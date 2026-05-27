@@ -1,0 +1,496 @@
+---
+// Self-contained interactive activation function explorer.
+// Ported from activation_functions.html, adapted for light/dark CSS variables.
+---
+
+<div class="ae-root">
+  <div class="ae-sidebar" id="ae-sidebar"></div>
+  <div class="ae-main">
+    <div class="ae-canvas-wrap">
+      <canvas id="ae-main" height="520"></canvas>
+      <div class="ae-formula" id="ae-formula"></div>
+    </div>
+    <div class="ae-grad-wrap">
+      <div class="ae-section-label">Gradient (đạo hàm)</div>
+      <canvas id="ae-grad" height="160"></canvas>
+    </div>
+    <div class="ae-info-grid">
+      <div class="ae-card">
+        <div class="ae-card-label">Ưu điểm</div>
+        <div id="ae-pros" class="ae-card-body"></div>
+      </div>
+      <div class="ae-card">
+        <div class="ae-card-label">Nhược điểm</div>
+        <div id="ae-cons" class="ae-card-body"></div>
+      </div>
+      <div class="ae-card">
+        <div class="ae-card-label">Dùng ở đâu</div>
+        <div id="ae-usage" class="ae-card-body"></div>
+      </div>
+      <div class="ae-card">
+        <div class="ae-card-label">Lý do ra đời</div>
+        <div id="ae-reason" class="ae-card-body"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const ACTIVATIONS = [
+  {
+    name: 'Sigmoid', year: '1986', era: 'Kỷ nguyên đầu',
+    formula: 'σ(x) = 1 / (1 + e⁻ˣ)',
+    fn:   x => 1 / (1 + Math.exp(-x)),
+    grad: x => { const s = 1/(1+Math.exp(-x)); return s*(1-s); },
+    color: '#7c6af7', range: [-6, 6],
+    pros: ['Output ∈ (0,1) → xác suất', 'Smooth, khả vi mọi nơi', 'Nền tảng lý thuyết rõ ràng'],
+    cons: ['Vanishing gradient: grad_max = 0.25', 'Output không zero-centered', 'exp() tốn tính toán'],
+    usage: 'Output layer binary classification, gate trong LSTM',
+    reason: 'Cần output dạng xác suất. Nền tảng logistic regression.',
+  },
+  {
+    name: 'Tanh', year: '1989', era: 'Kỷ nguyên đầu',
+    formula: 'tanh(x) = (eˣ − e⁻ˣ) / (eˣ + e⁻ˣ)',
+    fn:   x => Math.tanh(x),
+    grad: x => 1 - Math.tanh(x) ** 2,
+    color: '#f76a8c', range: [-4, 4],
+    pros: ['Zero-centered → gradient không bias', 'Output ∈ (−1, 1)', 'Hội tụ nhanh hơn sigmoid'],
+    cons: ['Vẫn vanishing gradient', 'Grad_max = 1 tại x=0', 'Bão hòa ở |x| lớn'],
+    usage: 'Hidden layers RNN, LSTM gates, shallow networks',
+    reason: 'Cải thiện sigmoid: zero-centered giúp gradient descent ổn định hơn.',
+  },
+  {
+    name: 'ReLU', year: '2010', era: 'Bước ngoặt',
+    formula: 'ReLU(x) = max(0, x)',
+    fn:   x => Math.max(0, x),
+    grad: x => x > 0 ? 1 : 0,
+    color: '#6af7c4', range: [-4, 4],
+    pros: ['Không vanishing gradient (x > 0)', 'Sparse activation → efficient', 'Tính toán cực nhanh', 'Hội tụ nhanh hơn ~6×'],
+    cons: ['Dying ReLU: neuron chết khi x < 0', 'Không zero-centered', 'Không khả vi tại x = 0'],
+    usage: 'CNN, deep networks — default choice 2012–2017',
+    reason: 'Hinton et al. 2010: giải quyết vanishing gradient, cho phép train deep network thực sự.',
+  },
+  {
+    name: 'Leaky ReLU', year: '2013', era: 'Họ ReLU',
+    formula: 'f(x) = x nếu x > 0, else αx  (α = 0.01)',
+    fn:   x => x > 0 ? x : 0.01 * x,
+    grad: x => x > 0 ? 1 : 0.01,
+    color: '#f7c46a', range: [-4, 4],
+    pros: ['Không dying ReLU', 'Gradient luôn tồn tại', 'Đơn giản, tính toán nhanh'],
+    cons: ['α là hyperparameter phải tune', 'Không nhất thiết tốt hơn ReLU', 'Không smooth tại x = 0'],
+    usage: 'Thay thế ReLU khi gặp dying neuron problem',
+    reason: 'Maas et al. 2013: fix dying ReLU bằng slope nhỏ ở vùng âm.',
+  },
+  {
+    name: 'PReLU', year: '2015', era: 'Họ ReLU',
+    formula: 'f(x) = x nếu x > 0, else αx  (α được học)',
+    fn:   x => x > 0 ? x : 0.1 * x,
+    grad: x => x > 0 ? 1 : 0.1,
+    color: '#fa8a4f', range: [-4, 4],
+    pros: ['α được học từ data', 'Thích nghi với từng layer', 'He et al: vượt human-level ImageNet'],
+    cons: ['Thêm tham số cần học', 'Risk overfit trên data nhỏ'],
+    usage: 'Deep CNN (ResNet era), image classification',
+    reason: 'He et al. 2015: parametric α → model tự tìm slope tối ưu cho từng task.',
+  },
+  {
+    name: 'ELU', year: '2015', era: 'Họ ReLU',
+    formula: 'f(x) = x nếu x ≥ 0, else α(eˣ − 1)',
+    fn:   x => x >= 0 ? x : 1.0 * (Math.exp(x) - 1),
+    grad: x => x >= 0 ? 1 : Math.exp(x),
+    color: '#c46af7', range: [-4, 4],
+    pros: ['Smooth tại x = 0', 'Output mean gần 0', 'Robust với noise'],
+    cons: ['Tính exp() tốn hơn ReLU', 'Lợi ích nhỏ so với ReLU trên thực tế'],
+    usage: 'Deep networks cần smooth gradient, một số NLP tasks',
+    reason: 'Clevert et al. 2015: smooth + negative values → mean activation gần 0.',
+  },
+  {
+    name: 'SELU', year: '2017', era: 'Họ ReLU',
+    formula: 'SELU(x) = λ · ELU(x, α)',
+    fn: x => {
+      const a = 1.6732632423543772, l = 1.0507009873554805;
+      return l * (x >= 0 ? x : a * (Math.exp(x) - 1));
+    },
+    grad: x => {
+      const a = 1.6732632423543772, l = 1.0507009873554805;
+      return l * (x >= 0 ? 1 : a * Math.exp(x));
+    },
+    color: '#6a9ef7', range: [-4, 4],
+    pros: ['Self-normalizing: mean→0, var→1', 'Không cần BatchNorm', 'Lý thuyết toán học chặt chẽ'],
+    cons: ['Chỉ hoạt động với lecun_normal init', 'Fragile với dropout thường', 'Ít dùng thực tế'],
+    usage: 'Deep feedforward networks, thay thế BatchNorm',
+    reason: 'Klambauer et al. 2017: tìm α, λ cố định sao cho distribution tự normalize.',
+  },
+  {
+    name: 'Swish', year: '2017', era: 'Neural search',
+    formula: 'Swish(x) = x · σ(x)',
+    fn:   x => x / (1 + Math.exp(-x)),
+    grad: x => { const s = 1/(1+Math.exp(-x)); return s + x*s*(1-s); },
+    color: '#f76ab0', range: [-6, 4],
+    pros: ['Smooth, non-monotonic', 'Unbounded trên (không saturate)', 'NAS tìm ra — tối ưu thực nghiệm', 'Tốt hơn ReLU trên deep networks'],
+    cons: ['Tính toán phức tạp hơn ReLU', 'Lợi ích nhỏ với shallow nets'],
+    usage: 'EfficientNet, MobileNet, nhiều SOTA vision models',
+    reason: 'Ramachandran et al. (Google Brain) 2017: dùng Neural Architecture Search tìm activation tốt nhất.',
+  },
+  {
+    name: 'GELU', year: '2016/2018',  era: 'Transformer era',
+    formula: 'GELU(x) ≈ x · Φ(x)',
+    fn:   x => 0.5 * x * (1 + Math.tanh(Math.sqrt(2/Math.PI) * (x + 0.044715 * x**3))),
+    grad: x => {
+      const t = Math.tanh(Math.sqrt(2/Math.PI) * (x + 0.044715*x**3));
+      const dt = (1-t*t) * Math.sqrt(2/Math.PI) * (1 + 3*0.044715*x**2);
+      return 0.5*(1+t) + 0.5*x*dt;
+    },
+    color: '#4ff7a0', range: [-4, 4],
+    pros: ['Smooth, differentiable everywhere', 'Probabilistic interpretation', 'Tốt nhất cho Transformer', 'Kết hợp dropout + ReLU về mặt lý thuyết'],
+    cons: ['Tính toán nặng hơn ReLU', 'Không có lợi thế rõ trên CNN'],
+    usage: 'GPT, BERT, ViT — toàn bộ Transformer family',
+    reason: 'Hendrycks 2016: GELU = x·P(X≤x) — weight input theo xác suất nó là dương.',
+  },
+  {
+    name: 'Mish', year: '2019', era: 'Transformer era',
+    formula: 'Mish(x) = x · tanh(ln(1 + eˣ))',
+    fn:   x => x * Math.tanh(Math.log(1 + Math.exp(x))),
+    grad: x => {
+      const sp = Math.log(1+Math.exp(x));
+      const t = Math.tanh(sp);
+      const st = 1/(1+Math.exp(-x));
+      return t + x * st * (1-t*t);
+    },
+    color: '#f7e46a', range: [-4, 4],
+    pros: ['Smooth, non-monotonic', 'Self-regularizing', 'Tốt hơn Swish/ReLU trên object detection'],
+    cons: ['Tính toán nặng nhất trong họ', 'Lợi ích nhỏ so với GELU/Swish'],
+    usage: 'YOLOv4, một số vision models',
+    reason: 'Misra 2019: smooth, bounded dưới, unbounded trên — tránh cả dying ReLU lẫn saturation.',
+  },
+  {
+    name: 'SwiGLU', year: '2020/2022', era: 'LLM era',
+    formula: 'SwiGLU(x,W,V) = Swish(xW) ⊙ xV',
+    fn: x => {
+      const swish = x / (1 + Math.exp(-x));
+      return swish * (x * 0.7 + 0.3);
+    },
+    grad: x => {
+      const s = 1/(1+Math.exp(-x));
+      const ds = s + x*s*(1-s);
+      return ds * (x*0.7+0.3) + (x/(1+Math.exp(-x))) * 0.7;
+    },
+    color: '#ff6b6b', range: [-4, 4],
+    pros: ['Gating mechanism: chọn lọc thông tin', 'Tốt nhất cho LLM hiện tại', 'Tăng capacity không tăng depth'],
+    cons: ['Cần 2 linear projections → ~1.5× params', 'Phức tạp hơn nhiều so với GELU đơn thuần'],
+    usage: 'LLaMA, PaLM, Mistral, Gemma — hầu hết LLM hiện đại',
+    reason: 'Noam Shazeer 2020: gating cho phép model học "chọn" feature nào quan trọng.',
+  },
+];
+
+let selected = 0;
+
+function cssVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+function buildSidebar() {
+  const sb = document.getElementById('ae-sidebar');
+  if (!sb) return;
+  let era = '';
+  ACTIVATIONS.forEach((a, i) => {
+    if (a.era !== era) {
+      era = a.era;
+      const lbl = document.createElement('div');
+      lbl.className = 'ae-era-label';
+      lbl.textContent = era;
+      sb.appendChild(lbl);
+    }
+    const btn = document.createElement('button');
+    btn.className = 'ae-btn' + (i === 0 ? ' ae-active' : '');
+    btn.id = `ae-btn-${i}`;
+    btn.innerHTML = `<span>${a.name}</span><span class="ae-year">${a.year}</span>`;
+    btn.addEventListener('click', () => selectActivation(i));
+    sb.appendChild(btn);
+  });
+}
+
+function selectActivation(i) {
+  selected = i;
+  document.querySelectorAll('.ae-btn').forEach((b, j) => b.classList.toggle('ae-active', j === i));
+  drawMain();
+  drawGrad();
+  updateInfo();
+}
+
+function resize(canvas) {
+  const rect = canvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  return { w: canvas.width, h: canvas.height, dpr };
+}
+
+function drawMain() {
+  const a = ACTIVATIONS[selected];
+  const canvas = document.getElementById('ae-main');
+  if (!canvas) return;
+  const { w, h, dpr } = resize(canvas);
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, w, h);
+
+  const [xMin, xMax] = a.range;
+  let yMin = Infinity, yMax = -Infinity;
+  for (let i = 0; i <= 300; i++) {
+    const x = xMin + (xMax - xMin) * i / 300;
+    const y = a.fn(x);
+    if (isFinite(y)) { yMin = Math.min(yMin, y); yMax = Math.max(yMax, y); }
+  }
+  const pad = (yMax - yMin) * 0.2;
+  yMin -= pad; yMax += pad;
+
+  const tx = (x) => (x - xMin) / (xMax - xMin) * w;
+  const ty = (y) => h - (y - yMin) / (yMax - yMin) * h;
+
+  // grid
+  ctx.strokeStyle = cssVar('--border');
+  ctx.lineWidth = 1 * dpr;
+  for (let x = Math.ceil(xMin); x <= xMax; x++) {
+    ctx.beginPath(); ctx.moveTo(tx(x), 0); ctx.lineTo(tx(x), h); ctx.stroke();
+  }
+  for (let y = Math.round(yMin * 2) / 2; y <= yMax; y += 0.5) {
+    ctx.beginPath(); ctx.moveTo(0, ty(y)); ctx.lineTo(w, ty(y)); ctx.stroke();
+  }
+
+  // axes
+  ctx.strokeStyle = cssVar('--muted');
+  ctx.lineWidth = 1.5 * dpr;
+  ctx.beginPath(); ctx.moveTo(0, ty(0)); ctx.lineTo(w, ty(0)); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(tx(0), 0); ctx.lineTo(tx(0), h); ctx.stroke();
+
+  // axis labels
+  ctx.fillStyle = cssVar('--muted');
+  ctx.font = `${10 * dpr}px JetBrains Mono, monospace`;
+  for (let x = Math.ceil(xMin); x <= xMax; x++) {
+    if (x === 0) continue;
+    ctx.fillText(x, tx(x) - 5 * dpr, ty(0) + 14 * dpr);
+  }
+
+  // function curve
+  ctx.strokeStyle = a.color;
+  ctx.lineWidth = 2.5 * dpr;
+  ctx.shadowColor = a.color;
+  ctx.shadowBlur = 6 * dpr;
+  ctx.beginPath();
+  let first = true;
+  for (let i = 0; i <= 500; i++) {
+    const x = xMin + (xMax - xMin) * i / 500;
+    const y = a.fn(x);
+    if (!isFinite(y)) { first = true; continue; }
+    if (first) { ctx.moveTo(tx(x), ty(y)); first = false; }
+    else ctx.lineTo(tx(x), ty(y));
+  }
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  document.getElementById('ae-formula').textContent = a.formula;
+}
+
+function drawGrad() {
+  const a = ACTIVATIONS[selected];
+  const canvas = document.getElementById('ae-grad');
+  if (!canvas) return;
+  const { w, h, dpr } = resize(canvas);
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, w, h);
+
+  const [xMin, xMax] = a.range;
+  let gMin = 0, gMax = 0;
+  for (let i = 0; i <= 300; i++) {
+    const x = xMin + (xMax - xMin) * i / 300;
+    const g = a.grad(x);
+    if (isFinite(g)) { gMin = Math.min(gMin, g); gMax = Math.max(gMax, g); }
+  }
+  const pad = Math.max((gMax - gMin) * 0.15, 0.05);
+  gMin -= pad; gMax += pad;
+
+  const tx = (x) => (x - xMin) / (xMax - xMin) * w;
+  const ty = (y) => h - (y - gMin) / (gMax - gMin) * h;
+
+  // zero line
+  ctx.strokeStyle = cssVar('--border');
+  ctx.lineWidth = 1 * dpr;
+  ctx.beginPath(); ctx.moveTo(0, ty(0)); ctx.lineTo(w, ty(0)); ctx.stroke();
+
+  // fill
+  const pts = [];
+  for (let i = 0; i <= 400; i++) {
+    const x = xMin + (xMax - xMin) * i / 400;
+    const g = a.grad(x);
+    if (isFinite(g)) pts.push([tx(x), ty(g)]);
+  }
+  if (pts.length > 1) {
+    ctx.beginPath();
+    pts.forEach(([x, y], i) => i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y));
+    ctx.lineTo(pts[pts.length-1][0], ty(0));
+    ctx.lineTo(pts[0][0], ty(0));
+    ctx.closePath();
+    const grad = ctx.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, a.color + '44');
+    grad.addColorStop(1, a.color + '08');
+    ctx.fillStyle = grad;
+    ctx.fill();
+  }
+
+  ctx.strokeStyle = a.color;
+  ctx.lineWidth = 2 * dpr;
+  ctx.shadowColor = a.color;
+  ctx.shadowBlur = 5 * dpr;
+  ctx.beginPath();
+  let first = true;
+  for (let i = 0; i <= 400; i++) {
+    const x = xMin + (xMax - xMin) * i / 400;
+    const g = a.grad(x);
+    if (!isFinite(g)) { first = true; continue; }
+    if (first) { ctx.moveTo(tx(x), ty(g)); first = false; }
+    else ctx.lineTo(tx(x), ty(g));
+  }
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+}
+
+function updateInfo() {
+  const a = ACTIVATIONS[selected];
+  const pro = document.getElementById('ae-pros');
+  const con = document.getElementById('ae-cons');
+  const usage = document.getElementById('ae-usage');
+  const reason = document.getElementById('ae-reason');
+  if (!pro) return;
+
+  pro.innerHTML = a.pros.map(t => `<div class="ae-pro">+ ${t}</div>`).join('');
+  con.innerHTML = a.cons.map(t => `<div class="ae-con">− ${t}</div>`).join('');
+  usage.textContent = a.usage;
+  reason.textContent = a.reason;
+}
+
+buildSidebar();
+drawMain();
+drawGrad();
+updateInfo();
+
+window.addEventListener('resize', () => { drawMain(); drawGrad(); });
+</script>
+
+<style>
+  .ae-root {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    gap: 14px;
+    margin: 1.75rem 0;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    background: var(--bg2);
+  }
+
+  /* Sidebar */
+  .ae-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .ae-era-label {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    padding: 8px 4px 2px;
+    margin-top: 4px;
+  }
+
+  .ae-btn {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 6px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    text-align: left;
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
+    width: 100%;
+  }
+  .ae-btn:hover { color: var(--text); border-color: var(--accent); }
+  .ae-btn.ae-active { color: var(--accent); border-color: var(--accent); background: var(--bg); }
+  .ae-year { font-size: 0.62rem; color: var(--muted); }
+
+  /* Main panel */
+  .ae-main { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+
+  .ae-canvas-wrap {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+  }
+  .ae-canvas-wrap canvas { display: block; width: 100%; height: 260px; }
+
+  .ae-formula {
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    color: var(--accent2);
+    margin-top: 8px;
+    text-align: center;
+  }
+
+  .ae-grad-wrap {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+  .ae-grad-wrap canvas { display: block; width: 100%; height: 80px; }
+
+  .ae-section-label {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+
+  .ae-info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .ae-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+
+  .ae-card-label {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin-bottom: 5px;
+  }
+
+  .ae-card-body { font-size: 0.8rem; line-height: 1.6; color: var(--text); }
+  .ae-pro { color: var(--accent2); }
+  .ae-con { color: var(--amber); }
+
+  @media (max-width: 700px) {
+    .ae-root { grid-template-columns: 1fr; }
+    .ae-sidebar { flex-direction: row; flex-wrap: wrap; }
+    .ae-era-label { width: 100%; }
+    .ae-info-grid { grid-template-columns: 1fr; }
+  }
+</style>
