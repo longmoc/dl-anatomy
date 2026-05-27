@@ -1,0 +1,44 @@
+---
+title: "SGD — Stochastic Gradient Descent"
+description: "Tại sao SGD hoạt động tốt hơn full-batch GD, và noise có vai trò gì trong quá trình huấn luyện."
+lang: vi
+category: training
+order: 1
+tags: [sgd, optimization, noise, regularization]
+---
+
+import Note from '../../components/Note.astro';
+
+# SGD — Stochastic Gradient Descent
+
+*Bài này sẽ được migrate từ `sgd_notes.html` với đầy đủ visualizations.*
+
+## Gradient Descent cơ bản
+
+$$\theta_{t+1} = \theta_t - \eta \nabla \mathcal{L}(\theta_t)$$
+
+**Full-batch GD:** tính gradient trên toàn bộ dataset.  
+**SGD:** tính gradient trên 1 sample hoặc mini-batch.
+
+## Tại sao SGD lại tốt hơn?
+
+<Note type="intuition">
+Noise từ mini-batch không phải là bug — nó là feature. Noise đóng vai trò regularizer và giúp thoát khỏi saddle points.
+</Note>
+
+### Cấu trúc noise
+
+$$\tilde{g}_t = \nabla\mathcal{L}(\theta_t) + \epsilon_t$$
+
+$$\text{Cov}(\epsilon_t) = \frac{1}{|B|}\Sigma(\theta_t)$$
+
+- Noise tỷ lệ nghịch với batch size $|B|$
+- Noise phụ thuộc vị trí $\theta$ — không phải noise thuần túy
+
+## SGD ≈ Langevin Dynamics
+
+$$d\theta = -\nabla\mathcal{L}(\theta)\,dt + \sqrt{\eta \cdot \Sigma(\theta)}\,dW_t$$
+
+<Note type="result">
+SGD tự nhiên tìm **flat minima** vì noise liên tục perturbate $\theta$. Flat minima generalize tốt hơn sharp minima.
+</Note>

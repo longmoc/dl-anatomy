@@ -1,0 +1,54 @@
+---
+interface Props {
+  id: string;       // unique id for the canvas
+  height?: number;
+  caption?: string;
+}
+const { id, height = 320, caption } = Astro.props;
+---
+<figure class="iplot">
+  <div class="iplot-wrap" style={`height:${height}px`}>
+    <canvas id={id} width="800" height={height * 2}></canvas>
+    <div class="iplot-controls">
+      <slot name="controls" />
+    </div>
+  </div>
+  {caption && <figcaption>{caption}</figcaption>}
+</figure>
+
+<slot name="script" />
+
+<style>
+  .iplot {
+    margin: 1.75rem 0;
+  }
+  .iplot-wrap {
+    position: relative;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .iplot-wrap canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+  .iplot-controls {
+    position: absolute;
+    bottom: 1rem;
+    left: 1rem;
+    right: 1rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: center;
+  }
+  figcaption {
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+    color: var(--muted);
+    text-align: center;
+    font-family: var(--mono);
+  }
+</style>

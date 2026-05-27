@@ -1,0 +1,45 @@
+---
+interface Props {
+  type?: 'theorem' | 'intuition' | 'warning' | 'paper' | 'result';
+  label?: string;
+}
+const { type = 'intuition', label } = Astro.props;
+
+const defaults: Record<string, string> = {
+  theorem: 'Theorem',
+  intuition: 'Intuition',
+  warning: 'Watch out',
+  paper: 'Paper',
+  result: 'Key result',
+};
+const displayLabel = label ?? defaults[type];
+---
+<div class:list={['note', `note-${type}`]}>
+  <span class="note-label">{displayLabel}</span>
+  <slot />
+</div>
+
+<style>
+  .note {
+    border-left: 3px solid var(--border);
+    background: var(--bg2);
+    border-radius: 0 8px 8px 0;
+    padding: 0.85rem 1.25rem;
+    margin: 1.25rem 0;
+    position: relative;
+  }
+  .note-label {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 500;
+    margin-bottom: 0.4rem;
+  }
+  .note-theorem  { border-color: var(--accent);  } .note-theorem  .note-label { color: var(--accent); }
+  .note-intuition{ border-color: var(--accent2); } .note-intuition .note-label { color: var(--accent2); }
+  .note-warning  { border-color: var(--amber);   } .note-warning  .note-label { color: var(--amber); }
+  .note-paper    { border-color: var(--muted);   } .note-paper    .note-label { color: var(--muted); }
+  .note-result   { border-color: var(--accent2); } .note-result   .note-label { color: var(--accent2); }
+</style>

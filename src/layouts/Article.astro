@@ -1,0 +1,151 @@
+---
+import Base from './Base.astro';
+
+interface Props {
+  title: string;
+  description?: string;
+  category: string;
+  lang?: 'vi' | 'en';
+  translation?: string; // slug for the translated version
+  headings?: { depth: number; slug: string; text: string }[];
+}
+
+const { title, description, category, lang = 'vi', translation, headings = [] } = Astro.props;
+const base = import.meta.env.BASE_URL;
+const toc = headings.filter(h => h.depth === 2 || h.depth === 3);
+
+const categoryLabels: Record<string, string> = {
+  foundations: 'Foundations',
+  optimization: 'Optimization',
+  activations: 'Activations',
+  training: 'Training',
+};
+---
+<Base title={title} description={description}>
+  <div class="article-shell">
+    {toc.length > 0 && (
+      <aside class="toc">
+        <div class="toc-label">On this page</div>
+        <nav>
+          {toc.map(h => (
+            <a
+              href={`#${h.slug}`}
+              class:list={['toc-item', { 'toc-h3': h.depth === 3 }]}
+            >{h.text}</a>
+          ))}
+        </nav>
+      </aside>
+    )}
+
+    <article class="article-body prose">
+      <div class="article-meta">
+        <a href={`${base}${category}`} class="breadcrumb">{categoryLabels[category] ?? category}</a>
+        {translation && (
+          <a
+            href={`${base}${category}/${translation}`}
+            class="lang-toggle"
+            title="Switch language"
+          >
+            {lang === 'vi' ? 'EN' : 'VI'}
+          </a>
+        )}
+      </div>
+
+      <slot />
+    </article>
+  </div>
+</Base>
+
+<style>
+  .article-shell {
+    display: flex;
+    gap: 3rem;
+    max-width: calc(var(--content-w) + var(--sidebar-w) + 3rem);
+    margin: 0 auto;
+    padding: 48px 24px 80px;
+    align-items: flex-start;
+  }
+
+  .article-body {
+    flex: 1;
+    min-width: 0;
+    max-width: var(--content-w);
+  }
+
+  .article-meta {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+
+  .breadcrumb {
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    color: var(--muted);
+    text-decoration: none;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border: 1px solid var(--border);
+    padding: 0.2em 0.7em;
+    border-radius: 100px;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .breadcrumb:hover { color: var(--accent); border-color: var(--accent); }
+
+  .lang-toggle {
+    margin-left: auto;
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    background: var(--bg3);
+    color: var(--muted);
+    border: 1px solid var(--border);
+    padding: 0.2em 0.7em;
+    border-radius: 100px;
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+  .lang-toggle:hover { color: var(--accent); }
+
+  /* TOC sidebar */
+  .toc {
+    position: sticky;
+    top: 72px;
+    width: var(--sidebar-w);
+    flex-shrink: 0;
+    order: 2;
+    max-height: calc(100vh - 96px);
+    overflow-y: auto;
+    padding-left: 1.5rem;
+    border-left: 1px solid var(--border);
+  }
+
+  .toc-label {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin-bottom: 0.75rem;
+  }
+
+  .toc-item {
+    display: block;
+    font-size: 0.85rem;
+    color: var(--muted);
+    text-decoration: none;
+    padding: 0.2rem 0;
+    line-height: 1.4;
+    transition: color 0.15s;
+    border-left: 2px solid transparent;
+    padding-left: 0.75rem;
+    margin-left: -0.75rem;
+  }
+  .toc-item:hover { color: var(--text); }
+  .toc-item.toc-h3 { padding-left: 1.5rem; font-size: 0.8rem; }
+
+  @media (max-width: 1100px) {
+    .toc { display: none; }
+    .article-shell { max-width: var(--content-w); }
+  }
+</style>

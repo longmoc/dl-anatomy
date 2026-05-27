@@ -1,0 +1,147 @@
+---
+import Base from '../layouts/Base.astro';
+import { getCollection } from 'astro:content';
+
+const allEntries = [
+  ...(await getCollection('foundations', e => !e.data.draft)),
+  ...(await getCollection('optimization', e => !e.data.draft)),
+  ...(await getCollection('activations', e => !e.data.draft)),
+  ...(await getCollection('training', e => !e.data.draft)),
+];
+
+const categories = [
+  { id: 'foundations',  label: 'Foundations',  desc: 'Probability, linear algebra, calculus in ML context' },
+  { id: 'optimization', label: 'Optimization',  desc: 'Loss landscape, convexity, saddle points, convergence' },
+  { id: 'activations',  label: 'Activations',   desc: 'Activation functions — properties and intuitions' },
+  { id: 'training',     label: 'Training',      desc: 'SGD variants, regularization, training dynamics' },
+];
+
+const base = import.meta.env.BASE_URL;
+---
+<Base title="DL Anatomy">
+  <div class="home">
+    <header class="hero">
+      <h1>DL Anatomy</h1>
+      <p class="hero-sub">Deep learning — theory, intuition, and practice.<br/>Ghi chú tổng hợp từ các buổi đào sâu lý thuyết.</p>
+    </header>
+
+    <div class="category-grid">
+      {categories.map(cat => {
+        const entries = allEntries
+          .filter(e => e.collection === cat.id)
+          .sort((a, b) => (a.data.order ?? 99) - (b.data.order ?? 99));
+        return (
+          <section class="cat-card">
+            <a href={`${base}${cat.id}`} class="cat-title">{cat.label}</a>
+            <p class="cat-desc">{cat.desc}</p>
+            {entries.length > 0 && (
+              <ul class="cat-articles">
+                {entries.map(e => (
+                  <li>
+                    <a href={`${base}${cat.id}/${e.slug}`}>{e.data.title}</a>
+                    {e.data.lang === 'en' && <span class="lang-badge">EN</span>}
+                    {e.data.translation && <span class="has-trans" title="Has translation">⇄</span>}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {entries.length === 0 && <p class="empty">Coming soon</p>}
+          </section>
+        );
+      })}
+    </div>
+  </div>
+</Base>
+
+<style>
+  .home {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 48px 24px 80px;
+  }
+
+  .hero {
+    margin-bottom: 3rem;
+  }
+
+  h1 {
+    font-size: 2.25rem;
+    font-weight: 600;
+    letter-spacing: -0.5px;
+    color: var(--accent);
+    font-family: var(--mono);
+    margin-bottom: 0.5rem;
+  }
+
+  .hero-sub {
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  .category-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    gap: 1.5rem;
+  }
+
+  .cat-card {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.5rem;
+    background: var(--bg2);
+  }
+
+  .cat-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--accent);
+    text-decoration: none;
+    display: block;
+    margin-bottom: 0.35rem;
+  }
+  .cat-title:hover { text-decoration: underline; }
+
+  .cat-desc {
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin-bottom: 1rem;
+    line-height: 1.5;
+  }
+
+  .cat-articles {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .cat-articles li {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+  }
+
+  .cat-articles a {
+    color: var(--text);
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+    transition: border-color 0.15s;
+  }
+  .cat-articles a:hover { border-color: var(--text); }
+
+  .lang-badge, .has-trans {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    padding: 0.1em 0.4em;
+    border-radius: 4px;
+  }
+
+  .empty {
+    font-size: 0.85rem;
+    color: var(--muted);
+    font-style: italic;
+  }
+</style>
