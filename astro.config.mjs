@@ -5,7 +5,7 @@ import rehypeKatex from 'rehype-katex';
 
 export default defineConfig({
   site: 'https://longmoc.github.io',
-  base: '/dl-anatomy',
+  base: '/dl-anatomy/',
   integrations: [mdx()],
   markdown: {
     remarkPlugins: [remarkMath],
