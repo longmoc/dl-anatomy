@@ -1,9 +1,11 @@
 ---
-// Self-contained interactive activation function explorer.
-// Ported from activation_functions.html, adapted for light/dark CSS variables.
+interface Props {
+  lang?: 'vi' | 'en';
+}
+const { lang = 'vi' } = Astro.props;
 ---
 
-<div class="ae-root">
+<div class="ae-root" data-lang={lang}>
   <div class="ae-sidebar" id="ae-sidebar"></div>
   <div class="ae-main">
     <div class="ae-canvas-wrap">
@@ -11,24 +13,24 @@
       <div class="ae-formula" id="ae-formula"></div>
     </div>
     <div class="ae-grad-wrap">
-      <div class="ae-section-label">Gradient (đạo hàm)</div>
+      <div class="ae-section-label" id="ae-grad-label"></div>
       <canvas id="ae-grad" height="160"></canvas>
     </div>
     <div class="ae-info-grid">
       <div class="ae-card">
-        <div class="ae-card-label">Ưu điểm</div>
+        <div class="ae-card-label" id="ae-label-pros"></div>
         <div id="ae-pros" class="ae-card-body"></div>
       </div>
       <div class="ae-card">
-        <div class="ae-card-label">Nhược điểm</div>
+        <div class="ae-card-label" id="ae-label-cons"></div>
         <div id="ae-cons" class="ae-card-body"></div>
       </div>
       <div class="ae-card">
-        <div class="ae-card-label">Dùng ở đâu</div>
+        <div class="ae-card-label" id="ae-label-usage"></div>
         <div id="ae-usage" class="ae-card-body"></div>
       </div>
       <div class="ae-card">
-        <div class="ae-card-label">Lý do ra đời</div>
+        <div class="ae-card-label" id="ae-label-reason"></div>
         <div id="ae-reason" class="ae-card-body"></div>
       </div>
     </div>
@@ -36,155 +38,209 @@
 </div>
 
 <script>
-const ACTIVATIONS = [
-  {
-    name: 'Sigmoid', year: '1986', era: 'Kỷ nguyên đầu',
+const UI = {
+  vi: {
+    gradient: 'Gradient (đạo hàm)',
+    pros: 'Ưu điểm',
+    cons: 'Nhược điểm',
+    usage: 'Dùng ở đâu',
+    reason: 'Lý do ra đời',
+    eras: {
+      'early':     'Kỷ nguyên đầu',
+      'breakthrough': 'Bước ngoặt',
+      'relu':      'Họ ReLU',
+      'nas':       'Neural search',
+      'transformer': 'Transformer era',
+      'llm':       'LLM era',
+    },
+  },
+  en: {
+    gradient: 'Gradient (derivative)',
+    pros: 'Pros',
+    cons: 'Cons',
+    usage: 'Where it\'s used',
+    reason: 'Why it was created',
+    eras: {
+      'early':     'Early era',
+      'breakthrough': 'Breakthrough',
+      'relu':      'ReLU family',
+      'nas':       'Neural search',
+      'transformer': 'Transformer era',
+      'llm':       'LLM era',
+    },
+  },
+};
+
+// Common: math functions, colors, ranges
+const BASE = [
+  { id: 'sigmoid', name: 'Sigmoid', year: '1986', era: 'early',
     formula: 'σ(x) = 1 / (1 + e⁻ˣ)',
     fn:   x => 1 / (1 + Math.exp(-x)),
     grad: x => { const s = 1/(1+Math.exp(-x)); return s*(1-s); },
-    color: '#7c6af7', range: [-6, 6],
-    pros: ['Output ∈ (0,1) → xác suất', 'Smooth, khả vi mọi nơi', 'Nền tảng lý thuyết rõ ràng'],
-    cons: ['Vanishing gradient: grad_max = 0.25', 'Output không zero-centered', 'exp() tốn tính toán'],
-    usage: 'Output layer binary classification, gate trong LSTM',
-    reason: 'Cần output dạng xác suất. Nền tảng logistic regression.',
-  },
-  {
-    name: 'Tanh', year: '1989', era: 'Kỷ nguyên đầu',
+    color: '#7c6af7', range: [-6, 6] },
+  { id: 'tanh', name: 'Tanh', year: '1989', era: 'early',
     formula: 'tanh(x) = (eˣ − e⁻ˣ) / (eˣ + e⁻ˣ)',
     fn:   x => Math.tanh(x),
     grad: x => 1 - Math.tanh(x) ** 2,
-    color: '#f76a8c', range: [-4, 4],
-    pros: ['Zero-centered → gradient không bias', 'Output ∈ (−1, 1)', 'Hội tụ nhanh hơn sigmoid'],
-    cons: ['Vẫn vanishing gradient', 'Grad_max = 1 tại x=0', 'Bão hòa ở |x| lớn'],
-    usage: 'Hidden layers RNN, LSTM gates, shallow networks',
-    reason: 'Cải thiện sigmoid: zero-centered giúp gradient descent ổn định hơn.',
-  },
-  {
-    name: 'ReLU', year: '2010', era: 'Bước ngoặt',
+    color: '#f76a8c', range: [-4, 4] },
+  { id: 'relu', name: 'ReLU', year: '2010', era: 'breakthrough',
     formula: 'ReLU(x) = max(0, x)',
     fn:   x => Math.max(0, x),
     grad: x => x > 0 ? 1 : 0,
-    color: '#6af7c4', range: [-4, 4],
-    pros: ['Không vanishing gradient (x > 0)', 'Sparse activation → efficient', 'Tính toán cực nhanh', 'Hội tụ nhanh hơn ~6×'],
-    cons: ['Dying ReLU: neuron chết khi x < 0', 'Không zero-centered', 'Không khả vi tại x = 0'],
-    usage: 'CNN, deep networks — default choice 2012–2017',
-    reason: 'Hinton et al. 2010: giải quyết vanishing gradient, cho phép train deep network thực sự.',
-  },
-  {
-    name: 'Leaky ReLU', year: '2013', era: 'Họ ReLU',
-    formula: 'f(x) = x nếu x > 0, else αx  (α = 0.01)',
+    color: '#6af7c4', range: [-4, 4] },
+  { id: 'leaky', name: 'Leaky ReLU', year: '2013', era: 'relu',
+    formula: 'f(x) = x if x > 0, else αx  (α = 0.01)',
     fn:   x => x > 0 ? x : 0.01 * x,
     grad: x => x > 0 ? 1 : 0.01,
-    color: '#f7c46a', range: [-4, 4],
-    pros: ['Không dying ReLU', 'Gradient luôn tồn tại', 'Đơn giản, tính toán nhanh'],
-    cons: ['α là hyperparameter phải tune', 'Không nhất thiết tốt hơn ReLU', 'Không smooth tại x = 0'],
-    usage: 'Thay thế ReLU khi gặp dying neuron problem',
-    reason: 'Maas et al. 2013: fix dying ReLU bằng slope nhỏ ở vùng âm.',
-  },
-  {
-    name: 'PReLU', year: '2015', era: 'Họ ReLU',
-    formula: 'f(x) = x nếu x > 0, else αx  (α được học)',
+    color: '#f7c46a', range: [-4, 4] },
+  { id: 'prelu', name: 'PReLU', year: '2015', era: 'relu',
+    formula: 'f(x) = x if x > 0, else αx  (α learned)',
     fn:   x => x > 0 ? x : 0.1 * x,
     grad: x => x > 0 ? 1 : 0.1,
-    color: '#fa8a4f', range: [-4, 4],
-    pros: ['α được học từ data', 'Thích nghi với từng layer', 'He et al: vượt human-level ImageNet'],
-    cons: ['Thêm tham số cần học', 'Risk overfit trên data nhỏ'],
-    usage: 'Deep CNN (ResNet era), image classification',
-    reason: 'He et al. 2015: parametric α → model tự tìm slope tối ưu cho từng task.',
-  },
-  {
-    name: 'ELU', year: '2015', era: 'Họ ReLU',
-    formula: 'f(x) = x nếu x ≥ 0, else α(eˣ − 1)',
+    color: '#fa8a4f', range: [-4, 4] },
+  { id: 'elu', name: 'ELU', year: '2015', era: 'relu',
+    formula: 'f(x) = x if x ≥ 0, else α(eˣ − 1)',
     fn:   x => x >= 0 ? x : 1.0 * (Math.exp(x) - 1),
     grad: x => x >= 0 ? 1 : Math.exp(x),
-    color: '#c46af7', range: [-4, 4],
-    pros: ['Smooth tại x = 0', 'Output mean gần 0', 'Robust với noise'],
-    cons: ['Tính exp() tốn hơn ReLU', 'Lợi ích nhỏ so với ReLU trên thực tế'],
-    usage: 'Deep networks cần smooth gradient, một số NLP tasks',
-    reason: 'Clevert et al. 2015: smooth + negative values → mean activation gần 0.',
-  },
-  {
-    name: 'SELU', year: '2017', era: 'Họ ReLU',
+    color: '#c46af7', range: [-4, 4] },
+  { id: 'selu', name: 'SELU', year: '2017', era: 'relu',
     formula: 'SELU(x) = λ · ELU(x, α)',
-    fn: x => {
-      const a = 1.6732632423543772, l = 1.0507009873554805;
-      return l * (x >= 0 ? x : a * (Math.exp(x) - 1));
-    },
-    grad: x => {
-      const a = 1.6732632423543772, l = 1.0507009873554805;
-      return l * (x >= 0 ? 1 : a * Math.exp(x));
-    },
-    color: '#6a9ef7', range: [-4, 4],
-    pros: ['Self-normalizing: mean→0, var→1', 'Không cần BatchNorm', 'Lý thuyết toán học chặt chẽ'],
-    cons: ['Chỉ hoạt động với lecun_normal init', 'Fragile với dropout thường', 'Ít dùng thực tế'],
-    usage: 'Deep feedforward networks, thay thế BatchNorm',
-    reason: 'Klambauer et al. 2017: tìm α, λ cố định sao cho distribution tự normalize.',
-  },
-  {
-    name: 'Swish', year: '2017', era: 'Neural search',
+    fn: x => { const a=1.6732632423543772,l=1.0507009873554805; return l*(x>=0?x:a*(Math.exp(x)-1)); },
+    grad: x => { const a=1.6732632423543772,l=1.0507009873554805; return l*(x>=0?1:a*Math.exp(x)); },
+    color: '#6a9ef7', range: [-4, 4] },
+  { id: 'swish', name: 'Swish', year: '2017', era: 'nas',
     formula: 'Swish(x) = x · σ(x)',
     fn:   x => x / (1 + Math.exp(-x)),
-    grad: x => { const s = 1/(1+Math.exp(-x)); return s + x*s*(1-s); },
-    color: '#f76ab0', range: [-6, 4],
-    pros: ['Smooth, non-monotonic', 'Unbounded trên (không saturate)', 'NAS tìm ra — tối ưu thực nghiệm', 'Tốt hơn ReLU trên deep networks'],
-    cons: ['Tính toán phức tạp hơn ReLU', 'Lợi ích nhỏ với shallow nets'],
-    usage: 'EfficientNet, MobileNet, nhiều SOTA vision models',
-    reason: 'Ramachandran et al. (Google Brain) 2017: dùng Neural Architecture Search tìm activation tốt nhất.',
-  },
-  {
-    name: 'GELU', year: '2016/2018',  era: 'Transformer era',
+    grad: x => { const s=1/(1+Math.exp(-x)); return s+x*s*(1-s); },
+    color: '#f76ab0', range: [-6, 4] },
+  { id: 'gelu', name: 'GELU', year: '2016/2018', era: 'transformer',
     formula: 'GELU(x) ≈ x · Φ(x)',
-    fn:   x => 0.5 * x * (1 + Math.tanh(Math.sqrt(2/Math.PI) * (x + 0.044715 * x**3))),
-    grad: x => {
-      const t = Math.tanh(Math.sqrt(2/Math.PI) * (x + 0.044715*x**3));
-      const dt = (1-t*t) * Math.sqrt(2/Math.PI) * (1 + 3*0.044715*x**2);
-      return 0.5*(1+t) + 0.5*x*dt;
-    },
-    color: '#4ff7a0', range: [-4, 4],
-    pros: ['Smooth, differentiable everywhere', 'Probabilistic interpretation', 'Tốt nhất cho Transformer', 'Kết hợp dropout + ReLU về mặt lý thuyết'],
-    cons: ['Tính toán nặng hơn ReLU', 'Không có lợi thế rõ trên CNN'],
-    usage: 'GPT, BERT, ViT — toàn bộ Transformer family',
-    reason: 'Hendrycks 2016: GELU = x·P(X≤x) — weight input theo xác suất nó là dương.',
-  },
-  {
-    name: 'Mish', year: '2019', era: 'Transformer era',
+    fn:   x => 0.5*x*(1+Math.tanh(Math.sqrt(2/Math.PI)*(x+0.044715*x**3))),
+    grad: x => { const t=Math.tanh(Math.sqrt(2/Math.PI)*(x+0.044715*x**3)); const dt=(1-t*t)*Math.sqrt(2/Math.PI)*(1+3*0.044715*x**2); return 0.5*(1+t)+0.5*x*dt; },
+    color: '#4ff7a0', range: [-4, 4] },
+  { id: 'mish', name: 'Mish', year: '2019', era: 'transformer',
     formula: 'Mish(x) = x · tanh(ln(1 + eˣ))',
-    fn:   x => x * Math.tanh(Math.log(1 + Math.exp(x))),
-    grad: x => {
-      const sp = Math.log(1+Math.exp(x));
-      const t = Math.tanh(sp);
-      const st = 1/(1+Math.exp(-x));
-      return t + x * st * (1-t*t);
-    },
-    color: '#f7e46a', range: [-4, 4],
-    pros: ['Smooth, non-monotonic', 'Self-regularizing', 'Tốt hơn Swish/ReLU trên object detection'],
-    cons: ['Tính toán nặng nhất trong họ', 'Lợi ích nhỏ so với GELU/Swish'],
-    usage: 'YOLOv4, một số vision models',
-    reason: 'Misra 2019: smooth, bounded dưới, unbounded trên — tránh cả dying ReLU lẫn saturation.',
-  },
-  {
-    name: 'SwiGLU', year: '2020/2022', era: 'LLM era',
+    fn:   x => x*Math.tanh(Math.log(1+Math.exp(x))),
+    grad: x => { const sp=Math.log(1+Math.exp(x)); const t=Math.tanh(sp); const st=1/(1+Math.exp(-x)); return t+x*st*(1-t*t); },
+    color: '#f7e46a', range: [-4, 4] },
+  { id: 'swiglu', name: 'SwiGLU', year: '2020/2022', era: 'llm',
     formula: 'SwiGLU(x,W,V) = Swish(xW) ⊙ xV',
-    fn: x => {
-      const swish = x / (1 + Math.exp(-x));
-      return swish * (x * 0.7 + 0.3);
-    },
-    grad: x => {
-      const s = 1/(1+Math.exp(-x));
-      const ds = s + x*s*(1-s);
-      return ds * (x*0.7+0.3) + (x/(1+Math.exp(-x))) * 0.7;
-    },
-    color: '#ff6b6b', range: [-4, 4],
-    pros: ['Gating mechanism: chọn lọc thông tin', 'Tốt nhất cho LLM hiện tại', 'Tăng capacity không tăng depth'],
-    cons: ['Cần 2 linear projections → ~1.5× params', 'Phức tạp hơn nhiều so với GELU đơn thuần'],
-    usage: 'LLaMA, PaLM, Mistral, Gemma — hầu hết LLM hiện đại',
-    reason: 'Noam Shazeer 2020: gating cho phép model học "chọn" feature nào quan trọng.',
-  },
+    fn:   x => { const sw=x/(1+Math.exp(-x)); return sw*(x*0.7+0.3); },
+    grad: x => { const s=1/(1+Math.exp(-x)); const ds=s+x*s*(1-s); return ds*(x*0.7+0.3)+(x/(1+Math.exp(-x)))*0.7; },
+    color: '#ff6b6b', range: [-4, 4] },
 ];
+
+const DATA = {
+  vi: [
+    { pros: ['Output ∈ (0,1) → xác suất', 'Smooth, khả vi mọi nơi', 'Nền tảng lý thuyết rõ ràng'],
+      cons: ['Vanishing gradient: grad_max = 0.25', 'Output không zero-centered', 'exp() tốn tính toán'],
+      usage: 'Output layer binary classification, gate trong LSTM',
+      reason: 'Cần output dạng xác suất. Nền tảng logistic regression.' },
+    { pros: ['Zero-centered → gradient không bias', 'Output ∈ (−1, 1)', 'Hội tụ nhanh hơn sigmoid'],
+      cons: ['Vẫn vanishing gradient', 'Grad_max = 1 tại x=0', 'Bão hòa ở |x| lớn'],
+      usage: 'Hidden layers RNN, LSTM gates, shallow networks',
+      reason: 'Cải thiện sigmoid: zero-centered giúp gradient descent ổn định hơn.' },
+    { pros: ['Không vanishing gradient (x > 0)', 'Sparse activation → efficient', 'Tính toán cực nhanh', 'Hội tụ nhanh hơn ~6×'],
+      cons: ['Dying ReLU: neuron chết khi x < 0', 'Không zero-centered', 'Không khả vi tại x = 0'],
+      usage: 'CNN, deep networks — default choice 2012–2017',
+      reason: 'Hinton et al. 2010: giải quyết vanishing gradient, cho phép train deep network thực sự.' },
+    { pros: ['Không dying ReLU', 'Gradient luôn tồn tại', 'Đơn giản, tính toán nhanh'],
+      cons: ['α là hyperparameter phải tune', 'Không nhất thiết tốt hơn ReLU', 'Không smooth tại x = 0'],
+      usage: 'Thay thế ReLU khi gặp dying neuron problem',
+      reason: 'Maas et al. 2013: fix dying ReLU bằng slope nhỏ ở vùng âm.' },
+    { pros: ['α được học từ data', 'Thích nghi với từng layer', 'He et al: vượt human-level ImageNet'],
+      cons: ['Thêm tham số cần học', 'Risk overfit trên data nhỏ'],
+      usage: 'Deep CNN (ResNet era), image classification',
+      reason: 'He et al. 2015: parametric α → model tự tìm slope tối ưu cho từng task.' },
+    { pros: ['Smooth tại x = 0', 'Output mean gần 0', 'Robust với noise'],
+      cons: ['Tính exp() tốn hơn ReLU', 'Lợi ích nhỏ so với ReLU trên thực tế'],
+      usage: 'Deep networks cần smooth gradient, một số NLP tasks',
+      reason: 'Clevert et al. 2015: smooth + negative values → mean activation gần 0.' },
+    { pros: ['Self-normalizing: mean→0, var→1', 'Không cần BatchNorm', 'Lý thuyết toán học chặt chẽ'],
+      cons: ['Chỉ hoạt động với lecun_normal init', 'Fragile với dropout thường', 'Ít dùng thực tế'],
+      usage: 'Deep feedforward networks, thay thế BatchNorm',
+      reason: 'Klambauer et al. 2017: tìm α, λ cố định sao cho distribution tự normalize.' },
+    { pros: ['Smooth, non-monotonic', 'Unbounded trên (không saturate)', 'NAS tìm ra — tối ưu thực nghiệm', 'Tốt hơn ReLU trên deep networks'],
+      cons: ['Tính toán phức tạp hơn ReLU', 'Lợi ích nhỏ với shallow nets'],
+      usage: 'EfficientNet, MobileNet, nhiều SOTA vision models',
+      reason: 'Ramachandran et al. (Google Brain) 2017: dùng NAS tìm activation tốt nhất.' },
+    { pros: ['Smooth, differentiable everywhere', 'Probabilistic interpretation', 'Tốt nhất cho Transformer', 'Kết hợp dropout + ReLU về mặt lý thuyết'],
+      cons: ['Tính toán nặng hơn ReLU', 'Không có lợi thế rõ trên CNN'],
+      usage: 'GPT, BERT, ViT — toàn bộ Transformer family',
+      reason: 'Hendrycks 2016: GELU = x·P(X≤x) — weight input theo xác suất nó là dương.' },
+    { pros: ['Smooth, non-monotonic', 'Self-regularizing', 'Tốt hơn Swish/ReLU trên object detection'],
+      cons: ['Tính toán nặng nhất trong họ', 'Lợi ích nhỏ so với GELU/Swish'],
+      usage: 'YOLOv4, một số vision models',
+      reason: 'Misra 2019: smooth, bounded dưới, unbounded trên — tránh cả dying ReLU lẫn saturation.' },
+    { pros: ['Gating mechanism: chọn lọc thông tin', 'Tốt nhất cho LLM hiện tại', 'Tăng capacity không tăng depth'],
+      cons: ['Cần 2 linear projections → ~1.5× params', 'Phức tạp hơn nhiều so với GELU đơn thuần'],
+      usage: 'LLaMA, PaLM, Mistral, Gemma — hầu hết LLM hiện đại',
+      reason: 'Noam Shazeer 2020: gating cho phép model học "chọn" feature nào quan trọng.' },
+  ],
+  en: [
+    { pros: ['Output ∈ (0,1) → probability output', 'Smooth, differentiable everywhere', 'Clear theoretical foundation'],
+      cons: ['Vanishing gradient: grad_max = 0.25', 'Output not zero-centered', 'Expensive exp() computation'],
+      usage: 'Binary classification output layer, LSTM/GRU gates',
+      reason: 'Needed probability-like output. Foundation of logistic regression.' },
+    { pros: ['Zero-centered → unbiased gradients', 'Output ∈ (−1, 1)', 'Faster convergence than Sigmoid'],
+      cons: ['Still suffers from vanishing gradient', 'Grad_max = 1 at x=0', 'Saturates at large |x|'],
+      usage: 'RNN hidden layers, LSTM gates, shallow networks',
+      reason: 'Improvement over Sigmoid: zero-centered output stabilizes gradient descent.' },
+    { pros: ['No vanishing gradient (x > 0)', 'Sparse activation → efficient', 'Extremely fast to compute', '~6× faster convergence'],
+      cons: ['Dying ReLU: neurons dead when x < 0', 'Not zero-centered', 'Not differentiable at x = 0'],
+      usage: 'CNN, deep networks — default choice 2012–2017',
+      reason: 'Hinton et al. 2010: solved vanishing gradient, enabled truly deep networks.' },
+    { pros: ['No dying ReLU', 'Gradient always non-zero', 'Simple, fast to compute'],
+      cons: ['α is a hyperparameter to tune', 'Not necessarily better than ReLU', 'Not smooth at x = 0'],
+      usage: 'Drop-in ReLU replacement when dead neurons occur',
+      reason: 'Maas et al. 2013: fixed dying ReLU with small slope in negative region.' },
+    { pros: ['α learned from data', 'Adapts per layer', 'He et al: surpassed human-level ImageNet'],
+      cons: ['Extra parameters to learn', 'Risk of overfitting on small datasets'],
+      usage: 'Deep CNN (ResNet era), image classification',
+      reason: 'He et al. 2015: parametric α lets model find optimal slope per task.' },
+    { pros: ['Smooth at x = 0', 'Mean output near 0', 'More robust to noise'],
+      cons: ['exp() more expensive than ReLU', 'Marginal gains over ReLU in practice'],
+      usage: 'Deep networks needing smooth gradients, some NLP tasks',
+      reason: 'Clevert et al. 2015: smooth + negative values → mean activation near 0.' },
+    { pros: ['Self-normalizing: mean→0, var→1', 'No BatchNorm needed', 'Strong mathematical theory'],
+      cons: ['Requires lecun_normal initialization', 'Fragile with standard dropout', 'Rarely used in practice'],
+      usage: 'Deep feedforward networks as a BatchNorm replacement',
+      reason: 'Klambauer et al. 2017: derived fixed α, λ so distribution self-normalizes.' },
+    { pros: ['Smooth, non-monotonic', 'Unbounded above (no saturation)', 'NAS-discovered — empirically optimal', 'Outperforms ReLU on deep networks'],
+      cons: ['More expensive than ReLU', 'Marginal gains on shallow nets'],
+      usage: 'EfficientNet, MobileNet, many SOTA vision models',
+      reason: 'Ramachandran et al. (Google Brain) 2017: Neural Architecture Search found this.' },
+    { pros: ['Smooth, differentiable everywhere', 'Probabilistic interpretation', 'Best for Transformers', 'Theoretically bridges dropout and ReLU'],
+      cons: ['Heavier compute than ReLU', 'No clear advantage on CNNs'],
+      usage: 'GPT, BERT, ViT — the entire Transformer family',
+      reason: 'Hendrycks 2016: GELU = x·P(X≤x) — weights input by probability it\'s positive.' },
+    { pros: ['Smooth, non-monotonic', 'Self-regularizing', 'Outperforms Swish/ReLU on object detection'],
+      cons: ['Heaviest compute in the family', 'Marginal gains over GELU/Swish'],
+      usage: 'YOLOv4, some vision models',
+      reason: 'Misra 2019: smooth, bounded below, unbounded above — avoids both dying ReLU and saturation.' },
+    { pros: ['Gating mechanism: selective information flow', 'Best activation for modern LLMs', 'Increases capacity without adding depth'],
+      cons: ['Needs 2 linear projections → ~1.5× params', 'Much more complex than plain GELU'],
+      usage: 'LLaMA, PaLM, Mistral, Gemma — most modern LLMs',
+      reason: 'Noam Shazeer 2020: gating lets model learn which features matter.' },
+  ],
+};
+
+const lang = (document.querySelector('.ae-root') as HTMLElement)?.dataset.lang || 'vi';
+const ui = UI[lang as 'vi' | 'en'];
+const data = DATA[lang as 'vi' | 'en'];
+
+// Set static UI labels
+document.getElementById('ae-grad-label')!.textContent  = ui.gradient;
+document.getElementById('ae-label-pros')!.textContent  = ui.pros;
+document.getElementById('ae-label-cons')!.textContent  = ui.cons;
+document.getElementById('ae-label-usage')!.textContent = ui.usage;
+document.getElementById('ae-label-reason')!.textContent = ui.reason;
+
+const ACTIVATIONS = BASE.map((b, i) => ({ ...b, ...data[i] }));
 
 let selected = 0;
 
-function cssVar(name) {
+function cssVar(name: string) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
@@ -197,7 +253,7 @@ function buildSidebar() {
       era = a.era;
       const lbl = document.createElement('div');
       lbl.className = 'ae-era-label';
-      lbl.textContent = era;
+      lbl.textContent = ui.eras[era as keyof typeof ui.eras] ?? era;
       sb.appendChild(lbl);
     }
     const btn = document.createElement('button');
@@ -209,7 +265,7 @@ function buildSidebar() {
   });
 }
 
-function selectActivation(i) {
+function selectActivation(i: number) {
   selected = i;
   document.querySelectorAll('.ae-btn').forEach((b, j) => b.classList.toggle('ae-active', j === i));
   drawMain();
@@ -217,7 +273,7 @@ function selectActivation(i) {
   updateInfo();
 }
 
-function resize(canvas) {
+function resize(canvas: HTMLCanvasElement) {
   const rect = canvas.getBoundingClientRect();
   const dpr = window.devicePixelRatio || 1;
   canvas.width = rect.width * dpr;
@@ -227,10 +283,10 @@ function resize(canvas) {
 
 function drawMain() {
   const a = ACTIVATIONS[selected];
-  const canvas = document.getElementById('ae-main');
+  const canvas = document.getElementById('ae-main') as HTMLCanvasElement;
   if (!canvas) return;
   const { w, h, dpr } = resize(canvas);
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d')!;
   ctx.clearRect(0, 0, w, h);
 
   const [xMin, xMax] = a.range;
@@ -243,10 +299,9 @@ function drawMain() {
   const pad = (yMax - yMin) * 0.2;
   yMin -= pad; yMax += pad;
 
-  const tx = (x) => (x - xMin) / (xMax - xMin) * w;
-  const ty = (y) => h - (y - yMin) / (yMax - yMin) * h;
+  const tx = (x: number) => (x - xMin) / (xMax - xMin) * w;
+  const ty = (y: number) => h - (y - yMin) / (yMax - yMin) * h;
 
-  // grid
   ctx.strokeStyle = cssVar('--border');
   ctx.lineWidth = 1 * dpr;
   for (let x = Math.ceil(xMin); x <= xMax; x++) {
@@ -256,21 +311,18 @@ function drawMain() {
     ctx.beginPath(); ctx.moveTo(0, ty(y)); ctx.lineTo(w, ty(y)); ctx.stroke();
   }
 
-  // axes
   ctx.strokeStyle = cssVar('--muted');
   ctx.lineWidth = 1.5 * dpr;
   ctx.beginPath(); ctx.moveTo(0, ty(0)); ctx.lineTo(w, ty(0)); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(tx(0), 0); ctx.lineTo(tx(0), h); ctx.stroke();
 
-  // axis labels
   ctx.fillStyle = cssVar('--muted');
   ctx.font = `${10 * dpr}px JetBrains Mono, monospace`;
   for (let x = Math.ceil(xMin); x <= xMax; x++) {
     if (x === 0) continue;
-    ctx.fillText(x, tx(x) - 5 * dpr, ty(0) + 14 * dpr);
+    ctx.fillText(String(x), tx(x) - 5 * dpr, ty(0) + 14 * dpr);
   }
 
-  // function curve
   ctx.strokeStyle = a.color;
   ctx.lineWidth = 2.5 * dpr;
   ctx.shadowColor = a.color;
@@ -287,15 +339,15 @@ function drawMain() {
   ctx.stroke();
   ctx.shadowBlur = 0;
 
-  document.getElementById('ae-formula').textContent = a.formula;
+  document.getElementById('ae-formula')!.textContent = a.formula;
 }
 
 function drawGrad() {
   const a = ACTIVATIONS[selected];
-  const canvas = document.getElementById('ae-grad');
+  const canvas = document.getElementById('ae-grad') as HTMLCanvasElement;
   if (!canvas) return;
   const { w, h, dpr } = resize(canvas);
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d')!;
   ctx.clearRect(0, 0, w, h);
 
   const [xMin, xMax] = a.range;
@@ -308,16 +360,14 @@ function drawGrad() {
   const pad = Math.max((gMax - gMin) * 0.15, 0.05);
   gMin -= pad; gMax += pad;
 
-  const tx = (x) => (x - xMin) / (xMax - xMin) * w;
-  const ty = (y) => h - (y - gMin) / (gMax - gMin) * h;
+  const tx = (x: number) => (x - xMin) / (xMax - xMin) * w;
+  const ty = (y: number) => h - (y - gMin) / (gMax - gMin) * h;
 
-  // zero line
   ctx.strokeStyle = cssVar('--border');
   ctx.lineWidth = 1 * dpr;
   ctx.beginPath(); ctx.moveTo(0, ty(0)); ctx.lineTo(w, ty(0)); ctx.stroke();
 
-  // fill
-  const pts = [];
+  const pts: [number, number][] = [];
   for (let i = 0; i <= 400; i++) {
     const x = xMin + (xMax - xMin) * i / 400;
     const g = a.grad(x);
@@ -355,16 +405,11 @@ function drawGrad() {
 
 function updateInfo() {
   const a = ACTIVATIONS[selected];
-  const pro = document.getElementById('ae-pros');
-  const con = document.getElementById('ae-cons');
-  const usage = document.getElementById('ae-usage');
-  const reason = document.getElementById('ae-reason');
-  if (!pro) return;
-
-  pro.innerHTML = a.pros.map(t => `<div class="ae-pro">+ ${t}</div>`).join('');
-  con.innerHTML = a.cons.map(t => `<div class="ae-con">− ${t}</div>`).join('');
-  usage.textContent = a.usage;
-  reason.textContent = a.reason;
+  document.getElementById('ae-pros')!.innerHTML   = a.pros.map(t => `<div class="ae-pro">+ ${t}</div>`).join('');
+  document.getElementById('ae-cons')!.innerHTML   = a.cons.map(t => `<div class="ae-con">− ${t}</div>`).join('');
+  document.getElementById('ae-usage')!.textContent  = a.usage;
+  document.getElementById('ae-reason')!.textContent = a.reason;
+  drawGrad();
 }
 
 buildSidebar();
@@ -387,7 +432,6 @@ window.addEventListener('resize', () => { drawMain(); drawGrad(); });
     background: var(--bg2);
   }
 
-  /* Sidebar */
   .ae-sidebar {
     display: flex;
     flex-direction: column;
@@ -425,7 +469,6 @@ window.addEventListener('resize', () => { drawMain(); drawGrad(); });
   .ae-btn.ae-active { color: var(--accent); border-color: var(--accent); background: var(--bg); }
   .ae-year { font-size: 0.62rem; color: var(--muted); }
 
-  /* Main panel */
   .ae-main { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 
   .ae-canvas-wrap {

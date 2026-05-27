@@ -21,7 +21,7 @@ import ActivationExplorer from '../../components/ActivationExplorer.astro';
 
 Select an activation function to see its plot, gradient, and detailed analysis.
 
-<ActivationExplorer />
+<ActivationExplorer lang="en" />
 
 ---
 
@@ -81,7 +81,9 @@ The neuron "dies" — it never recovers. This typically happens with a learning 
 
 ## Early era: Sigmoid and Tanh (1986–2009)
 
-### Sigmoid — $\sigma(x) = \frac{1}{1+e^{-x}}$
+### Sigmoid
+
+$$\sigma(x) = \frac{1}{1+e^{-x}}$$
 
 Derived from logistic regression. Gradient:
 
@@ -91,7 +93,9 @@ Maximum at $x=0$: $\sigma'(0) = 0.25$. Output $\in (0,1)$ — not zero-centered.
 
 Still used for: gates in LSTM/GRU (requires output $\in (0,1)$ to act as a "valve"), binary classification output layers.
 
-### Tanh — $\tanh(x) = \frac{e^x - e^{-x}}{e^x + e^{-x}}$
+### Tanh
+
+$$\tanh(x) = \frac{e^x - e^{-x}}{e^x + e^{-x}}$$
 
 Essentially a rescaled Sigmoid: $\tanh(x) = 2\sigma(2x) - 1$.
 
