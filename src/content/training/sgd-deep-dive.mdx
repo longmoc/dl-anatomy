@@ -10,6 +10,7 @@ tags: [sgd, optimization, noise, regularization, langevin]
 ---
 
 import Note from '../../components/Note.astro';
+import SGDExplorer from '../../components/SGDExplorer.astro';
 
 # SGD — Stochastic Gradient Descent
 
@@ -38,6 +39,8 @@ Gradient thực tế dùng là ước lượng ngẫu nhiên của true gradient
 | $B = 1$ (SGD thuần) | Rất lớn | Mỗi step dùng 1 sample. Gradient noise lớn — quả bóng nhảy loạn. Thoát local minima tốt nhưng unstable. |
 | $B = 32$–$256$ (mini-batch) | Vừa | Điểm ngọt. Đủ noise để regularize và thoát saddle point, đủ signal để đi đúng hướng. Default của hầu hết deep learning. |
 | $B = n$ (full batch GD) | Không có | Gradient chính xác, hội tụ mượt. Nhưng không scale được, dễ kẹt tại sharp minima, generalize kém hơn. |
+
+<SGDExplorer />
 
 ## Learning rate ảnh hưởng gì
 

@@ -1,0 +1,337 @@
+---
+interface Props {
+  lang?: 'vi' | 'en';
+}
+const { lang = 'vi' } = Astro.props;
+
+const ui = lang === 'en' ? {
+  bsLabel: 'Batch size',
+  lrLabel: 'LR η',
+  play: '▶ Play',
+  pause: '⏸ Pause',
+  reset: '↺ Reset',
+  caption: 'L(θ) = 0.1·(θ²−4)²  —  two minima at θ = ±2, barrier at θ = 0.',
+} : {
+  bsLabel: 'Batch size',
+  lrLabel: 'LR η',
+  play: '▶ Chạy',
+  pause: '⏸ Dừng',
+  reset: '↺ Reset',
+  caption: 'L(θ) = 0.1·(θ²−4)²  —  hai cực tiểu tại θ = ±2, rào cản tại θ = 0.',
+};
+---
+
+<div class="sgde" data-lang={lang}>
+  <canvas class="sgde-canvas"></canvas>
+  <div class="sgde-controls">
+    <div class="sgde-row">
+      <span class="sgde-lbl">{ui.bsLabel}</span>
+      <div class="sgde-bs">
+        <button class="sgde-bsbtn" data-noise="0.80">B=1</button>
+        <button class="sgde-bsbtn sgde-active" data-noise="0.25">B=16</button>
+        <button class="sgde-bsbtn" data-noise="0.08">B=64</button>
+        <button class="sgde-bsbtn" data-noise="0">Full GD</button>
+      </div>
+    </div>
+    <div class="sgde-row">
+      <span class="sgde-lbl">{ui.lrLabel}</span>
+      <input type="range" class="sgde-lr" min="1" max="70" value="5" />
+      <span class="sgde-lrval">0.05</span>
+    </div>
+    <div class="sgde-row sgde-actions">
+      <button class="sgde-btn sgde-toggle">{ui.play}</button>
+      <button class="sgde-btn sgde-reset">{ui.reset}</button>
+      <span class="sgde-status"></span>
+    </div>
+  </div>
+  <p class="sgde-caption">{ui.caption}</p>
+</div>
+
+<script>
+document.querySelectorAll('.sgde').forEach(root => {
+  const isEn = root.dataset.lang === 'en';
+  const LABELS = {
+    step: isEn ? 'step' : 'bước',
+    play: isEn ? '▶ Play'  : '▶ Chạy',
+    pause: isEn ? '⏸ Pause' : '⏸ Dừng',
+  };
+
+  const canvas  = root.querySelector('.sgde-canvas') as HTMLCanvasElement;
+  const ctx     = canvas.getContext('2d')!;
+  const toggle  = root.querySelector('.sgde-toggle') as HTMLButtonElement;
+  const resetB  = root.querySelector('.sgde-reset')  as HTMLButtonElement;
+  const lrSlide = root.querySelector('.sgde-lr')     as HTMLInputElement;
+  const lrDisp  = root.querySelector('.sgde-lrval')  as HTMLElement;
+  const status  = root.querySelector('.sgde-status') as HTMLElement;
+
+  // Loss: L(θ) = 0.1*(θ²−4)²  — minima at ±2, barrier 1.6 at θ=0
+  const loss  = (x: number) => 0.1 * Math.pow(x * x - 4, 2);
+  const dloss = (x: number) => 0.4 * x * (x * x - 4);
+
+  const XMIN = -3.2, XMAX = 3.2, LMAX = 3.4;
+  const THETA0 = 3.1;
+  const TRAIL_MAX = 120;
+
+  let theta = THETA0, lr = 0.05, noise = 0.25;
+  let running = false, nSteps = 0, raf = 0;
+  const trail: number[] = [];
+
+  const randn = () => {
+    const u = Math.random() + 1e-10, v = Math.random();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  };
+
+  let W = 0, H = 0;
+  const PL = 18, PR = 18, PT = 18, PB = 30;
+  const tx = (x: number) => PL + (x - XMIN) / (XMAX - XMIN) * (W - PL - PR);
+  const ty = (y: number) => H - PB - Math.min(Math.max(y, 0), LMAX) / LMAX * (H - PT - PB);
+
+  const cv = (n: string) =>
+    getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+  function draw() {
+    const rect = canvas.getBoundingClientRect();
+    W = rect.width; H = rect.height;
+    if (!W || !H) return;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width  = W * dpr;
+    canvas.height = H * dpr;
+    ctx.save();
+    ctx.scale(dpr, dpr);
+
+    const accent  = cv('--accent');
+    const accent2 = cv('--accent2');
+    const muted   = cv('--muted');
+    const bg      = cv('--bg');
+    const border  = cv('--border');
+
+    // Background
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    // Minima guide lines
+    ctx.save();
+    ctx.setLineDash([3, 6]);
+    ctx.strokeStyle = accent2;
+    ctx.lineWidth = 1;
+    ctx.globalAlpha = 0.35;
+    [-2, 2].forEach(xm => {
+      ctx.beginPath();
+      ctx.moveTo(tx(xm), PT);
+      ctx.lineTo(tx(xm), H - PB);
+      ctx.stroke();
+    });
+    ctx.restore();
+
+    // Loss curve
+    ctx.beginPath();
+    ctx.strokeStyle = muted;
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.65;
+    let pen = false;
+    for (let px = PL; px <= W - PR; px += 1) {
+      const x = XMIN + (px - PL) / (W - PL - PR) * (XMAX - XMIN);
+      const l = loss(x);
+      const py = ty(l);
+      if (!pen) { ctx.moveTo(px, py); pen = true; }
+      else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    // Min labels
+    ctx.font = `10px var(--mono, monospace)`;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = accent2;
+    ctx.globalAlpha = 0.6;
+    ctx.fillText('θ=−2', tx(-2), H - 6);
+    ctx.fillText('θ=+2', tx(2),  H - 6);
+    ctx.globalAlpha = 1;
+
+    // Trail
+    trail.forEach((t, i) => {
+      ctx.globalAlpha = 0.12 + 0.55 * (i / trail.length);
+      ctx.beginPath();
+      ctx.arc(tx(t), ty(loss(t)), 2.2, 0, Math.PI * 2);
+      ctx.fillStyle = accent;
+      ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+
+    // Divergence zone: θ near edges
+    const diverged = Math.abs(theta) > 3.05;
+    const converged = Math.abs(Math.abs(theta) - 2) < 0.08;
+
+    // Current point
+    ctx.beginPath();
+    ctx.arc(tx(theta), ty(loss(theta)), 7, 0, Math.PI * 2);
+    ctx.fillStyle = diverged ? cv('--amber') : converged ? accent2 : accent;
+    ctx.fill();
+    ctx.strokeStyle = bg;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.restore();
+
+    // Status text
+    const lv = loss(theta);
+    status.textContent =
+      `${LABELS.step}: ${nSteps}  ·  θ = ${theta.toFixed(3)}  ·  L = ${lv.toFixed(4)}` +
+      (converged ? (isEn ? '  ✓ converged' : '  ✓ hội tụ') : '') +
+      (diverged  ? (isEn ? '  ✗ diverged'  : '  ✗ phân kỳ') : '');
+  }
+
+  function sgdStep() {
+    const g = dloss(theta) + randn() * noise;
+    theta = Math.max(XMIN + 0.02, Math.min(XMAX - 0.02, theta - lr * g));
+    trail.push(theta);
+    if (trail.length > TRAIL_MAX) trail.shift();
+    nSteps++;
+  }
+
+  let lastT = 0;
+  function loop(t: number) {
+    if (!running) return;
+    if (t - lastT > 75) {
+      for (let i = 0; i < 3; i++) sgdStep();
+      draw();
+      lastT = t;
+    }
+    raf = requestAnimationFrame(loop);
+  }
+
+  function reset() {
+    running = false;
+    cancelAnimationFrame(raf);
+    theta = THETA0;
+    trail.length = 0;
+    nSteps = 0;
+    toggle.textContent = LABELS.play;
+    draw();
+  }
+
+  toggle.addEventListener('click', () => {
+    running = !running;
+    toggle.textContent = running ? LABELS.pause : LABELS.play;
+    if (running) raf = requestAnimationFrame(loop);
+  });
+
+  resetB.addEventListener('click', reset);
+
+  root.querySelectorAll('.sgde-bsbtn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      root.querySelectorAll('.sgde-bsbtn').forEach(b => b.classList.remove('sgde-active'));
+      btn.classList.add('sgde-active');
+      noise = parseFloat((btn as HTMLElement).dataset.noise ?? '0.25');
+    });
+  });
+
+  lrSlide.addEventListener('input', () => {
+    lr = lrSlide.valueAsNumber / 100;
+    lrDisp.textContent = lr.toFixed(2);
+  });
+
+  const ro = new ResizeObserver(draw);
+  ro.observe(canvas);
+  draw();
+});
+</script>
+
+<style>
+  .sgde {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1rem 0.85rem;
+    margin: 1.75rem 0;
+  }
+
+  .sgde-canvas {
+    width: 100%;
+    height: 220px;
+    display: block;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    margin-bottom: 0.75rem;
+  }
+
+  .sgde-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+  }
+
+  .sgde-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+  }
+
+  .sgde-lbl {
+    font-family: var(--mono);
+    font-size: 0.77rem;
+    color: var(--muted);
+    min-width: 68px;
+  }
+
+  .sgde-bs { display: flex; gap: 0.3rem; flex-wrap: wrap; }
+
+  .sgde-bsbtn {
+    font-family: var(--mono);
+    font-size: 0.74rem;
+    padding: 0.18em 0.6em;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg);
+    color: var(--muted);
+    cursor: pointer;
+    transition: color 0.12s, border-color 0.12s, background 0.12s;
+  }
+  .sgde-bsbtn:hover { color: var(--text); border-color: var(--text); }
+  .sgde-bsbtn.sgde-active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+
+  .sgde-lr { flex: 1; min-width: 100px; max-width: 180px; }
+
+  .sgde-lrval {
+    font-family: var(--mono);
+    font-size: 0.77rem;
+    color: var(--accent);
+    min-width: 26px;
+  }
+
+  .sgde-actions { gap: 0.45rem; }
+
+  .sgde-btn {
+    font-family: var(--mono);
+    font-size: 0.77rem;
+    padding: 0.28em 0.8em;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    background: var(--bg);
+    color: var(--text);
+    cursor: pointer;
+    transition: color 0.12s, border-color 0.12s;
+  }
+  .sgde-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+  .sgde-status {
+    font-family: var(--mono);
+    font-size: 0.73rem;
+    color: var(--muted);
+  }
+
+  .sgde-caption {
+    font-size: 0.78rem;
+    color: var(--muted);
+    text-align: center;
+    margin-top: 0.6rem;
+    font-style: italic;
+    line-height: 1.5;
+  }
+</style>

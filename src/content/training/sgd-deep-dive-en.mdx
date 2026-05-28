@@ -10,6 +10,7 @@ tags: [sgd, optimization, noise, regularization, langevin]
 ---
 
 import Note from '../../components/Note.astro';
+import SGDExplorer from '../../components/SGDExplorer.astro';
 
 # SGD — Stochastic Gradient Descent
 
@@ -38,6 +39,8 @@ The gradient actually used is a stochastic estimate of the true gradient — thi
 | $B = 1$ (pure SGD) | Very high | Each step uses 1 sample. Noisy gradients cause erratic jumps. Good at escaping local minima, but unstable. |
 | $B = 32$–$256$ (mini-batch) | Moderate | The sweet spot. Enough noise to regularize and escape saddle points, enough signal to move in the right direction. Default for most deep learning. |
 | $B = n$ (full-batch GD) | None | Exact gradients, smooth convergence. But doesn't scale, tends to get stuck at sharp minima, generalizes worse. |
+
+<SGDExplorer lang="en" />
 
 ## How learning rate affects training
 
