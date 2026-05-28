@@ -1,52 +1,139 @@
 ---
 title: "SGD — Stochastic Gradient Descent"
-description: "Tại sao SGD hoạt động tốt hơn full-batch GD, và noise có vai trò gì trong quá trình huấn luyện."
+description: "Tại sao SGD hoạt động tốt hơn full-batch GD, noise có cấu trúc gì, và kết nối với Langevin dynamics."
 lang: vi
 category: training
 order: 1
-tags: [sgd, optimization, noise, regularization]
+translation: sgd-deep-dive-en
+tags: [sgd, optimization, noise, regularization, langevin]
 ---
 
 import Note from '../../components/Note.astro';
 
 # SGD — Stochastic Gradient Descent
 
-*Bài này sẽ được migrate từ `sgd_notes.html` với đầy đủ visualizations.*
+## SGD là gì về mặt toán học
 
-## Gradient Descent cơ bản
+Bài toán training là tìm $\theta$ để minimize:
 
 $$
-\theta_{t+1} = \theta_t - \eta \nabla \mathcal{L}(\theta_t)
+\mathcal{L}(\theta) = \frac{1}{n}\sum_{i=1}^n \ell(f_\theta(x_i), y_i)
 $$
 
-**Full-batch GD:** tính gradient trên toàn bộ dataset.  
-**SGD:** tính gradient trên 1 sample hoặc mini-batch.
+Với $n$ lớn (hàng triệu samples), tính gradient trên toàn bộ data mỗi bước rất tốn kém. SGD giải quyết bằng cách dùng một minibatch $B$ ngẫu nhiên:
 
-## Tại sao SGD lại tốt hơn?
+$$
+\theta_{t+1} = \theta_t - \eta \cdot \underbrace{\frac{1}{|B|}\sum_{i \in B} \nabla_\theta \ell_i(\theta_t)}_{\tilde{g}_t \approx \nabla\mathcal{L}(\theta_t)}
+$$
 
 <Note type="intuition">
-Noise từ mini-batch không phải là bug — nó là feature. Noise đóng vai trò regularizer và giúp thoát khỏi saddle points.
+Gradient thực tế dùng là ước lượng ngẫu nhiên của true gradient — đây là nguồn gốc của mọi tính chất thú vị của SGD.
 </Note>
 
-### Cấu trúc noise
+## Ba chế độ tùy batch size
+
+| Batch size | Noise | Đặc điểm thực tế |
+|---|---|---|
+| $B = 1$ (SGD thuần) | Rất lớn | Mỗi step dùng 1 sample. Gradient noise lớn — quả bóng nhảy loạn. Thoát local minima tốt nhưng unstable. |
+| $B = 32$–$256$ (mini-batch) | Vừa | Điểm ngọt. Đủ noise để regularize và thoát saddle point, đủ signal để đi đúng hướng. Default của hầu hết deep learning. |
+| $B = n$ (full batch GD) | Không có | Gradient chính xác, hội tụ mượt. Nhưng không scale được, dễ kẹt tại sharp minima, generalize kém hơn. |
+
+## Learning rate ảnh hưởng gì
+
+| LR | Hành vi |
+|---|---|
+| Quá nhỏ (< 0.01) | Từng bước đi rất nhỏ, hội tụ cực chậm, dễ kẹt tại điểm đang đứng. |
+| Vừa (0.05–0.15) | Di chuyển ổn định về phía minimum. Noise giúp thoát khỏi các hố cạn. |
+| Quá lớn (> 0.25) | Nhảy vượt qua minimum, dao động qua lại, thậm chí diverge — loss tăng vô tận. |
+
+### Điều kiện hội tụ — Robbins-Monro
+
+Để SGD hội tụ về mặt lý thuyết, learning rate cần thỏa mãn:
+
+$$
+\sum_{t=1}^\infty \eta_t = \infty \quad \text{và} \quad \sum_{t=1}^\infty \eta_t^2 < \infty
+$$
+
+<Note type="warning">
+Điều kiện thứ nhất đảm bảo các bước đủ lớn để đến được minimum. Điều kiện thứ hai đảm bảo các bước đủ nhỏ để dừng lại được. Trong thực tế, LR decay schedule chính là cách đảm bảo hai điều này.
+</Note>
+
+## Noise có cấu trúc — không phải random thuần túy
+
+Gradient thực tế của SGD là:
 
 $$
 \tilde{g}_t = \nabla\mathcal{L}(\theta_t) + \epsilon_t
 $$
 
+Với phương sai của noise:
+
 $$
 \text{Cov}(\epsilon_t) = \frac{1}{|B|}\Sigma(\theta_t)
 $$
 
-- Noise tỷ lệ nghịch với batch size $|B|$
-- Noise phụ thuộc vị trí $\theta$ — không phải noise thuần túy
+Trong đó $\Sigma(\theta_t) = \text{Cov}_{i \sim \text{data}}[\nabla\ell_i(\theta_t)]$ là **gradient covariance matrix** — phụ thuộc vào vị trí $\theta_t$, không phải hằng số.
+
+<Note type="result">
+Noise lớn ở vùng loss cao (các gradient $\nabla\ell_i$ phân tán), noise nhỏ ở vùng loss thấp (các gradient đồng thuận). SGD tự nhiên ổn định hơn khi gần minimum.
+</Note>
 
 ## SGD ≈ Langevin Dynamics
+
+Khi learning rate nhỏ và step liên tục, SGD xấp xỉ một **Stochastic Differential Equation**:
 
 $$
 d\theta = -\nabla\mathcal{L}(\theta)\,dt + \sqrt{\eta \cdot \Sigma(\theta)}\,dW_t
 $$
 
-<Note type="result">
-SGD tự nhiên tìm **flat minima** vì noise liên tục perturbate $\theta$. Flat minima generalize tốt hơn sharp minima.
+Đây là phương trình **Langevin dynamics** trong vật lý thống kê. Nhiệt độ hiệu dụng của hệ:
+
+$$
+T_{\text{eff}} \propto \frac{\eta}{|B|}
+$$
+
+Stationary distribution (phân phối dừng) của hệ này:
+
+$$
+p(\theta) \propto \exp\!\left(-\frac{\mathcal{L}(\theta)}{T_{\text{eff}}}\right)
+$$
+
+<Note type="theorem">
+Đây chính xác là **Gibbs distribution** trong vật lý thống kê — và là **Bayesian posterior** với prior uniform. SGD không chỉ tìm một điểm $\theta^*$ mà về mặt lý thuyết đang *sample từ posterior* của $\theta$.
 </Note>
+
+## Implicit regularizer
+
+Kỳ vọng loss sau một SGD step với noise $\epsilon$:
+
+$$
+\mathbb{E}[\mathcal{L}(\theta_{t+1})] \approx \mathcal{L}(\theta_t) - \eta\|\nabla\mathcal{L}\|^2 + \underbrace{\frac{\eta^2}{2}\text{tr}(H\Sigma)}_{\text{noise penalty}}
+$$
+
+Term $\frac{\eta^2}{2}\text{tr}(H\Sigma)$ là **implicit regularizer**: lớn khi $H$ lớn (sharp region) → SGD bị phạt khi ở vùng sharp. Không cần thêm $\lambda\|\theta\|^2$ vào loss, SGD tự động phạt vùng curvature cao.
+
+## Linear scaling rule
+
+Từ $T_{\text{eff}} \propto \frac{\eta}{|B|}$, có hệ quả thực tế:
+
+<Note type="result">
+Tăng batch size $k$ lần ≡ giảm nhiệt độ $k$ lần. Để bù lại, cần tăng learning rate $k$ lần — **linear scaling rule**. Đây là lý do khi train trên nhiều GPU (batch lớn hơn), người ta scale LR theo số GPU.
+</Note>
+
+## Tại sao SGD vẫn được dùng (vs Adam)
+
+| Tiêu chí | SGD + momentum | Adam |
+|---|---|---|
+| Loại noise | Isotropic — tác động đều mọi hướng | Anisotropic — scale riêng từng chiều |
+| Minima tìm được | Flat minima — generalize tốt hơn trên vision | Đôi khi sharp minima — generalize kém hơn |
+| Tuning | Cần tune LR cẩn thận hơn | Ít nhạy cảm với LR hơn, dễ dùng |
+| Dùng ở đâu | ResNet, nhiều SOTA vision models | LLM, NLP, default cho hầu hết tasks |
+
+## Papers tham khảo
+
+| Paper | |
+|---|---|
+| Smith & Le (2018) | A Bayesian Perspective on Generalization and SGD |
+| Keskar et al. (2017) | On Large-Batch Training — sharp vs flat minima |
+| Zhu et al. (2019) | The Anisotropic Noise in SGD |
+| Blanc et al. (2020) | Implicit Regularization for Deep Neural Networks |

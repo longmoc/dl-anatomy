@@ -1,0 +1,139 @@
+---
+title: "SGD — Stochastic Gradient Descent"
+description: "Why SGD outperforms full-batch GD, what structured noise means, and the connection to Langevin dynamics."
+lang: en
+category: training
+order: 1
+translation: sgd-deep-dive
+tags: [sgd, optimization, noise, regularization, langevin]
+---
+
+import Note from '../../components/Note.astro';
+
+# SGD — Stochastic Gradient Descent
+
+## What is SGD, mathematically
+
+The training objective is to find $\theta$ that minimizes:
+
+$$
+\mathcal{L}(\theta) = \frac{1}{n}\sum_{i=1}^n \ell(f_\theta(x_i), y_i)
+$$
+
+With $n$ in the millions, computing the exact gradient over the full dataset every step is prohibitively expensive. SGD solves this by using a random minibatch $B$:
+
+$$
+\theta_{t+1} = \theta_t - \eta \cdot \underbrace{\frac{1}{|B|}\sum_{i \in B} \nabla_\theta \ell_i(\theta_t)}_{\tilde{g}_t \approx \nabla\mathcal{L}(\theta_t)}
+$$
+
+<Note type="intuition">
+The gradient actually used is a stochastic estimate of the true gradient — this is the source of all of SGD's interesting properties.
+</Note>
+
+## Three regimes by batch size
+
+| Batch size | Noise | Practical behavior |
+|---|---|---|
+| $B = 1$ (pure SGD) | Very high | Each step uses 1 sample. Noisy gradients cause erratic jumps. Good at escaping local minima, but unstable. |
+| $B = 32$–$256$ (mini-batch) | Moderate | The sweet spot. Enough noise to regularize and escape saddle points, enough signal to move in the right direction. Default for most deep learning. |
+| $B = n$ (full-batch GD) | None | Exact gradients, smooth convergence. But doesn't scale, tends to get stuck at sharp minima, generalizes worse. |
+
+## How learning rate affects training
+
+| LR | Behavior |
+|---|---|
+| Too small (< 0.01) | Steps are tiny — extremely slow convergence, prone to getting stuck. |
+| Good range (0.05–0.15) | Steady progress toward minimum. Noise helps escape shallow basins. |
+| Too large (> 0.25) | Overshoots the minimum, oscillates, can diverge — loss increases indefinitely. |
+
+### Convergence condition — Robbins-Monro
+
+For SGD to converge theoretically, the learning rate must satisfy:
+
+$$
+\sum_{t=1}^\infty \eta_t = \infty \quad \text{and} \quad \sum_{t=1}^\infty \eta_t^2 < \infty
+$$
+
+<Note type="warning">
+The first condition ensures steps are large enough to reach the minimum. The second ensures steps are eventually small enough to stop. In practice, an LR decay schedule is exactly how these conditions are enforced.
+</Note>
+
+## Noise has structure — it's not purely random
+
+The actual gradient used by SGD is:
+
+$$
+\tilde{g}_t = \nabla\mathcal{L}(\theta_t) + \epsilon_t
+$$
+
+With the noise covariance:
+
+$$
+\text{Cov}(\epsilon_t) = \frac{1}{|B|}\Sigma(\theta_t)
+$$
+
+Where $\Sigma(\theta_t) = \text{Cov}_{i \sim \text{data}}[\nabla\ell_i(\theta_t)]$ is the **gradient covariance matrix** — it depends on the current position $\theta_t$, not a fixed constant.
+
+<Note type="result">
+Noise is large in high-loss regions (gradients $\nabla\ell_i$ point in scattered directions), and small near a minimum (gradients align). SGD naturally becomes more stable as it approaches a good solution.
+</Note>
+
+## SGD ≈ Langevin Dynamics
+
+When the learning rate is small and steps are treated as continuous, SGD approximates a **Stochastic Differential Equation**:
+
+$$
+d\theta = -\nabla\mathcal{L}(\theta)\,dt + \sqrt{\eta \cdot \Sigma(\theta)}\,dW_t
+$$
+
+This is the **Langevin dynamics** equation from statistical physics. The effective temperature of the system is:
+
+$$
+T_{\text{eff}} \propto \frac{\eta}{|B|}
+$$
+
+The stationary distribution of this system:
+
+$$
+p(\theta) \propto \exp\!\left(-\frac{\mathcal{L}(\theta)}{T_{\text{eff}}}\right)
+$$
+
+<Note type="theorem">
+This is exactly the **Gibbs distribution** from statistical physics — and the **Bayesian posterior** under a uniform prior. SGD doesn't just find a single point $\theta^*$; in theory it's *sampling from the posterior* over $\theta$.
+</Note>
+
+## Implicit regularization
+
+Expected loss after one SGD step with noise $\epsilon$:
+
+$$
+\mathbb{E}[\mathcal{L}(\theta_{t+1})] \approx \mathcal{L}(\theta_t) - \eta\|\nabla\mathcal{L}\|^2 + \underbrace{\frac{\eta^2}{2}\text{tr}(H\Sigma)}_{\text{noise penalty}}
+$$
+
+The term $\frac{\eta^2}{2}\text{tr}(H\Sigma)$ is an **implicit regularizer**: it's large when $H$ is large (sharp curvature region), so SGD is penalized for staying in sharp regions. No need to add $\lambda\|\theta\|^2$ to the loss — SGD automatically penalizes high-curvature areas.
+
+## Linear scaling rule
+
+From $T_{\text{eff}} \propto \frac{\eta}{|B|}$, a practical consequence follows:
+
+<Note type="result">
+Increasing batch size by $k$ ≡ decreasing temperature by $k$. To compensate, learning rate must increase by $k$ — the **linear scaling rule**. This is why practitioners scale LR proportionally to the number of GPUs when using large batches.
+</Note>
+
+## Why SGD is still used (vs Adam)
+
+| Criterion | SGD + momentum | Adam |
+|---|---|---|
+| Noise type | Isotropic — uniform across all directions | Anisotropic — scales each dimension separately |
+| Minima found | Flat minima — better generalization on vision | Occasionally sharp minima — can generalize worse |
+| Tuning effort | Requires careful LR tuning | Less sensitive to LR, easier to use |
+| Where it's used | ResNet, many SOTA vision models | LLMs, NLP, default for most tasks |
+
+## References
+
+| Paper | |
+|---|---|
+| Smith & Le (2018) | A Bayesian Perspective on Generalization and SGD |
+| Keskar et al. (2017) | On Large-Batch Training — sharp vs flat minima |
+| Zhu et al. (2019) | The Anisotropic Noise in SGD |
+| Blanc et al. (2020) | Implicit Regularization for Deep Neural Networks |

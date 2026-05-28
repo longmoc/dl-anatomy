@@ -1,0 +1,122 @@
+---
+title: "Optimizer Anatomy"
+description: "A survey of the deep learning optimizer landscape — from vanilla SGD to modern adaptive methods."
+lang: en
+category: training
+order: 0
+translation: optimizers
+tags: [optimizer, sgd, adam, training, overview]
+---
+
+import Note from '../../components/Note.astro';
+
+# Optimizer Anatomy
+
+An optimizer is the algorithm that updates parameters $\theta$ after each training step. The central question: **how do we use gradients to move efficiently through the loss landscape?**
+
+## The core problem
+
+All optimizers solve the same minimization problem:
+
+$$
+\min_\theta \mathcal{L}(\theta) = \frac{1}{n}\sum_{i=1}^n \ell(f_\theta(x_i), y_i)
+$$
+
+Pure gradient descent uses the full dataset each step: $\theta_{t+1} = \theta_t - \eta \nabla \mathcal{L}(\theta_t)$. When $n$ is in the millions this is prohibitively expensive — which is why SGD was introduced, and why every modern optimizer is built on top of it.
+
+## Evolution over time
+
+| Era | Optimizer | What's new |
+|---|---|---|
+| 1980–2005 | SGD | Mini-batch, stochastic gradient |
+| 2006–2012 | Momentum, AdaGrad, RMSProp | History accumulation, per-dimension adaptive LR |
+| 2013–2019 | Adam, AdamW | 1st & 2nd moment estimates, decoupled weight decay |
+| 2020–present | Muon, Lion, Schedule-free | LLM-scale training, no LR schedule needed |
+
+## Two schools of thought
+
+### SGD + Momentum
+
+Gradient noise is **isotropic** — it acts uniformly across all directions in parameter space. This property naturally biases SGD toward **flat minima**, which generalize better on vision tasks (ResNet, ViT).
+
+The trade-off: LR requires careful tuning and a good schedule.
+
+### Adaptive methods (Adam, AdamW)
+
+Scale each gradient dimension **independently** based on its history. Much less sensitive to LR — default choice for NLP and most LLM training.
+
+<Note type="warning">
+Adaptive methods can converge to **sharp minima** — low training loss but worse generalization. This is why many SOTA vision models still use SGD + momentum rather than Adam.
+</Note>
+
+## Optimizer taxonomy
+
+**First-order (gradient only):**
+- SGD, SGD + Momentum, Nesterov AGD
+- AdaGrad, RMSProp
+- Adam, AdamW, NAdam
+
+**Approximate second-order:**
+- K-FAC (approximate Fisher information matrix)
+- Shampoo (matrix preconditioning)
+
+**New paradigms:**
+- Lion (sign-based, found by AutoML search)
+- Muon (Nesterov + orthogonalization, for LLMs)
+- Schedule-free Adam (eliminates the LR schedule)
+
+## Update rules — quick reference
+
+**Vanilla SGD:**
+
+$$
+\theta_{t+1} = \theta_t - \eta \cdot \tilde{g}_t
+$$
+
+**Momentum (Heavy Ball):**
+
+$$
+v_{t+1} = \beta v_t + \tilde{g}_t \qquad \theta_{t+1} = \theta_t - \eta v_{t+1}
+$$
+
+**Adam:**
+
+$$
+m_t = \beta_1 m_{t-1} + (1-\beta_1)g_t
+$$
+
+$$
+v_t = \beta_2 v_{t-1} + (1-\beta_2)g_t^2
+$$
+
+$$
+\theta_{t+1} = \theta_t - \eta \frac{\hat{m}_t}{\sqrt{\hat{v}_t} + \epsilon}
+$$
+
+Where $\hat{m}_t = m_t / (1 - \beta_1^t)$ and $\hat{v}_t = v_t / (1 - \beta_2^t)$ are bias-corrected estimates.
+
+<Note type="intuition">
+$v_t$ — the second moment — measures "average gradient magnitude per dimension." Dividing by $\sqrt{\hat{v}_t}$ means: dimensions with large gradients get smaller steps; dimensions with small gradients get larger steps. This is what "adaptive" means.
+</Note>
+
+## Key hyperparameters
+
+| Hyperparameter | SGD | Adam | Notes |
+|---|---|---|---|
+| Learning rate $\eta$ | Needs careful tuning | Less sensitive, typically 1e-3 | Most impactful for SGD |
+| Momentum $\beta$ | 0.9 typical | $\beta_1 = 0.9$ | Controls "inertia" speed |
+| Weight decay | L2 added to loss | AdamW: decoupled | Adam should use AdamW |
+| Batch size | Affects noise level | Less sensitive | SGD: noise $\propto 1/|B|$ |
+
+## Articles in this series
+
+| Article | Content |
+|---|---|
+| SGD — Stochastic Gradient Descent | Why SGD works, structured noise, Langevin dynamics, implicit regularization |
+| Momentum & Nesterov *(coming soon)* | Why momentum accelerates, Nesterov look-ahead |
+| Adam & AdamW *(coming soon)* | Adaptive gradient, bias correction, why decouple weight decay |
+| LR Schedules *(coming soon)* | Warmup, cosine, WSD — and when to skip the schedule entirely |
+
+<Note type="paper">
+For a deep dive on the Adam vs SGD generalization gap: **Wilson et al. (2017)** — "The Marginal Value of Momentum for Small Learning Rate SGD." Conclusion: well-tuned SGD matches or outperforms Adam on test accuracy across many vision benchmarks.
+</Note>

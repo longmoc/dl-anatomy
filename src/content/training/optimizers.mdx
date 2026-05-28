@@ -1,0 +1,122 @@
+---
+title: "Optimizer Anatomy"
+description: "Tổng quan về landscape optimizer trong deep learning — từ SGD vanilla đến các phương pháp adaptive hiện đại."
+lang: vi
+category: training
+order: 0
+translation: optimizers-en
+tags: [optimizer, sgd, adam, training, overview]
+---
+
+import Note from '../../components/Note.astro';
+
+# Optimizer Anatomy
+
+Optimizer là thuật toán cập nhật tham số $\theta$ sau mỗi bước training. Câu hỏi cốt lõi: **dùng gradient như thế nào để di chuyển hiệu quả trong loss landscape?**
+
+## Bài toán chung
+
+Tất cả các optimizer đều giải bài toán minimize loss:
+
+$$
+\min_\theta \mathcal{L}(\theta) = \frac{1}{n}\sum_{i=1}^n \ell(f_\theta(x_i), y_i)
+$$
+
+Gradient descent thuần túy dùng toàn bộ dataset mỗi bước: $\theta_{t+1} = \theta_t - \eta \nabla \mathcal{L}(\theta_t)$. Không thực tế khi $n$ hàng triệu — đây là lý do SGD ra đời, và từ SGD tất cả optimizer hiện đại được xây dựng.
+
+## Tiến hóa qua các thời kỳ
+
+| Era | Optimizer | Điểm mới |
+|---|---|---|
+| 1980–2005 | SGD | Mini-batch, stochastic gradient |
+| 2006–2012 | Momentum, AdaGrad, RMSProp | Tích lũy history, adaptive per-dimension LR |
+| 2013–2019 | Adam, AdamW | Moment bậc 1 & 2, decoupled weight decay |
+| 2020–nay | Muon, Lion, Schedule-free | Scale cho LLM, không cần LR schedule |
+
+## Hai trường phái
+
+### SGD + Momentum
+
+Noise gradient là **isotropic** — tác động đều mọi hướng trong parameter space. Đặc tính này giúp SGD tự nhiên tìm **flat minima**, generalize tốt hơn trên vision tasks (ResNet, ViT).
+
+Giá phải trả: LR cần tune cẩn thận, cần LR schedule tốt.
+
+### Adaptive methods (Adam, AdamW)
+
+Scale gradient **riêng từng chiều** theo lịch sử gradient. Ít nhạy cảm với LR hơn, dễ dùng — default cho NLP và hầu hết LLM training.
+
+<Note type="warning">
+Adaptive methods đôi khi hội tụ đến **sharp minima** — loss trên train set thấp nhưng generalize kém hơn. Đây là lý do nhiều SOTA vision model vẫn dùng SGD + momentum thay vì Adam.
+</Note>
+
+## Phân loại theo cơ chế
+
+**First-order only (gradient):**
+- SGD, SGD + Momentum, Nesterov AGD
+- AdaGrad, RMSProp
+- Adam, AdamW, NAdam
+
+**Second-order approximate:**
+- K-FAC (approximate Fisher information matrix)
+- Shampoo (matrix preconditioning)
+
+**Momentum-free / new paradigm:**
+- Lion (sign-based, từ AutoML search)
+- Muon (Nesterov + orthogonalization, cho LLM)
+- Schedule-free Adam (loại bỏ LR schedule)
+
+## Công thức cập nhật — so sánh nhanh
+
+**SGD thuần:**
+
+$$
+\theta_{t+1} = \theta_t - \eta \cdot \tilde{g}_t
+$$
+
+**Momentum (Heavy Ball):**
+
+$$
+v_{t+1} = \beta v_t + \tilde{g}_t \qquad \theta_{t+1} = \theta_t - \eta v_{t+1}
+$$
+
+**Adam:**
+
+$$
+m_t = \beta_1 m_{t-1} + (1-\beta_1)g_t
+$$
+
+$$
+v_t = \beta_2 v_{t-1} + (1-\beta_2)g_t^2
+$$
+
+$$
+\theta_{t+1} = \theta_t - \eta \frac{\hat{m}_t}{\sqrt{\hat{v}_t} + \epsilon}
+$$
+
+Trong đó $\hat{m}_t = m_t / (1 - \beta_1^t)$ và $\hat{v}_t = v_t / (1 - \beta_2^t)$ là bias-corrected estimates.
+
+<Note type="intuition">
+$v_t$ — moment bậc 2 — đo "độ lớn trung bình của gradient theo từng chiều." Chia cho $\sqrt{\hat{v}_t}$ nghĩa là: chiều nào gradient lớn → bước nhỏ; chiều nào gradient nhỏ → bước lớn. Đây là ý nghĩa của "adaptive."
+</Note>
+
+## Hyperparameters quan trọng
+
+| Hyperparameter | SGD | Adam | Ghi chú |
+|---|---|---|---|
+| Learning rate $\eta$ | Cần tune kỹ | Ít nhạy, thường 1e-3 | Nhạy cảm nhất với SGD |
+| Momentum $\beta$ | 0.9 thông thường | $\beta_1 = 0.9$ | Tốc độ "quán tính" |
+| Weight decay | L2 trong loss | AdamW: decoupled | Adam thường dùng AdamW |
+| Batch size | Ảnh hưởng noise | Ít ảnh hưởng hơn | SGD: noise $\propto 1/|B|$ |
+
+## Series bài viết
+
+| Bài | Nội dung |
+|---|---|
+| SGD — Stochastic Gradient Descent | Tại sao SGD hoạt động, noise có cấu trúc, Langevin dynamics, implicit regularization |
+| Momentum & Nesterov *(sắp có)* | Tại sao momentum tăng tốc, Nesterov look-ahead |
+| Adam & AdamW *(sắp có)* | Adaptive gradient, bias correction, tại sao decouple weight decay |
+| LR Schedule *(sắp có)* | Warmup, cosine, WSD — và khi nào không cần schedule |
+
+<Note type="paper">
+Nếu muốn đọc sâu hơn về lý do Adam vs SGD generalization gap: **Wilson et al. (2017)** — "The Marginal Value of Momentum for Small Learning Rate SGD." Kết luận: SGD + tuned LR thường bằng hoặc hơn Adam về test accuracy trên nhiều vision benchmarks.
+</Note>
