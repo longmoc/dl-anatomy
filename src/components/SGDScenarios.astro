@@ -7,6 +7,7 @@ interface ScenarioDef {
   noteStyle: 'muted' | 'good' | 'warn';
   lr: number;
   noise: number;
+  theta0: number;
 }
 
 interface Props {
@@ -17,50 +18,58 @@ interface Props {
 const { type, lang = 'vi' } = Astro.props;
 
 const DEFS: Record<'batch' | 'lr', ScenarioDef[]> = {
+  // Batch: start NEAR minimum (θ=2.6) so noise competes with gradient.
+  // At θ=2.6, |∇L| ≈ 2.9; with lr=0.08 the deterministic step is ~0.23.
+  // B=1 noise std 2.5 → step std ≈ 0.20 (noise ≈ gradient → visible zigzag).
+  // B=64 noise std 0.30 → step std ≈ 0.024 (noise << gradient → smooth).
+  // Ratio 2.5/0.30 ≈ 8 ≈ √64, reflecting the 1/√|B| scaling law.
+  // Absolute magnitudes are illustrative — true values are data/model-dependent.
   batch: [
     {
       labelVi: 'B = 1',   labelEn: 'B = 1',
-      noteVi:  'nhiễu rất lớn — nhảy loạn',
-      noteEn:  'very noisy — erratic jumps',
+      noteVi:  'nhiễu lớn — zigzag rõ rệt',
+      noteEn:  'high noise — clear zigzag',
       noteStyle: 'warn',
-      lr: 0.08, noise: 0.90,
+      lr: 0.08, noise: 2.50, theta0: 2.6,
     },
     {
       labelVi: 'B = 64',  labelEn: 'B = 64',
-      noteVi:  'nhiễu vừa — điểm ngọt',
-      noteEn:  'moderate noise — sweet spot',
+      noteVi:  'nhiễu nhỏ — gần gradient thực',
+      noteEn:  'low noise — near true gradient',
       noteStyle: 'good',
-      lr: 0.08, noise: 0.10,
+      lr: 0.08, noise: 0.30, theta0: 2.6,
     },
     {
       labelVi: 'Full GD', labelEn: 'Full GD',
-      noteVi:  'không nhiễu — đường thẳng',
-      noteEn:  'no noise — straight path',
+      noteVi:  'không nhiễu — đường thẳng xuống',
+      noteEn:  'no noise — straight descent',
       noteStyle: 'muted',
-      lr: 0.08, noise: 0.00,
+      lr: 0.08, noise: 0.00, theta0: 2.6,
     },
   ],
+  // LR: start far (θ=3.1) so convergence speed difference is visible.
+  // No noise so LR effect is isolated.
   lr: [
     {
       labelVi: 'η = 0.02', labelEn: 'η = 0.02',
       noteVi:  'quá nhỏ — hội tụ rất chậm',
       noteEn:  'too small — very slow',
       noteStyle: 'warn',
-      lr: 0.02, noise: 0.00,
+      lr: 0.02, noise: 0.00, theta0: 3.1,
     },
     {
       labelVi: 'η = 0.08', labelEn: 'η = 0.08',
       noteVi:  'phù hợp — hội tụ mượt mà',
       noteEn:  'optimal — smooth convergence',
       noteStyle: 'good',
-      lr: 0.08, noise: 0.00,
+      lr: 0.08, noise: 0.00, theta0: 3.1,
     },
     {
       labelVi: 'η = 0.40', labelEn: 'η = 0.40',
-      noteVi:  'quá lớn — bước nhảy lớn',
+      noteVi:  'quá lớn — vượt qua minimum',
       noteEn:  'too large — overshooting',
       noteStyle: 'warn',
-      lr: 0.40, noise: 0.00,
+      lr: 0.40, noise: 0.00, theta0: 3.1,
     },
   ],
 };
@@ -77,6 +86,7 @@ const replayLabel = lang === 'en' ? '↺ Replay' : '↺ Chạy lại';
           class="sgds-canvas"
           data-lr={s.lr}
           data-noise={s.noise}
+          data-theta0={s.theta0}
         ></canvas>
         <div class="sgds-info">
           <span class="sgds-title">{lang === 'en' ? s.labelEn : s.labelVi}</span>
@@ -103,7 +113,6 @@ document.querySelectorAll('.sgds').forEach(root => {
   };
 
   const XMIN = -3.2, XMAX = 3.2, LMAX = 3.4;
-  const THETA0 = 3.1;
   const TRAIL_MAX = 140;
   const CYCLE_MS = 5000;   // restart every 5s
   const TICK_MS  = 70;     // ~14fps
@@ -130,13 +139,14 @@ document.querySelectorAll('.sgds').forEach(root => {
 
   root.querySelectorAll('.sgds-canvas').forEach(el => {
     const canvas = el as HTMLCanvasElement;
-    const lr     = parseFloat(canvas.dataset.lr    ?? '0.08');
-    const noise  = parseFloat(canvas.dataset.noise ?? '0');
+    const lr     = parseFloat(canvas.dataset.lr     ?? '0.08');
+    const noise  = parseFloat(canvas.dataset.noise  ?? '0');
+    const theta0 = parseFloat(canvas.dataset.theta0 ?? '3.1');
     panels.push({
       canvas,
       ctx: canvas.getContext('2d')!,
       lr, noise,
-      theta: THETA0,
+      theta: theta0,
       trail: [],
       stepsCount: 0,
       convergedAt: -1,
@@ -256,7 +266,7 @@ document.querySelectorAll('.sgds').forEach(root => {
 
   function resetAll() {
     panels.forEach(p => {
-      p.theta = THETA0;
+      p.theta = parseFloat(p.canvas.dataset.theta0 ?? '3.1');
       p.trail.length = 0;
       p.stepsCount = 0;
       p.convergedAt = -1;

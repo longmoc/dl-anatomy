@@ -42,6 +42,8 @@ The gradient actually used is a stochastic estimate of the true gradient — thi
 
 <SGDScenarios type="batch" lang="en" />
 
+> **Note:** The noise magnitudes here are illustrative. Actual noise depends on the specific data and model. What holds universally is the scaling: $\text{noise\_std} \propto 1/\sqrt{|B|}$ — quadrupling batch size halves the noise.
+
 ## How learning rate affects training
 
 | LR | Behavior |

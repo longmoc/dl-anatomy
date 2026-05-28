@@ -42,6 +42,8 @@ Gradient thực tế dùng là ước lượng ngẫu nhiên của true gradient
 
 <SGDScenarios type="batch" />
 
+> **Lưu ý:** Giá trị noise ở đây mang tính minh hoạ. Độ nhiễu thực tế phụ thuộc vào data và model cụ thể. Điều đúng với mọi trường hợp là tỷ lệ: $\text{noise\_std} \propto 1/\sqrt{|B|}$ — batch lớn gấp 4 → nhiễu giảm một nửa.
+
 ## Learning rate ảnh hưởng gì
 
 | LR | Hành vi |
