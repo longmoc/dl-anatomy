@@ -5,6 +5,7 @@ const articleSchema = z.object({
   description: z.string().optional(),
   lang: z.enum(['vi', 'en']).default('vi'),
   translation: z.string().optional(), // slug of the other-language version
+  parent: z.string().optional(),      // slug of hub article (marks this as a sub-article)
   category: z.enum(['foundations', 'optimization', 'activations', 'training', 'architectures']),
   order: z.number().optional(),
   draft: z.boolean().default(false),

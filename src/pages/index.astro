@@ -30,7 +30,7 @@ const base = import.meta.env.BASE_URL;
     <div class="category-grid">
       {categories.map(cat => {
         const entries = allEntries
-          .filter(e => e.collection === cat.id)
+          .filter(e => e.collection === cat.id && e.data.lang === 'vi' && !e.data.parent)
           .sort((a, b) => (a.data.order ?? 99) - (b.data.order ?? 99));
         return (
           <section class="cat-card">

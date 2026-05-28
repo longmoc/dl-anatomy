@@ -11,8 +11,20 @@ interface Props {
 const { catId, catLabel, catDesc } = Astro.props;
 const base = import.meta.env.BASE_URL;
 
-const allEntries = await getCollection(catId, e => !e.data.draft);
-const entries = allEntries.sort((a, b) => (a.data.order ?? 99) - (b.data.order ?? 99));
+const all = await getCollection(catId, e => !e.data.draft);
+const sorted = all.sort((a, b) => (a.data.order ?? 99) - (b.data.order ?? 99));
+
+// Primary listing: VI articles with no parent
+const primary = sorted.filter(e => e.data.lang === 'vi' && !e.data.parent);
+
+// Sub-articles: VI articles with a parent, grouped by parent slug
+const viSubs = sorted.filter(e => e.data.lang === 'vi' && e.data.parent);
+const subsByParent = new Map<string, typeof viSubs>();
+for (const sub of viSubs) {
+  const p = sub.data.parent!;
+  if (!subsByParent.has(p)) subsByParent.set(p, []);
+  subsByParent.get(p)!.push(sub);
+}
 ---
 <Base title={catLabel}>
   <div class="cat-page">
@@ -22,26 +34,40 @@ const entries = allEntries.sort((a, b) => (a.data.order ?? 99) - (b.data.order ?
       <p class="cat-desc">{catDesc}</p>
     </header>
 
-    {entries.length === 0 ? (
+    {primary.length === 0 ? (
       <p class="empty">No articles yet — coming soon.</p>
     ) : (
       <ul class="article-list">
-        {entries.map(e => (
-          <li class="article-row">
-            <a href={`${base}${catId}/${e.slug}`} class="article-title">
-              {e.data.title}
-            </a>
-            <div class="article-meta">
-              {e.data.description && (
-                <span class="article-desc">{e.data.description}</span>
-              )}
-              <div class="badges">
-                {e.data.lang === 'en' && <span class="badge">EN</span>}
-                {e.data.translation && <span class="badge" title="Has translation">⇄</span>}
+        {primary.map(entry => {
+          const children = subsByParent.get(entry.slug) ?? [];
+          const isHub = children.length > 0;
+          return (
+            <li class:list={['article-row', { 'is-hub': isHub }]}>
+              <div class="row-header">
+                <a href={`${base}${catId}/${entry.slug}`} class="article-title">
+                  {entry.data.title}
+                </a>
+                {isHub && <span class="hub-tag">series</span>}
+                {entry.data.translation && <span class="badge" title="Has translation">⇄</span>}
               </div>
-            </div>
-          </li>
-        ))}
+              {entry.data.description && (
+                <p class="article-desc">{entry.data.description}</p>
+              )}
+              {isHub && (
+                <ul class="sub-list">
+                  {children.map(sub => (
+                    <li>
+                      <a href={`${base}${catId}/${sub.slug}`} class="sub-link">
+                        ↳ {sub.data.title}
+                      </a>
+                      {sub.data.translation && <span class="badge" title="Has translation">⇄</span>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </li>
+          );
+        })}
       </ul>
     )}
   </div>
@@ -62,9 +88,7 @@ const entries = allEntries.sort((a, b) => (a.data.order ?? 99) - (b.data.order ?
   }
   .cat-back a:hover { color: var(--text); }
 
-  .cat-header {
-    margin-bottom: 2.5rem;
-  }
+  .cat-header { margin-bottom: 2.5rem; }
 
   h1 {
     font-size: 2rem;
@@ -88,47 +112,56 @@ const entries = allEntries.sort((a, b) => (a.data.order ?? 99) - (b.data.order ?
     gap: 0;
   }
 
+  /* ── Plain standalone article ── */
   .article-row {
     padding: 1rem 0;
     border-bottom: 1px solid var(--border);
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
+    gap: 0.3rem;
   }
-  .article-row:first-child {
-    border-top: 1px solid var(--border);
+  .article-row:first-child { border-top: 1px solid var(--border); }
+
+  /* ── Hub / series card ── */
+  .article-row.is-hub {
+    padding: 1.1rem 1.25rem;
+    margin: 0.5rem 0;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 8px 8px 0;
+  }
+  .article-row.is-hub:first-child { border-top: 1px solid var(--border); }
+
+  .row-header {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
   }
 
   .article-title {
     font-size: 1rem;
-    font-weight: 500;
+    font-weight: 600;
     color: var(--text);
     text-decoration: none;
     border-bottom: 1px solid transparent;
     transition: color 0.15s, border-color 0.15s;
-    width: fit-content;
   }
   .article-title:hover {
     color: var(--accent);
     border-color: var(--accent);
   }
 
-  .article-meta {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-  }
-
-  .article-desc {
-    font-size: 0.85rem;
-    color: var(--muted);
-    line-height: 1.5;
-  }
-
-  .badges {
-    display: flex;
-    gap: 0.35rem;
-    flex-shrink: 0;
+  .hub-tag {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    padding: 0.1em 0.45em;
+    border-radius: 4px;
+    opacity: 0.75;
   }
 
   .badge {
@@ -139,6 +172,38 @@ const entries = allEntries.sort((a, b) => (a.data.order ?? 99) - (b.data.order ?
     padding: 0.1em 0.4em;
     border-radius: 4px;
   }
+
+  .article-desc {
+    font-size: 0.85rem;
+    color: var(--muted);
+    line-height: 1.5;
+    margin-top: 0.1rem;
+  }
+
+  /* ── Sub-article list ── */
+  .sub-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    margin-top: 0.65rem;
+    padding-top: 0.65rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .sub-list li {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+  }
+
+  .sub-link {
+    font-size: 0.875rem;
+    color: var(--muted);
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+  .sub-link:hover { color: var(--text); }
 
   .empty {
     color: var(--muted);
