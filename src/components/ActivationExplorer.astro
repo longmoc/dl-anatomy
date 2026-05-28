@@ -259,7 +259,7 @@ function buildSidebar() {
     const btn = document.createElement('button');
     btn.className = 'ae-btn' + (i === 0 ? ' ae-active' : '');
     btn.id = `ae-btn-${i}`;
-    btn.innerHTML = `<span>${a.name}</span><span class="ae-year">${a.year}</span>`;
+    btn.innerHTML = `<span>${a.name}</span><span class="ae-year">(${a.year})</span>`;
     btn.addEventListener('click', () => selectActivation(i));
     sb.appendChild(btn);
   });
@@ -453,6 +453,7 @@ window.addEventListener('resize', () => { drawMain(); drawGrad(); });
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 0.5rem;
     background: var(--bg3);
     border: 1px solid var(--border);
     color: var(--muted);
