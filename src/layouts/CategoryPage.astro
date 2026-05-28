@@ -1,0 +1,148 @@
+---
+import Base from './Base.astro';
+import { getCollection } from 'astro:content';
+
+interface Props {
+  catId: 'foundations' | 'optimization' | 'activations' | 'training' | 'architectures';
+  catLabel: string;
+  catDesc: string;
+}
+
+const { catId, catLabel, catDesc } = Astro.props;
+const base = import.meta.env.BASE_URL;
+
+const allEntries = await getCollection(catId, e => !e.data.draft);
+const entries = allEntries.sort((a, b) => (a.data.order ?? 99) - (b.data.order ?? 99));
+---
+<Base title={catLabel}>
+  <div class="cat-page">
+    <header class="cat-header">
+      <p class="cat-back"><a href={base}>← Home</a></p>
+      <h1>{catLabel}</h1>
+      <p class="cat-desc">{catDesc}</p>
+    </header>
+
+    {entries.length === 0 ? (
+      <p class="empty">No articles yet — coming soon.</p>
+    ) : (
+      <ul class="article-list">
+        {entries.map(e => (
+          <li class="article-row">
+            <a href={`${base}${catId}/${e.slug}`} class="article-title">
+              {e.data.title}
+            </a>
+            <div class="article-meta">
+              {e.data.description && (
+                <span class="article-desc">{e.data.description}</span>
+              )}
+              <div class="badges">
+                {e.data.lang === 'en' && <span class="badge">EN</span>}
+                {e.data.translation && <span class="badge" title="Has translation">⇄</span>}
+              </div>
+            </div>
+          </li>
+        ))}
+      </ul>
+    )}
+  </div>
+</Base>
+
+<style>
+  .cat-page {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 48px 24px 80px;
+  }
+
+  .cat-back a {
+    font-size: 0.875rem;
+    color: var(--muted);
+    text-decoration: none;
+    font-family: var(--mono);
+  }
+  .cat-back a:hover { color: var(--text); }
+
+  .cat-header {
+    margin-bottom: 2.5rem;
+  }
+
+  h1 {
+    font-size: 2rem;
+    font-weight: 600;
+    letter-spacing: -0.5px;
+    color: var(--accent);
+    font-family: var(--mono);
+    margin: 0.5rem 0 0.4rem;
+  }
+
+  .cat-desc {
+    color: var(--muted);
+    font-size: 0.9rem;
+    line-height: 1.6;
+  }
+
+  .article-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .article-row {
+    padding: 1rem 0;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  .article-row:first-child {
+    border-top: 1px solid var(--border);
+  }
+
+  .article-title {
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--text);
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+    transition: color 0.15s, border-color 0.15s;
+    width: fit-content;
+  }
+  .article-title:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+
+  .article-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .article-desc {
+    font-size: 0.85rem;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  .badges {
+    display: flex;
+    gap: 0.35rem;
+    flex-shrink: 0;
+  }
+
+  .badge {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    padding: 0.1em 0.4em;
+    border-radius: 4px;
+  }
+
+  .empty {
+    color: var(--muted);
+    font-style: italic;
+    font-size: 0.9rem;
+  }
+</style>
