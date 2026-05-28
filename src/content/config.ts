@@ -5,7 +5,7 @@ const articleSchema = z.object({
   description: z.string().optional(),
   lang: z.enum(['vi', 'en']).default('vi'),
   translation: z.string().optional(), // slug of the other-language version
-  category: z.enum(['foundations', 'optimization', 'activations', 'training']),
+  category: z.enum(['foundations', 'optimization', 'activations', 'training', 'architectures']),
   order: z.number().optional(),
   draft: z.boolean().default(false),
   date: z.coerce.date().optional(),
@@ -17,4 +17,5 @@ export const collections = {
   optimization: defineCollection({ type: 'content', schema: articleSchema }),
   activations: defineCollection({ type: 'content', schema: articleSchema }),
   training: defineCollection({ type: 'content', schema: articleSchema }),
+  architectures: defineCollection({ type: 'content', schema: articleSchema }),
 };
