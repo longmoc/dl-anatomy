@@ -28,7 +28,7 @@ Pure gradient descent uses the full dataset each step: $\theta_{t+1} = \theta_t 
 
 | Era | Optimizer | What's new |
 |---|---|---|
-| 1980–2005 | SGD | Mini-batch, stochastic gradient |
+| 1980–2005 | [SGD](/dl-anatomy/training/sgd-deep-dive-en) | Mini-batch, stochastic gradient |
 | 2006–2012 | Momentum, AdaGrad, RMSProp | History accumulation, per-dimension adaptive LR |
 | 2013–2019 | Adam, AdamW | 1st & 2nd moment estimates, decoupled weight decay |
 | 2020–present | Muon, Lion, Schedule-free | LLM-scale training, no LR schedule needed |
@@ -112,7 +112,7 @@ $v_t$ — the second moment — measures "average gradient magnitude per dimensi
 
 | Article | Content |
 |---|---|
-| SGD — Stochastic Gradient Descent | Why SGD works, structured noise, Langevin dynamics, implicit regularization |
+| [SGD — Stochastic Gradient Descent](/dl-anatomy/training/sgd-deep-dive-en) | Why SGD works, structured noise, Langevin dynamics, implicit regularization |
 | Momentum & Nesterov *(coming soon)* | Why momentum accelerates, Nesterov look-ahead |
 | Adam & AdamW *(coming soon)* | Adaptive gradient, bias correction, why decouple weight decay |
 | LR Schedules *(coming soon)* | Warmup, cosine, WSD — and when to skip the schedule entirely |
