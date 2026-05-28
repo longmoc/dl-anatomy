@@ -15,7 +15,9 @@ import Note from '../../components/Note.astro';
 
 ## Gradient Descent cơ bản
 
-$$\theta_{t+1} = \theta_t - \eta \nabla \mathcal{L}(\theta_t)$$
+$$
+\theta_{t+1} = \theta_t - \eta \nabla \mathcal{L}(\theta_t)
+$$
 
 **Full-batch GD:** tính gradient trên toàn bộ dataset.  
 **SGD:** tính gradient trên 1 sample hoặc mini-batch.
@@ -28,16 +30,22 @@ Noise từ mini-batch không phải là bug — nó là feature. Noise đóng va
 
 ### Cấu trúc noise
 
-$$\tilde{g}_t = \nabla\mathcal{L}(\theta_t) + \epsilon_t$$
+$$
+\tilde{g}_t = \nabla\mathcal{L}(\theta_t) + \epsilon_t
+$$
 
-$$\text{Cov}(\epsilon_t) = \frac{1}{|B|}\Sigma(\theta_t)$$
+$$
+\text{Cov}(\epsilon_t) = \frac{1}{|B|}\Sigma(\theta_t)
+$$
 
 - Noise tỷ lệ nghịch với batch size $|B|$
 - Noise phụ thuộc vị trí $\theta$ — không phải noise thuần túy
 
 ## SGD ≈ Langevin Dynamics
 
-$$d\theta = -\nabla\mathcal{L}(\theta)\,dt + \sqrt{\eta \cdot \Sigma(\theta)}\,dW_t$$
+$$
+d\theta = -\nabla\mathcal{L}(\theta)\,dt + \sqrt{\eta \cdot \Sigma(\theta)}\,dW_t
+$$
 
 <Note type="result">
 SGD tự nhiên tìm **flat minima** vì noise liên tục perturbate $\theta$. Flat minima generalize tốt hơn sharp minima.

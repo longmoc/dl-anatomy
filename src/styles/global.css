@@ -51,6 +51,10 @@ body {
   text-align: center;
 }
 
+/* Alignment overrides — wrap in MDX: <div class="math-left">$$ ... $$</div> */
+.math-left  .katex-display { text-align: left; }
+.math-right .katex-display { text-align: right; }
+
 /* ── Prose styles (article content) ── */
 .prose h1 { font-size: 2rem; font-weight: 600; letter-spacing: -0.5px; color: var(--accent); margin-bottom: 6px; }
 .prose h2 { font-size: 1.25rem; font-weight: 600; color: var(--text); margin: 2.5rem 0 0.75rem; border-bottom: 1px solid var(--border); padding-bottom: 0.35rem; }
