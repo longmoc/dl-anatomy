@@ -37,7 +37,7 @@ Gradient thực tế dùng là ước lượng ngẫu nhiên của true gradient
 | Batch size | Noise | Đặc điểm thực tế |
 |---|---|---|
 | $B = 1$ (SGD thuần) | Rất lớn | Mỗi step dùng 1 sample. Gradient noise lớn — quả bóng nhảy loạn. Thoát local minima tốt nhưng unstable. |
-| $B = 32$–$256$ (mini-batch) | Vừa | Điểm ngọt. Đủ noise để regularize và thoát saddle point, đủ signal để đi đúng hướng. Default của hầu hết deep learning. |
+| mini-batch | Vừa | Điểm ngọt. Đủ noise để regularize và thoát saddle point, đủ signal để đi đúng hướng. Kích thước cụ thể phụ thuộc hardware và task. |
 | $B = n$ (full batch GD) | Không có | Gradient chính xác, hội tụ mượt. Nhưng không scale được, dễ kẹt tại sharp minima, generalize kém hơn. |
 
 <SGDScenarios type="batch" />

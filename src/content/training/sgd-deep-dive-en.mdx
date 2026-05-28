@@ -37,7 +37,7 @@ The gradient actually used is a stochastic estimate of the true gradient — thi
 | Batch size | Noise | Practical behavior |
 |---|---|---|
 | $B = 1$ (pure SGD) | Very high | Each step uses 1 sample. Noisy gradients cause erratic jumps. Good at escaping local minima, but unstable. |
-| $B = 32$–$256$ (mini-batch) | Moderate | The sweet spot. Enough noise to regularize and escape saddle points, enough signal to move in the right direction. Default for most deep learning. |
+| mini-batch | Moderate | The sweet spot. Enough noise to regularize and escape saddle points, enough signal to move in the right direction. Concrete size depends on hardware and task. |
 | $B = n$ (full-batch GD) | None | Exact gradients, smooth convergence. But doesn't scale, tends to get stuck at sharp minima, generalizes worse. |
 
 <SGDScenarios type="batch" lang="en" />
