@@ -1,0 +1,376 @@
+---
+interface ScenarioDef {
+  labelVi: string;
+  labelEn: string;
+  noteVi: string;
+  noteEn: string;
+  noteStyle: 'muted' | 'good' | 'warn';
+  lr: number;
+  noise: number;
+}
+
+interface Props {
+  type: 'batch' | 'lr';
+  lang?: 'vi' | 'en';
+}
+
+const { type, lang = 'vi' } = Astro.props;
+
+const DEFS: Record<'batch' | 'lr', ScenarioDef[]> = {
+  batch: [
+    {
+      labelVi: 'B = 1',   labelEn: 'B = 1',
+      noteVi:  'nhiễu rất lớn — nhảy loạn',
+      noteEn:  'very noisy — erratic jumps',
+      noteStyle: 'warn',
+      lr: 0.08, noise: 0.90,
+    },
+    {
+      labelVi: 'B = 64',  labelEn: 'B = 64',
+      noteVi:  'nhiễu vừa — điểm ngọt',
+      noteEn:  'moderate noise — sweet spot',
+      noteStyle: 'good',
+      lr: 0.08, noise: 0.10,
+    },
+    {
+      labelVi: 'Full GD', labelEn: 'Full GD',
+      noteVi:  'không nhiễu — đường thẳng',
+      noteEn:  'no noise — straight path',
+      noteStyle: 'muted',
+      lr: 0.08, noise: 0.00,
+    },
+  ],
+  lr: [
+    {
+      labelVi: 'η = 0.02', labelEn: 'η = 0.02',
+      noteVi:  'quá nhỏ — hội tụ rất chậm',
+      noteEn:  'too small — very slow',
+      noteStyle: 'warn',
+      lr: 0.02, noise: 0.00,
+    },
+    {
+      labelVi: 'η = 0.08', labelEn: 'η = 0.08',
+      noteVi:  'phù hợp — hội tụ mượt mà',
+      noteEn:  'optimal — smooth convergence',
+      noteStyle: 'good',
+      lr: 0.08, noise: 0.00,
+    },
+    {
+      labelVi: 'η = 0.40', labelEn: 'η = 0.40',
+      noteVi:  'quá lớn — bước nhảy lớn',
+      noteEn:  'too large — overshooting',
+      noteStyle: 'warn',
+      lr: 0.40, noise: 0.00,
+    },
+  ],
+};
+
+const scenarios = DEFS[type];
+const replayLabel = lang === 'en' ? '↺ Replay' : '↺ Chạy lại';
+---
+
+<div class="sgds" data-lang={lang}>
+  <div class="sgds-grid">
+    {scenarios.map(s => (
+      <div class="sgds-panel">
+        <canvas
+          class="sgds-canvas"
+          data-lr={s.lr}
+          data-noise={s.noise}
+        ></canvas>
+        <div class="sgds-info">
+          <span class="sgds-title">{lang === 'en' ? s.labelEn : s.labelVi}</span>
+          <span class={`sgds-note sgds-note-${s.noteStyle}`}>
+            {lang === 'en' ? s.noteEn : s.noteVi}
+          </span>
+        </div>
+      </div>
+    ))}
+  </div>
+  <div class="sgds-footer">
+    <button class="sgds-replay">{replayLabel}</button>
+  </div>
+</div>
+
+<script>
+document.querySelectorAll('.sgds').forEach(root => {
+  // Loss: L(θ) = 0.1*(θ²-4)² — minima at θ=±2
+  const loss  = (x: number) => 0.1 * (x * x - 4) ** 2;
+  const dloss = (x: number) => 0.4 * x * (x * x - 4);
+  const randn = () => {
+    const u = Math.random() + 1e-10;
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * Math.random());
+  };
+
+  const XMIN = -3.2, XMAX = 3.2, LMAX = 3.4;
+  const THETA0 = 3.1;
+  const TRAIL_MAX = 140;
+  const CYCLE_MS = 5000;   // restart every 5s
+  const TICK_MS  = 70;     // ~14fps
+  const STEPS_PER_TICK = 1;
+
+  // coordinate helpers (per-canvas, need W/H at draw time)
+  const PL = 14, PR = 14, PT = 14, PB = 24;
+  const tx = (x: number, W: number) => PL + (x - XMIN) / (XMAX - XMIN) * (W - PL - PR);
+  const ty = (y: number, H: number) => H - PB - Math.min(Math.max(y, 0), LMAX) / LMAX * (H - PT - PB);
+  const cv = (n: string) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+  type Panel = {
+    canvas: HTMLCanvasElement;
+    ctx: CanvasRenderingContext2D;
+    lr: number;
+    noise: number;
+    theta: number;
+    trail: number[];
+    stepsCount: number;
+    convergedAt: number;   // step at which converged (-1 if not)
+  };
+
+  const panels: Panel[] = [];
+
+  root.querySelectorAll('.sgds-canvas').forEach(el => {
+    const canvas = el as HTMLCanvasElement;
+    const lr     = parseFloat(canvas.dataset.lr    ?? '0.08');
+    const noise  = parseFloat(canvas.dataset.noise ?? '0');
+    panels.push({
+      canvas,
+      ctx: canvas.getContext('2d')!,
+      lr, noise,
+      theta: THETA0,
+      trail: [],
+      stepsCount: 0,
+      convergedAt: -1,
+    });
+  });
+
+  function drawPanel(p: Panel) {
+    const { canvas, ctx, theta, trail, convergedAt } = p;
+    const rect = canvas.getBoundingClientRect();
+    const W = rect.width, H = rect.height;
+    if (!W || !H) return;
+    const dpr = window.devicePixelRatio || 1;
+    if (canvas.width !== W * dpr) {
+      canvas.width  = W * dpr;
+      canvas.height = H * dpr;
+    }
+    ctx.save();
+    ctx.scale(dpr, dpr);
+
+    const accent  = cv('--accent');
+    const accent2 = cv('--accent2');
+    const muted   = cv('--muted');
+    const bg      = cv('--bg');
+    const amber   = cv('--amber');
+
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    // Minima guide lines
+    ctx.save();
+    ctx.setLineDash([2, 5]);
+    ctx.strokeStyle = accent2;
+    ctx.lineWidth = 1;
+    ctx.globalAlpha = 0.3;
+    [-2, 2].forEach(xm => {
+      ctx.beginPath();
+      ctx.moveTo(tx(xm, W), PT);
+      ctx.lineTo(tx(xm, W), H - PB);
+      ctx.stroke();
+    });
+    ctx.restore();
+
+    // Loss curve
+    ctx.beginPath();
+    ctx.strokeStyle = muted;
+    ctx.lineWidth = 1.5;
+    ctx.globalAlpha = 0.5;
+    let penDown = false;
+    for (let px = PL; px <= W - PR; px++) {
+      const x = XMIN + (px - PL) / (W - PL - PR) * (XMAX - XMIN);
+      const py = ty(loss(x), H);
+      if (!penDown) { ctx.moveTo(px, py); penDown = true; }
+      else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    // Min labels
+    ctx.font = `9px var(--mono, monospace)`;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = accent2;
+    ctx.globalAlpha = 0.5;
+    ctx.fillText('−2', tx(-2, W), H - 4);
+    ctx.fillText('+2', tx(2, W),  H - 4);
+    ctx.globalAlpha = 1;
+
+    // Trail
+    trail.forEach((t, i) => {
+      ctx.globalAlpha = 0.10 + 0.60 * (i / trail.length);
+      ctx.beginPath();
+      ctx.arc(tx(t, W), ty(loss(t), H), 2, 0, Math.PI * 2);
+      ctx.fillStyle = accent;
+      ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+
+    // Current dot
+    const converged = Math.abs(Math.abs(theta) - 2) < 0.12;
+    const diverged  = Math.abs(theta) > 3.05;
+    const dotColor  = converged ? accent2 : diverged ? amber : accent;
+    const dotR = converged ? 5.5 : 6;
+
+    ctx.beginPath();
+    ctx.arc(tx(theta, W), ty(loss(theta), H), dotR, 0, Math.PI * 2);
+    ctx.fillStyle = dotColor;
+    ctx.fill();
+    ctx.strokeStyle = bg;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Converged step annotation
+    if (convergedAt >= 0) {
+      const isEn = (root as HTMLElement).dataset.lang === 'en';
+      const label = isEn ? `✓ ${convergedAt}` : `✓ ${convergedAt}`;
+      ctx.font = `bold 9px var(--mono, monospace)`;
+      ctx.fillStyle = accent2;
+      ctx.textAlign = 'left';
+      ctx.globalAlpha = 0.85;
+      ctx.fillText(label, PL + 3, PT + 10);
+      ctx.globalAlpha = 1;
+    }
+
+    ctx.restore();
+  }
+
+  function sgdStep(p: Panel) {
+    if (p.convergedAt >= 0) return; // already converged, freeze
+    const g = dloss(p.theta) + randn() * p.noise;
+    p.theta = Math.max(XMIN + 0.02, Math.min(XMAX - 0.02, p.theta - p.lr * g));
+    p.trail.push(p.theta);
+    if (p.trail.length > TRAIL_MAX) p.trail.shift();
+    p.stepsCount++;
+    if (p.convergedAt < 0 && Math.abs(Math.abs(p.theta) - 2) < 0.12) {
+      p.convergedAt = p.stepsCount;
+    }
+  }
+
+  function resetAll() {
+    panels.forEach(p => {
+      p.theta = THETA0;
+      p.trail.length = 0;
+      p.stepsCount = 0;
+      p.convergedAt = -1;
+    });
+  }
+
+  // Single rAF loop shared across all panels
+  let lastTick = 0;
+  let elapsed  = 0;
+
+  function loop(t: number) {
+    if (t - lastTick >= TICK_MS) {
+      elapsed += t - lastTick;
+      lastTick = t;
+
+      if (elapsed >= CYCLE_MS) {
+        elapsed = 0;
+        resetAll();
+      } else {
+        for (let i = 0; i < STEPS_PER_TICK; i++) panels.forEach(sgdStep);
+      }
+      panels.forEach(drawPanel);
+    }
+    requestAnimationFrame(loop);
+  }
+
+  // Replay button
+  const replayBtn = root.querySelector('.sgds-replay') as HTMLButtonElement;
+  replayBtn.addEventListener('click', () => {
+    elapsed = 0;
+    resetAll();
+    panels.forEach(drawPanel);
+  });
+
+  // Initial draw + start loop
+  const ro = new ResizeObserver(() => panels.forEach(drawPanel));
+  panels.forEach(p => ro.observe(p.canvas));
+  panels.forEach(drawPanel);
+  requestAnimationFrame(loop);
+});
+</script>
+
+<style>
+  .sgds {
+    margin: 1.75rem 0;
+  }
+
+  .sgds-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+  }
+
+  @media (max-width: 540px) {
+    .sgds-grid { grid-template-columns: 1fr; }
+  }
+
+  .sgds-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--bg2);
+  }
+
+  .sgds-canvas {
+    width: 100%;
+    height: 160px;
+    display: block;
+    background: var(--bg);
+  }
+
+  .sgds-info {
+    display: flex;
+    flex-direction: column;
+    padding: 0.55rem 0.75rem 0.6rem;
+    gap: 0.15rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .sgds-title {
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: -0.2px;
+  }
+
+  .sgds-note {
+    font-size: 0.76rem;
+    line-height: 1.4;
+  }
+  .sgds-note-good  { color: var(--accent2); }
+  .sgds-note-warn  { color: var(--amber); }
+  .sgds-note-muted { color: var(--muted); }
+
+  .sgds-footer {
+    margin-top: 0.6rem;
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .sgds-replay {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    padding: 0.22em 0.75em;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg2);
+    color: var(--muted);
+    cursor: pointer;
+    transition: color 0.12s, border-color 0.12s;
+  }
+  .sgds-replay:hover { color: var(--text); border-color: var(--text); }
+</style>

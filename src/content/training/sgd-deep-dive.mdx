@@ -10,7 +10,7 @@ tags: [sgd, optimization, noise, regularization, langevin]
 ---
 
 import Note from '../../components/Note.astro';
-import SGDExplorer from '../../components/SGDExplorer.astro';
+import SGDScenarios from '../../components/SGDScenarios.astro';
 
 # SGD — Stochastic Gradient Descent
 
@@ -40,7 +40,7 @@ Gradient thực tế dùng là ước lượng ngẫu nhiên của true gradient
 | $B = 32$–$256$ (mini-batch) | Vừa | Điểm ngọt. Đủ noise để regularize và thoát saddle point, đủ signal để đi đúng hướng. Default của hầu hết deep learning. |
 | $B = n$ (full batch GD) | Không có | Gradient chính xác, hội tụ mượt. Nhưng không scale được, dễ kẹt tại sharp minima, generalize kém hơn. |
 
-<SGDExplorer />
+<SGDScenarios type="batch" />
 
 ## Learning rate ảnh hưởng gì
 
@@ -49,6 +49,8 @@ Gradient thực tế dùng là ước lượng ngẫu nhiên của true gradient
 | Quá nhỏ (< 0.01) | Từng bước đi rất nhỏ, hội tụ cực chậm, dễ kẹt tại điểm đang đứng. |
 | Vừa (0.05–0.15) | Di chuyển ổn định về phía minimum. Noise giúp thoát khỏi các hố cạn. |
 | Quá lớn (> 0.25) | Nhảy vượt qua minimum, dao động qua lại, thậm chí diverge — loss tăng vô tận. |
+
+<SGDScenarios type="lr" />
 
 ### Điều kiện hội tụ — Robbins-Monro
 
