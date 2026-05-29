@@ -1,0 +1,147 @@
+---
+title: "Adam & AdamW"
+description: "Adaptive learning rates, bias correction, and why AdamW decouples weight decay from the gradient update."
+lang: en
+category: training
+order: 3
+parent: optimizers
+translation: adam
+tags: [adam, adamw, adaptive, optimization, weight-decay]
+---
+
+import Note from '../../components/Note.astro';
+import AdamViz from '../../components/AdamViz.astro';
+
+# Adam & AdamW
+
+## The limitation of Momentum in anisotropic spaces
+
+Momentum helps SGD escape narrow valleys, but it still uses **one learning rate for every dimension**. When gradients across parameters differ wildly in scale — common in NLP and embedding layers — a single lr cannot be optimal for all of them.
+
+**Example**: one parameter receives gradients ~1000, another ~0.01. A lr small enough for the first parameter makes the second converge painfully slowly; increasing lr causes the first to overshoot.
+
+The solution: **per-parameter adaptive learning rates** — large-gradient dimensions get smaller steps, small-gradient dimensions get larger steps.
+
+## From AdaGrad to RMSProp
+
+**AdaGrad (Duchi et al., 2011)**: divide by the square root of accumulated squared gradients:
+
+$$
+\theta_{t+1} = \theta_t - \frac{\eta}{\sqrt{G_t + \epsilon}} \odot g_t \quad \text{where } G_t = \sum_{k=1}^{t} g_k^2
+$$
+
+Works well for sparse gradients, but $G_t$ only grows → effective lr approaches zero, training stalls.
+
+**RMSProp (Hinton, 2012)**: use an EMA instead of full accumulation, keeping lr stable:
+
+$$
+v_t = \beta_2 v_{t-1} + (1-\beta_2) g_t^2 \qquad \theta_{t+1} = \theta_t - \frac{\eta}{\sqrt{v_t + \epsilon}} g_t
+$$
+
+## Adam (Kingma & Ba, 2014)
+
+Adam combines two ideas: **momentum** (EMA of gradients — 1st moment) and **RMSProp** (EMA of squared gradients — 2nd moment):
+
+$$
+m_t = \beta_1 m_{t-1} + (1 - \beta_1) g_t \qquad \text{(1st moment — "direction")}
+$$
+
+$$
+v_t = \beta_2 v_{t-1} + (1 - \beta_2) g_t^2 \qquad \text{(2nd moment — "scale")}
+$$
+
+$$
+\theta_{t+1} = \theta_t - \eta \frac{\hat{m}_t}{\sqrt{\hat{v}_t} + \epsilon}
+$$
+
+Where $\hat{m}_t = \dfrac{m_t}{1 - \beta_1^t}$ and $\hat{v}_t = \dfrac{v_t}{1 - \beta_2^t}$ are **bias-corrected estimates**.
+
+**Defaults**: $\beta_1 = 0.9$, $\beta_2 = 0.999$, $\epsilon = 10^{-8}$.
+
+## Bias correction — why it matters
+
+$m_0 = v_0 = 0$ — initialized to zero. At the first step $t=1$:
+
+$$
+m_1 = \beta_1 \cdot 0 + (1-\beta_1) g_1 = 0.1\, g_1
+$$
+
+$m_1$ **underestimates** the true gradient by 10×. Without correction: the first steps are tiny, the optimizer "hesitates" before building enough momentum. Dividing by $(1-\beta_1^t)$: at $t=1$, $\hat{m}_1 = m_1/0.1 = g_1$ — correct.
+
+As training proceeds, $1 - \beta_1^t \to 1$ and the bias correction vanishes naturally.
+
+<Note type="intuition">
+$\sqrt{\hat{v}_t}$ measures "typical gradient magnitude in that dimension." Dividing $\hat{m}_t$ by $\sqrt{\hat{v}_t}$ means: parameters that routinely get large gradients take smaller steps; parameters with small gradients take larger steps. Every dimension converges at roughly the same rate.
+</Note>
+
+## Illustration: anisotropic loss landscape
+
+Momentum vs Adam on $L(x,y) = 50x^2 + y^2$:
+
+<AdamViz lang="en" />
+
+**Observations:**
+- **Momentum (amber)**: must use small lr to keep x from oscillating → y barely moves, far from minimum after many steps
+- **Adam (purple)**: normalizes each axis independently — x and y converge at comparable rates
+
+## AdamW — decoupled weight decay
+
+Standard L2 weight decay adds $\lambda\|\theta\|^2$ to the loss → gradient becomes $g_t + \lambda\theta_t$. In Adam, this $\lambda\theta_t$ term is also **divided by $\sqrt{\hat{v}}$** — the adaptive scaling makes weight decay uneven and weaker than intended.
+
+**AdamW** (Loshchilov & Hutter, 2019) decouples weight decay from the gradient step:
+
+$$
+\underbrace{\theta_{t+1} = \theta_t - \eta \frac{\hat{m}_t}{\sqrt{\hat{v}_t} + \epsilon}}_{\text{gradient step}} \underbrace{-\; \eta\lambda\theta_t}_{\text{weight decay}}
+$$
+
+Weight decay is applied directly to $\theta$, not scaled by $\sqrt{\hat{v}}$ — every parameter is regularized with equal strength.
+
+<Note type="result">
+In practice: always use AdamW over Adam when weight decay is needed. Adam + L2 does not regularize as intended. Most modern frameworks (PyTorch, Transformers) default to AdamW.
+</Note>
+
+## When Adam fails to converge
+
+Reddi et al. (2018) proved Adam **can fail to converge** even on simple convex functions — $v_t$ can decrease in later steps, causing the effective lr to spike and "forget" the past.
+
+**AMSGrad** (Reddi et al., 2018): use $\hat{v}_t^{\max} = \max(\hat{v}_{t-1}^{\max}, \hat{v}_t)$ instead of $\hat{v}_t$ → lr never spikes upward. Has provable convergence but rarely improves over Adam in practice.
+
+In deep learning, theoretical non-convergence is rarely an issue in practice — but AdamW + LR schedule is more reliable than plain Adam.
+
+## Comparison
+
+| | SGD | Momentum | Adam / AdamW |
+|---|---|---|---|
+| Per-dim LR | ✗ shared | ✗ shared | ✓ adaptive |
+| Momentum | ✗ | ✓ | ✓ (β₁) |
+| Sparse-friendly | ✗ | ✗ | ✓ |
+| Weight decay | L2 | L2 | Decoupled (AdamW) |
+| Flat minima | ✓ good | ✓ good | ✗ sometimes worse |
+| Used for | Vision | Vision | LLM, NLP, most tasks |
+
+## In practice
+
+```python
+# PyTorch
+optimizer = torch.optim.AdamW(
+    model.parameters(),
+    lr=1e-3,           # typical starting point
+    betas=(0.9, 0.999),
+    eps=1e-8,
+    weight_decay=0.01
+)
+```
+
+- Larger $\epsilon$ (0.1–1.0) can improve stability on some tasks
+- LLMs: lr typically 1e-4 to 3e-4 with warmup + cosine decay
+- Vision transformers: AdamW + weight decay 0.05–0.1
+
+## References
+
+| Paper | |
+|---|---|
+| Duchi et al. (2011) | AdaGrad: Adaptive Subgradient Methods |
+| Kingma & Ba (2014) | Adam: A Method for Stochastic Optimization |
+| Loshchilov & Hutter (2019) | Decoupled Weight Decay Regularization (AdamW) |
+| Reddi et al. (2018) | On the Convergence of Adam and Beyond (AMSGrad) |
+| Wilson et al. (2017) | The Marginal Value of Momentum for Small Learning Rate SGD |

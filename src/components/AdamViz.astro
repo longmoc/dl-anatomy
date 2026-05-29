@@ -1,0 +1,252 @@
+---
+interface Props {
+  lang?: 'vi' | 'en';
+}
+const { lang = 'vi' } = Astro.props;
+
+const L = lang === 'en'
+  ? {
+      mom: 'Momentum', adam: 'Adam',
+      replay: '↺ Replay',
+      caption: 'L(x,y) = 50x² + y²  —  gradient scale differs 100× between axes. Momentum must use small lr to keep x stable → y converges slowly. Adam normalizes each axis independently.',
+    }
+  : {
+      mom: 'Momentum', adam: 'Adam',
+      replay: '↺ Chạy lại',
+      caption: 'L(x,y) = 50x² + y²  —  gradient theo x lớn hơn y gấp 100 lần. Momentum phải dùng lr nhỏ để x không dao động → y hội tụ rất chậm. Adam chuẩn hoá từng chiều độc lập.',
+    };
+---
+
+<div class="aviz" data-lang={lang}>
+  <canvas class="aviz-canvas"></canvas>
+  <div class="aviz-footer">
+    <div class="aviz-legend">
+      <span class="aviz-dot aviz-c-mom"></span><span>{L.mom}</span>
+      <span class="aviz-dot aviz-c-adam"></span><span>{L.adam}</span>
+    </div>
+    <button class="aviz-replay">{L.replay}</button>
+  </div>
+  <p class="aviz-caption">{L.caption}</p>
+</div>
+
+<script>
+document.querySelectorAll('.aviz').forEach(root => {
+  const canvas = root.querySelector('.aviz-canvas') as HTMLCanvasElement;
+  const ctx    = canvas.getContext('2d')!;
+
+  // Loss: L(x,y) = 50x² + y²   grad = (100x, 2y)
+  const grad = (x: number, y: number): [number, number] => [100 * x, 2 * y];
+
+  type Vec2 = [number, number];
+  const START: Vec2 = [2.5, 4.0];
+  const TRAIL = 160;
+  const CYCLE = 6000;
+  const TICK  = 65;
+
+  const XMIN = -3.2, XMAX = 3.2, YMIN = -5.2, YMAX = 5.2;
+  const PL = 14, PR = 14, PT = 14, PB = 14;
+  let W = 0, H = 0;
+  const tx = (x: number) => PL + (x - XMIN) / (XMAX - XMIN) * (W - PL - PR);
+  const ty = (y: number) => PT + (YMAX - y) / (YMAX - YMIN) * (H - PT - PB);
+  const cv = (n: string) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+  // --- Momentum state ---
+  type MomState = { theta: Vec2; vel: Vec2; trail: Vec2[]; converged: boolean };
+  const LR_MOM = 0.003, BETA = 0.9;
+
+  function makeMom(): MomState {
+    return { theta: [...START] as Vec2, vel: [0, 0], trail: [], converged: false };
+  }
+  function stepMom(s: MomState) {
+    if (s.converged) return;
+    const g = grad(s.theta[0], s.theta[1]);
+    s.vel = [BETA * s.vel[0] + g[0], BETA * s.vel[1] + g[1]];
+    s.theta = [
+      Math.max(XMIN + 0.05, Math.min(XMAX - 0.05, s.theta[0] - LR_MOM * s.vel[0])),
+      Math.max(YMIN + 0.05, Math.min(YMAX - 0.05, s.theta[1] - LR_MOM * s.vel[1])),
+    ];
+    s.trail.push([...s.theta] as Vec2);
+    if (s.trail.length > TRAIL) s.trail.shift();
+    if (Math.hypot(s.theta[0], s.theta[1]) < 0.18) s.converged = true;
+  }
+
+  // --- Adam state ---
+  type AdamState = { theta: Vec2; m: Vec2; v: Vec2; t: number; trail: Vec2[]; converged: boolean };
+  const LR_ADAM = 0.08, B1 = 0.9, B2 = 0.999, EPS = 1e-8;
+
+  function makeAdam(): AdamState {
+    return { theta: [...START] as Vec2, m: [0, 0], v: [0, 0], t: 0, trail: [], converged: false };
+  }
+  function stepAdam(s: AdamState) {
+    if (s.converged) return;
+    s.t++;
+    const g = grad(s.theta[0], s.theta[1]);
+    s.m = [B1 * s.m[0] + (1 - B1) * g[0], B1 * s.m[1] + (1 - B1) * g[1]];
+    s.v = [B2 * s.v[0] + (1 - B2) * g[0] ** 2, B2 * s.v[1] + (1 - B2) * g[1] ** 2];
+    const bc1 = 1 - B1 ** s.t, bc2 = 1 - B2 ** s.t;
+    const mh: Vec2 = [s.m[0] / bc1, s.m[1] / bc1];
+    const vh: Vec2 = [s.v[0] / bc2, s.v[1] / bc2];
+    s.theta = [
+      Math.max(XMIN + 0.05, Math.min(XMAX - 0.05, s.theta[0] - LR_ADAM * mh[0] / (Math.sqrt(vh[0]) + EPS))),
+      Math.max(YMIN + 0.05, Math.min(YMAX - 0.05, s.theta[1] - LR_ADAM * mh[1] / (Math.sqrt(vh[1]) + EPS))),
+    ];
+    s.trail.push([...s.theta] as Vec2);
+    if (s.trail.length > TRAIL) s.trail.shift();
+    if (Math.hypot(s.theta[0], s.theta[1]) < 0.18) s.converged = true;
+  }
+
+  let mom  = makeMom();
+  let adam = makeAdam();
+
+  function drawContour(level: number, alpha: number) {
+    // 50x² + y² = c  →  x²/(c/50) + y²/c = 1
+    const ax = Math.sqrt(level / 50);
+    const ay = Math.sqrt(level);
+    const cx = tx(0), cy = ty(0);
+    const rx = ax / (XMAX - XMIN) * (W - PL - PR);
+    const ry = ay / (YMAX - YMIN) * (H - PT - PB);
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rx, ry, 0, 0, 2 * Math.PI);
+    ctx.globalAlpha = alpha;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  function drawTraj(trail: Vec2[], current: Vec2, color: string, converged: boolean) {
+    trail.forEach((pt, i) => {
+      ctx.globalAlpha = 0.08 + 0.6 * (i / trail.length);
+      ctx.beginPath();
+      ctx.arc(tx(pt[0]), ty(pt[1]), 2, 0, 2 * Math.PI);
+      ctx.fillStyle = color;
+      ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+    ctx.beginPath();
+    ctx.arc(tx(current[0]), ty(current[1]), converged ? 4.5 : 5.5, 0, 2 * Math.PI);
+    ctx.fillStyle = color;
+    ctx.fill();
+    const bg = cv('--bg');
+    ctx.strokeStyle = bg;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+
+  function draw() {
+    const rect = canvas.getBoundingClientRect();
+    W = rect.width; H = rect.height;
+    if (!W || !H) return;
+    const dpr = window.devicePixelRatio || 1;
+    if (canvas.width !== W * dpr) { canvas.width = W * dpr; canvas.height = H * dpr; }
+    ctx.save();
+    ctx.scale(dpr, dpr);
+
+    ctx.fillStyle = cv('--bg');
+    ctx.fillRect(0, 0, W, H);
+
+    // Contours
+    ctx.strokeStyle = cv('--border');
+    ctx.lineWidth = 1;
+    [0.5, 2, 6, 15, 35].forEach((c, i) => drawContour(c, 0.2 + i * 0.07));
+
+    // Minimum
+    ctx.beginPath();
+    ctx.arc(tx(0), ty(0), 3.5, 0, 2 * Math.PI);
+    ctx.fillStyle = cv('--accent2');
+    ctx.globalAlpha = 0.7;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    drawTraj(mom.trail,  mom.theta,  cv('--amber'),  mom.converged);
+    drawTraj(adam.trail, adam.theta, cv('--accent'), adam.converged);
+
+    ctx.restore();
+  }
+
+  function resetAll() {
+    mom  = makeMom();
+    adam = makeAdam();
+  }
+
+  let lastTick = 0, elapsed = 0;
+  function loop(ts: number) {
+    if (ts - lastTick >= TICK) {
+      elapsed += ts - lastTick;
+      lastTick = ts;
+      if (elapsed >= CYCLE) { elapsed = 0; resetAll(); }
+      else { stepMom(mom); stepAdam(adam); }
+      draw();
+    }
+    requestAnimationFrame(loop);
+  }
+
+  root.querySelector('.aviz-replay')!.addEventListener('click', () => {
+    elapsed = 0; resetAll(); draw();
+  });
+
+  const ro = new ResizeObserver(draw);
+  ro.observe(canvas);
+  draw();
+  requestAnimationFrame(loop);
+});
+</script>
+
+<style>
+  .aviz {
+    margin: 1.75rem 0;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--bg2);
+  }
+  .aviz-canvas {
+    width: 100%;
+    height: 240px;
+    display: block;
+    background: var(--bg);
+  }
+  .aviz-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.55rem 0.9rem;
+    border-top: 1px solid var(--border);
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .aviz-legend {
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    color: var(--muted);
+  }
+  .aviz-dot {
+    display: inline-block;
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .aviz-c-mom  { background: var(--amber); }
+  .aviz-c-adam { background: var(--accent); }
+  .aviz-replay {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    padding: 0.22em 0.75em;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg);
+    color: var(--muted);
+    cursor: pointer;
+    transition: color 0.12s, border-color 0.12s;
+  }
+  .aviz-replay:hover { color: var(--text); border-color: var(--text); }
+  .aviz-caption {
+    font-size: 0.78rem;
+    color: var(--muted);
+    text-align: center;
+    padding: 0.4rem 1rem 0.65rem;
+    font-style: italic;
+    line-height: 1.5;
+  }
+</style>

@@ -1,0 +1,147 @@
+---
+title: "Adam & AdamW"
+description: "Cơ chế adaptive learning rate, bias correction, và tại sao AdamW tách weight decay khỏi gradient update."
+lang: vi
+category: training
+order: 3
+parent: optimizers
+translation: adam-en
+tags: [adam, adamw, adaptive, optimization, weight-decay]
+---
+
+import Note from '../../components/Note.astro';
+import AdamViz from '../../components/AdamViz.astro';
+
+# Adam & AdamW
+
+## Hạn chế của Momentum trong không gian anisotropic
+
+Momentum giúp SGD thoát khỏi valley hẹp nhưng vẫn dùng **một learning rate cho mọi chiều**. Khi gradient giữa các parameter có scale rất khác nhau — điều phổ biến trong NLP và embedding layers — một lr duy nhất không thể tối ưu cho tất cả.
+
+**Ví dụ**: một parameter cập nhật với gradient ~1000, một parameter khác ~0.01. Để lr đủ nhỏ cho parameter đầu, parameter sau sẽ cập nhật cực kỳ chậm; tăng lr thì parameter đầu vượt qua minimum.
+
+Giải pháp: **per-parameter adaptive learning rate** — chiều nào gradient lớn thì dùng lr nhỏ, chiều nào gradient nhỏ thì dùng lr lớn.
+
+## Từ AdaGrad đến RMSProp
+
+**AdaGrad (Duchi et al., 2011)**: chia gradient cho căn của tổng bình phương gradient lịch sử:
+
+$$
+\theta_{t+1} = \theta_t - \frac{\eta}{\sqrt{G_t + \epsilon}} \odot g_t \quad \text{với } G_t = \sum_{k=1}^{t} g_k^2
+$$
+
+Tốt cho sparse gradients, nhưng $G_t$ chỉ tăng không giảm → effective lr tiệm cận 0, training bị đình trệ.
+
+**RMSProp (Hinton, 2012)**: dùng EMA thay vì tổng tích lũy, giữ lr ổn định hơn:
+
+$$
+v_t = \beta_2 v_{t-1} + (1-\beta_2) g_t^2 \qquad \theta_{t+1} = \theta_t - \frac{\eta}{\sqrt{v_t + \epsilon}} g_t
+$$
+
+## Adam (Kingma & Ba, 2014)
+
+Adam kết hợp hai ý tưởng: **momentum** (EMA của gradient — bậc 1) và **RMSProp** (EMA của gradient bình phương — bậc 2):
+
+$$
+m_t = \beta_1 m_{t-1} + (1 - \beta_1) g_t \qquad \text{(moment bậc 1 — "hướng")}
+$$
+
+$$
+v_t = \beta_2 v_{t-1} + (1 - \beta_2) g_t^2 \qquad \text{(moment bậc 2 — "scale")}
+$$
+
+$$
+\theta_{t+1} = \theta_t - \eta \frac{\hat{m}_t}{\sqrt{\hat{v}_t} + \epsilon}
+$$
+
+Với $\hat{m}_t = \dfrac{m_t}{1 - \beta_1^t}$ và $\hat{v}_t = \dfrac{v_t}{1 - \beta_2^t}$ là **bias-corrected estimates**.
+
+**Defaults**: $\beta_1 = 0.9$, $\beta_2 = 0.999$, $\epsilon = 10^{-8}$.
+
+## Bias correction — tại sao cần thiết
+
+$m_0 = v_0 = 0$ — khởi tạo bằng 0. Tại bước đầu $t=1$:
+
+$$
+m_1 = \beta_1 \cdot 0 + (1-\beta_1) g_1 = 0.1\, g_1
+$$
+
+$m_1$ **ước lượng thấp hơn** gradient thực 10 lần. Không sửa: bước đầu quá nhỏ, optimizer "ngập ngừng" trước khi xây dựng đủ momentum. Chia cho $(1-\beta_1^t)$: tại $t=1$, $\hat{m}_1 = m_1 / 0.1 = g_1$ — đúng.
+
+Sau nhiều bước, $1 - \beta_1^t \to 1$ nên bias correction biến mất tự nhiên.
+
+<Note type="intuition">
+$\sqrt{\hat{v}_t}$ đo "độ lớn điển hình của gradient theo chiều đó." Chia $\hat{m}_t$ cho $\sqrt{\hat{v}_t}$ nghĩa là: parameter nào hay nhận gradient lớn → bước nhỏ lại; parameter nào gradient nhỏ → bước lớn lên. Mỗi chiều tự động về cùng "tốc độ" hội tụ.
+</Note>
+
+## Minh hoạ: anisotropic loss landscape
+
+Momentum vs Adam trên $L(x,y) = 50x^2 + y^2$:
+
+<AdamViz />
+
+**Quan sát:**
+- **Momentum (vàng)**: lr nhỏ để x không dao động → y hội tụ cực chậm, còn xa minimum sau hàng trăm bước
+- **Adam (tím)**: chuẩn hoá từng chiều — x và y cùng tiến về minimum với tốc độ tương đương
+
+## AdamW — decoupled weight decay
+
+L2 weight decay thông thường thêm $\lambda\|\theta\|^2$ vào loss → gradient trở thành $g_t + \lambda\theta_t$. Với Adam, phần $\lambda\theta_t$ này cũng bị **chia cho $\sqrt{\hat{v}}$** — adaptive scaling làm cho weight decay không đồng đều và yếu hơn dự định.
+
+**AdamW** (Loshchilov & Hutter, 2019) tách weight decay ra khỏi gradient update:
+
+$$
+\underbrace{\theta_{t+1} = \theta_t - \eta \frac{\hat{m}_t}{\sqrt{\hat{v}_t} + \epsilon}}_{\text{gradient step}} \underbrace{-\; \eta\lambda\theta_t}_{\text{weight decay}}
+$$
+
+Weight decay áp dụng trực tiếp lên $\theta$, không bị scale bởi $\sqrt{\hat{v}}$ — mỗi parameter bị regularize với cường độ như nhau.
+
+<Note type="result">
+Trong thực tế: luôn dùng AdamW thay vì Adam khi có weight decay. Adam + L2 không regularize đúng như kỳ vọng. Hầu hết framework hiện đại (PyTorch, Transformers) đã default sang AdamW.
+</Note>
+
+## Khi nào Adam không hội tụ?
+
+Reddi et al. (2018) chứng minh Adam **có thể không hội tụ** ngay cả trên hàm lồi đơn giản — $v_t$ có thể giảm ở bước sau khiến lr đột ngột tăng lên và "quên" quá khứ.
+
+**AMSGrad** (Reddi et al., 2018): dùng $\hat{v}_t^{\max} = \max(\hat{v}_{t-1}^{\max}, \hat{v}_t)$ thay vì $\hat{v}_t$ → lr không bao giờ tăng đột biến. Có đảm bảo hội tụ nhưng trong thực tế thường không cải thiện Adam đáng kể.
+
+Trong deep learning, non-convergence lý thuyết ít khi gây vấn đề thực tế — nhưng AdamW + LR schedule ổn định hơn Adam thuần.
+
+## Tóm tắt so sánh
+
+| | SGD | Momentum | Adam / AdamW |
+|---|---|---|---|
+| LR per-dim | ✗ chung | ✗ chung | ✓ adaptive |
+| Momentum | ✗ | ✓ | ✓ (β₁) |
+| Sparse-friendly | ✗ | ✗ | ✓ |
+| Weight decay | L2 | L2 | Decoupled (AdamW) |
+| Flat minima | ✓ tốt | ✓ tốt | ✗ đôi khi kém hơn |
+| Dùng ở đâu | Vision | Vision | LLM, NLP, mọi task |
+
+## Thực hành
+
+```python
+# PyTorch
+optimizer = torch.optim.AdamW(
+    model.parameters(),
+    lr=1e-3,          # typical starting point
+    betas=(0.9, 0.999),
+    eps=1e-8,
+    weight_decay=0.01
+)
+```
+
+- $\epsilon$ lớn hơn (0.1–1.0) đôi khi ổn định hơn trên một số task
+- Với LLM: lr thường 1e-4 đến 3e-4 với warmup + cosine decay
+- Vision transformers: AdamW + weight decay 0.05–0.1
+
+## Papers tham khảo
+
+| Paper | |
+|---|---|
+| Duchi et al. (2011) | AdaGrad: Adaptive Subgradient Methods |
+| Kingma & Ba (2014) | Adam: A Method for Stochastic Optimization |
+| Loshchilov & Hutter (2019) | Decoupled Weight Decay Regularization (AdamW) |
+| Reddi et al. (2018) | On the Convergence of Adam and Beyond (AMSGrad) |
+| Wilson et al. (2017) | The Marginal Value of Momentum for Small Learning Rate SGD |
