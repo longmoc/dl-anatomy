@@ -1,0 +1,129 @@
+---
+title: "LR Schedules"
+description: "Tại sao không dùng fixed learning rate, cách warmup hoạt động, và so sánh cosine vs WSD."
+lang: vi
+category: training
+order: 4
+parent: optimizers
+translation: lr-schedules-en
+tags: [learning-rate, schedule, warmup, cosine, wsd]
+---
+
+import Note from '../../components/Note.astro';
+import LRViz from '../../components/LRViz.astro';
+
+# LR Schedules
+
+## Tại sao không dùng fixed learning rate?
+
+Learning rate cố định đặt ra một đánh đổi không thể giải quyết:
+
+- **LR lớn**: explore tốt, thoát local minima, nhưng cuối training dao động quanh minimum thay vì hội tụ
+- **LR nhỏ**: hội tụ tốt, nhưng đầu training tiến cực chậm
+
+Giải pháp tự nhiên: **lr lớn ở đầu, nhỏ dần ở cuối** — đây là ý tưởng cơ bản của mọi LR schedule.
+
+## Warmup — tại sao cần?
+
+Warmup là giai đoạn lr tăng từ gần 0 lên lr_max trong vài trăm đến vài nghìn bước đầu.
+
+**Lý do với Adam**: $v_t$ (second moment) được khởi tạo bằng 0 và cần thời gian để xây dựng ước lượng đáng tin cậy. Nếu dùng lr_max ngay từ đầu, trong khi $\hat{v}_t$ vẫn còn nhỏ (chưa tích lũy đủ), step size thực tế sẽ rất lớn → gradient explosion hoặc training mất ổn định.
+
+**Lý do với model lớn**: weight initialization tạo ra gradient landscape không ổn định. Warmup cho phép mô hình "định hướng" trước khi nhận lr lớn.
+
+<Note type="intuition">
+Warmup giống như khởi động máy trước khi chạy full tốc — không có warmup, bạn có thể "gãy" optimizer state ngay từ đầu.
+</Note>
+
+Thời gian warmup điển hình: **1–10% tổng số bước** (vài trăm bước cho fine-tuning, vài nghìn cho pre-training LLM).
+
+## Các schedule phổ biến
+
+<LRViz />
+
+### Step decay
+
+$$
+\eta_t = \eta_0 \cdot \gamma^{\lfloor t / s \rfloor}
+$$
+
+Giảm lr theo bậc cố định (thường $\gamma = 0.1$) tại các milestone cụ thể. Đơn giản, từng là chuẩn trong vision (ResNet paper dùng schedule này). Nhược điểm: phải quyết định milestone thủ công, lr thay đổi đột ngột.
+
+### Cosine annealing
+
+$$
+\eta_t = \eta_{\min} + \frac{1}{2}(\eta_{\max} - \eta_{\min})\left(1 + \cos\frac{\pi t}{T}\right)
+$$
+
+Giảm mượt từ $\eta_{\max}$ xuống $\eta_{\min}$ theo đường cosine. Không cần chọn milestone, smooth hơn step decay. Biến thể **SGDR** (Loshchilov & Hutter, 2016) thêm "warm restarts" — sau khi lr về $\eta_{\min}$, reset lại $\eta_{\max}$ và lặp lại theo chu kỳ ngắn dần.
+
+### Cosine + warmup
+
+Kết hợp linear warmup với cosine decay — **chuẩn de facto hiện tại** cho phần lớn deep learning:
+
+$$
+\eta_t = \begin{cases}
+\eta_{\max} \cdot \dfrac{t}{T_{\text{warm}}} & t < T_{\text{warm}} \\[8pt]
+\eta_{\min} + \dfrac{1}{2}(\eta_{\max} - \eta_{\min})\!\left(1 + \cos\dfrac{\pi(t - T_{\text{warm}})}{T - T_{\text{warm}}}\right) & t \geq T_{\text{warm}}
+\end{cases}
+$$
+
+Dùng cho BERT, GPT, ViT, và hầu hết transformer hiện đại.
+
+### WSD — Warmup, Stable, Decay
+
+Chia training thành 3 giai đoạn rõ ràng:
+
+1. **Warmup**: lr tăng tuyến tính lên $\eta_{\max}$
+2. **Stable**: giữ nguyên $\eta_{\max}$ trong phần lớn training
+3. **Decay**: giảm nhanh về $\eta_{\min}$ (cosine hoặc linear) trong 10–20% cuối
+
+**Ưu điểm so với cosine**: trong cosine, lr luôn thay đổi → không thể "pause and extend" training. WSD có giai đoạn stable cố định — nếu có thêm data hoặc compute, chỉ cần kéo dài giai đoạn stable rồi mới decay. Linh hoạt hơn nhiều cho continued pre-training.
+
+<Note type="result">
+WSD đang trở thành lựa chọn phổ biến cho LLM pre-training. MiniCPM, Llama 3 và một số model gần đây dùng WSD hoặc biến thể tương tự vì khả năng mở rộng training linh hoạt.
+</Note>
+
+## So sánh thực tế
+
+| Schedule | Cần tune | Phù hợp | Ghi chú |
+|---|---|---|---|
+| Step decay | Milestone, γ | Vision (CNN) | Cũ, vẫn hiệu quả |
+| Cosine | η_min | Mọi task | Đơn giản, tốt |
+| Cosine + warmup | T_warmup, η_min | Transformer, LLM | Chuẩn hiện tại |
+| WSD | T_warmup, T_stable | LLM pre-training | Linh hoạt nhất |
+
+## Thực hành
+
+```python
+# Cosine annealing (PyTorch)
+scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+    optimizer, T_max=num_steps, eta_min=1e-6
+)
+
+# Cosine + warmup (HuggingFace Transformers)
+from transformers import get_cosine_schedule_with_warmup
+scheduler = get_cosine_schedule_with_warmup(
+    optimizer,
+    num_warmup_steps=num_steps // 10,
+    num_training_steps=num_steps,
+)
+```
+
+- **T_warmup**: 1–5% tổng steps cho pre-training; 5–10% cho fine-tuning
+- **η_min**: thường 0–10% của η_max; nhiều LLM recipe dùng η_min = 0
+- **η_max**: tune riêng, không phụ thuộc schedule
+- Với AdamW: lr thường 1e-4 đến 3e-4; với SGD: lr thường 0.01–0.1
+
+## Khi nào không cần schedule?
+
+Bài tiếp theo trong series sẽ xem xét các optimizer thế hệ mới (Lion, Muon, Schedule-free Adam) — trong đó **Schedule-free Adam** loại bỏ hoàn toàn LR schedule bằng cách tích hợp averaging vào update rule, cho kết quả tương đương cosine+warmup mà không cần quyết định T hay η_min.
+
+## Papers tham khảo
+
+| Paper | |
+|---|---|
+| Loshchilov & Hutter (2016) | SGDR: Stochastic Gradient Descent with Warm Restarts |
+| Vaswani et al. (2017) | Attention Is All You Need (inverse sqrt + warmup) |
+| He et al. (2016) | Deep Residual Learning (step decay) |
+| Hu et al. (2024) | MiniCPM: Scaling Small Language Models with WSD Schedule |

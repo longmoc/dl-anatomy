@@ -1,0 +1,129 @@
+---
+title: "LR Schedules"
+description: "Why fixed learning rates fail, how warmup works, and comparing cosine vs WSD."
+lang: en
+category: training
+order: 4
+parent: optimizers
+translation: lr-schedules
+tags: [learning-rate, schedule, warmup, cosine, wsd]
+---
+
+import Note from '../../components/Note.astro';
+import LRViz from '../../components/LRViz.astro';
+
+# LR Schedules
+
+## Why not use a fixed learning rate?
+
+A fixed learning rate creates an irresolvable trade-off:
+
+- **Large LR**: good exploration, escapes local minima, but oscillates around the minimum at the end of training instead of converging
+- **Small LR**: converges well, but makes extremely slow progress early on
+
+The natural solution: **large lr early, small lr late** — this is the core idea behind every LR schedule.
+
+## Warmup — why is it needed?
+
+Warmup is a phase where the lr increases from near zero to lr_max over the first few hundred to few thousand steps.
+
+**Reason with Adam**: $v_t$ (second moment) is initialized to zero and needs time to build a reliable estimate. If you use lr_max immediately while $\hat{v}_t$ is still small (not yet accumulated), the actual step size is very large → gradient explosion or training instability.
+
+**Reason with large models**: weight initialization creates an unstable gradient landscape. Warmup lets the model "orient itself" before receiving a large lr.
+
+<Note type="intuition">
+Warmup is like warming up a car before driving at full speed — without it, you risk "breaking" the optimizer state from the very start.
+</Note>
+
+Typical warmup duration: **1–10% of total steps** (a few hundred steps for fine-tuning, a few thousand for LLM pre-training).
+
+## Common schedules
+
+<LRViz lang="en" />
+
+### Step decay
+
+$$
+\eta_t = \eta_0 \cdot \gamma^{\lfloor t / s \rfloor}
+$$
+
+Reduces lr by a fixed factor (typically $\gamma = 0.1$) at pre-defined milestones. Simple — was the standard in vision (used in the ResNet paper). Drawback: milestones must be chosen manually, and lr changes abruptly.
+
+### Cosine annealing
+
+$$
+\eta_t = \eta_{\min} + \frac{1}{2}(\eta_{\max} - \eta_{\min})\left(1 + \cos\frac{\pi t}{T}\right)
+$$
+
+Smoothly decreases from $\eta_{\max}$ to $\eta_{\min}$ following a cosine curve. No milestone selection needed, smoother than step decay. The **SGDR** variant (Loshchilov & Hutter, 2016) adds warm restarts — after lr reaches $\eta_{\min}$, it resets to $\eta_{\max}$ and repeats with progressively shorter cycles.
+
+### Cosine + warmup
+
+Combines linear warmup with cosine decay — the **current de facto standard** for most deep learning:
+
+$$
+\eta_t = \begin{cases}
+\eta_{\max} \cdot \dfrac{t}{T_{\text{warm}}} & t < T_{\text{warm}} \\[8pt]
+\eta_{\min} + \dfrac{1}{2}(\eta_{\max} - \eta_{\min})\!\left(1 + \cos\dfrac{\pi(t - T_{\text{warm}})}{T - T_{\text{warm}}}\right) & t \geq T_{\text{warm}}
+\end{cases}
+$$
+
+Used in BERT, GPT, ViT, and most modern transformers.
+
+### WSD — Warmup, Stable, Decay
+
+Divides training into three explicit phases:
+
+1. **Warmup**: lr increases linearly to $\eta_{\max}$
+2. **Stable**: holds $\eta_{\max}$ for the majority of training
+3. **Decay**: rapidly decreases to $\eta_{\min}$ (cosine or linear) in the final 10–20%
+
+**Advantage over cosine**: with cosine, lr is always changing — you can't pause and extend training. WSD has a fixed stable phase — if you have more data or compute, simply extend the stable phase and then decay. Much more flexible for continued pre-training.
+
+<Note type="result">
+WSD is becoming the preferred choice for LLM pre-training. MiniCPM, Llama 3, and several recent models use WSD or similar variants for their flexible continued training capability.
+</Note>
+
+## Practical comparison
+
+| Schedule | Needs tuning | Good for | Notes |
+|---|---|---|---|
+| Step decay | Milestones, γ | Vision (CNN) | Old but effective |
+| Cosine | η_min | All tasks | Simple, solid |
+| Cosine + warmup | T_warmup, η_min | Transformers, LLM | Current standard |
+| WSD | T_warmup, T_stable | LLM pre-training | Most flexible |
+
+## In practice
+
+```python
+# Cosine annealing (PyTorch)
+scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+    optimizer, T_max=num_steps, eta_min=1e-6
+)
+
+# Cosine + warmup (HuggingFace Transformers)
+from transformers import get_cosine_schedule_with_warmup
+scheduler = get_cosine_schedule_with_warmup(
+    optimizer,
+    num_warmup_steps=num_steps // 10,
+    num_training_steps=num_steps,
+)
+```
+
+- **T_warmup**: 1–5% of total steps for pre-training; 5–10% for fine-tuning
+- **η_min**: typically 0–10% of η_max; many LLM recipes use η_min = 0
+- **η_max**: tune independently, not dependent on the schedule
+- With AdamW: lr typically 1e-4 to 3e-4; with SGD: typically 0.01–0.1
+
+## When you don't need a schedule
+
+The next article in the series covers next-generation optimizers (Lion, Muon, Schedule-free Adam) — where **Schedule-free Adam** eliminates the LR schedule entirely by integrating averaging into the update rule, achieving results comparable to cosine+warmup without deciding T or η_min.
+
+## References
+
+| Paper | |
+|---|---|
+| Loshchilov & Hutter (2016) | SGDR: Stochastic Gradient Descent with Warm Restarts |
+| Vaswani et al. (2017) | Attention Is All You Need (inverse sqrt + warmup) |
+| He et al. (2016) | Deep Residual Learning (step decay) |
+| Hu et al. (2024) | MiniCPM: Scaling Small Language Models with WSD Schedule |
