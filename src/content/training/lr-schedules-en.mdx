@@ -25,17 +25,37 @@ The natural solution: **large lr early, small lr late** — this is the core ide
 
 ## Warmup — why is it needed?
 
-Warmup is a phase where the lr increases from near zero to lr_max over the first few hundred to few thousand steps.
+Warmup is a phase where the lr increases linearly from near zero to $\eta_{\max}$ over the first few hundred to few thousand steps. The reason differs depending on the optimizer.
 
-**Reason with Adam**: $v_t$ (second moment) is initialized to zero and needs time to build a reliable estimate. If you use lr_max immediately while $\hat{v}_t$ is still small (not yet accumulated), the actual step size is very large → gradient explosion or training instability.
+### With Adam: second moment estimates are unreliable early on
 
-**Reason with large models**: weight initialization creates an unstable gradient landscape. Warmup lets the model "orient itself" before receiving a large lr.
+Adam's bias correction ensures $\hat{v}_t$ is **unbiased** — but it does not make it **low-variance**. At step $t=1$, $\hat{v}_1 = g_1^2$ is based on a single minibatch. This is a very noisy estimate of $\mathbb{E}[g^2]$.
 
-<Note type="intuition">
-Warmup is like warming up a car before driving at full speed — without it, you risk "breaking" the optimizer state from the very start.
+The dangerous consequence: a parameter that normally has small gradients ($\mathbb{E}[g^2] \approx 0.01$) but happens to receive $g_1 \approx 0$ on the first step → $\hat{v}_1 \approx 0$ → denominator collapses to $\epsilon$ → step size $\approx \eta_{\max}/\epsilon$ → **catastrophically large step**.
+
+After thousands of steps, $\hat{v}_t$ is a stable exponential moving average over many observations. The effective "window size" of the EMA with $\beta_2 = 0.999$ corresponds to $\frac{1}{1-\beta_2} = 1000$ steps — this is the theoretical basis for warmup lasting at least ~1000 steps with standard AdamW.
+
+<Note type="warning">
+The problem is not that $\hat{v}_t$ is "too small" — bias correction handles that. The problem is that $\hat{v}_t$ is **too noisy** (high-variance) when $t$ is small: a single minibatch is not enough to reliably estimate gradient scale.
 </Note>
 
-Typical warmup duration: **1–10% of total steps** (a few hundred steps for fine-tuning, a few thousand for LLM pre-training).
+### With large models: loss spikes
+
+With large transformers, training without warmup frequently causes a **loss spike** — a sudden increase in loss during the first few thousand steps before (sometimes) recovering. Cause: residual connections allow a large early update to propagate across many layers, pushing the model into an unstable region of parameter space that is hard to escape.
+
+### With plain SGD: less critical
+
+SGD has no second moment accumulation, so it doesn't face the cold-start problem. Warmup is still useful for avoiding large overshoots in the first steps, but is not as essential as with Adam.
+
+### How long is enough?
+
+| Scenario | Typical warmup |
+|---|---|
+| Fine-tuning small transformer | 5–10% of total steps (~100–500 steps) |
+| LLM pre-training | 1–2% of total steps (1000–5000 steps) |
+| SGD + cosine | Optional, 0–5% |
+
+Warmup too short → optimizer state not yet stable. Warmup too long → wastes training budget at low lr. With $\beta_2=0.999$: ~1000 warmup steps is reasonable to give $\hat{v}_t$ enough observations.
 
 ## Common schedules
 

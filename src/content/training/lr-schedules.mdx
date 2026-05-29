@@ -25,17 +25,37 @@ Giải pháp tự nhiên: **lr lớn ở đầu, nhỏ dần ở cuối** — đ
 
 ## Warmup — tại sao cần?
 
-Warmup là giai đoạn lr tăng từ gần 0 lên lr_max trong vài trăm đến vài nghìn bước đầu.
+Warmup là giai đoạn lr tăng tuyến tính từ gần 0 lên $\eta_{\max}$ trong vài trăm đến vài nghìn bước đầu. Lý do khác nhau tùy optimizer.
 
-**Lý do với Adam**: $v_t$ (second moment) được khởi tạo bằng 0 và cần thời gian để xây dựng ước lượng đáng tin cậy. Nếu dùng lr_max ngay từ đầu, trong khi $\hat{v}_t$ vẫn còn nhỏ (chưa tích lũy đủ), step size thực tế sẽ rất lớn → gradient explosion hoặc training mất ổn định.
+### Với Adam: ước lượng second moment chưa đáng tin cậy
 
-**Lý do với model lớn**: weight initialization tạo ra gradient landscape không ổn định. Warmup cho phép mô hình "định hướng" trước khi nhận lr lớn.
+Bias correction trong Adam đảm bảo $\hat{v}_t$ là **unbiased** — nhưng không đảm bảo **low-variance**. Tại bước $t=1$, $\hat{v}_1 = g_1^2$ chỉ dựa trên một minibatch duy nhất. Đây là ước lượng rất nhiễu của $\mathbb{E}[g^2]$.
 
-<Note type="intuition">
-Warmup giống như khởi động máy trước khi chạy full tốc — không có warmup, bạn có thể "gãy" optimizer state ngay từ đầu.
+Hệ quả nguy hiểm: một parameter bình thường có gradient nhỏ ($\mathbb{E}[g^2] \approx 0.01$) nhưng bước đầu tình cờ nhận được $g_1 \approx 0$ → $\hat{v}_1 \approx 0$ → mẫu số gần bằng $\epsilon$ → step size $\approx \eta_{\max}/\epsilon$ → **bước cực lớn**.
+
+Sau hàng nghìn bước, $\hat{v}_t$ là trung bình có trọng số của nhiều quan sát → ổn định và đáng tin cậy. "Window" hiệu dụng của EMA với $\beta_2 = 0.999$ tương đương $\frac{1}{1-\beta_2} = 1000$ bước — đây là cơ sở lý thuyết cho việc warmup nên kéo dài ít nhất ~1000 bước với AdamW chuẩn.
+
+<Note type="warning">
+Vấn đề không phải là $\hat{v}_t$ "quá nhỏ" — bias correction đã sửa điều đó. Vấn đề là $\hat{v}_t$ **quá nhiễu** (high-variance) khi $t$ nhỏ: một minibatch không đại diện đủ để ước lượng gradient scale đáng tin cậy.
 </Note>
 
-Thời gian warmup điển hình: **1–10% tổng số bước** (vài trăm bước cho fine-tuning, vài nghìn cho pre-training LLM).
+### Với model lớn: loss spike
+
+Với transformer nhiều tham số, training không có warmup thường dẫn đến **loss spike** — loss tăng đột ngột trong vài nghìn bước đầu trước khi giảm lại (nếu may mắn). Nguyên nhân: residual connections khiến một update lớn sớm lan truyền qua nhiều layer, đưa mô hình vào vùng parameter space không ổn định và khó thoát ra.
+
+### Với SGD thuần: ít cần hơn
+
+SGD không có second moment accumulation, nên không gặp vấn đề cold-start. Warmup vẫn có ích để tránh overshoot ở những bước đầu khi gradient landscape chưa quen thuộc, nhưng không bắt buộc như với Adam.
+
+### Bao lâu thì đủ?
+
+| Kịch bản | Warmup điển hình |
+|---|---|
+| Fine-tuning transformer nhỏ | 5–10% tổng steps (~100–500 steps) |
+| Pre-training LLM | 1–2% tổng steps (1000–5000 steps) |
+| SGD + cosine | Không bắt buộc, 0–5% |
+
+Warmup quá ngắn → optimizer state chưa ổn định. Warmup quá dài → lãng phí training budget ở lr thấp. Với $\beta_2=0.999$: warmup ~1000 steps là hợp lý để $\hat{v}_t$ có đủ observations.
 
 ## Các schedule phổ biến
 
