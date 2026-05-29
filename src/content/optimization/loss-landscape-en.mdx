@@ -266,13 +266,22 @@ From $T_{\text{eff}} \propto \frac{\eta}{|B|}$:
 
 ## Overparameterization creates a solution space
 
-When $|\theta| \gg n_{\text{data}}$, the system:
+It sounds paradoxical: adding parameters makes the search space **larger**, so why is optimization easier? The answer lies in how the nature of the problem changes:
 
-$$
-f_\theta(x_i) = y_i, \quad i = 1, \ldots, n
-$$
+- When $|\theta| \ll n_{\text{data}}$: too few parameters to fit the data → information must be "compressed" → easy to get stuck at bad local minima
+- When $|\theta| \gg n_{\text{data}}$: **infinitely many ways** to fit the data → the landscape changes completely
 
-is **underdetermined** — far fewer equations than unknowns. The solution set is not an isolated point but a **manifold**:
+### From a system of equations to a solution manifold
+
+At the data-point level, training solves $n$ conditions $f_\theta(x_i) = y_i$, each a hypersurface in parameter space $\mathbb{R}^{|\theta|}$:
+
+| Regime | Solution set |
+|---|---|
+| $|\theta| < n$ | Overconstrained — usually **no exact solution** |
+| $|\theta| = n$ | Just enough — usually **finitely many isolated solutions** |
+| $|\theta| \gg n$ | Underconstrained — solutions form a high-dimensional **manifold** |
+
+In the overparameterized regime, the dimension of the solution manifold:
 
 $$
 \dim(\mathcal{M}^*) \approx |\theta| - n
@@ -286,17 +295,61 @@ $$
 
 *token count ≠ independent constraints directly*
 
-The set of $\theta$ achieving low loss is a **wide region**, not an isolated point. When gradient descent enters this region, it "gets stuck" in a good sense — loss doesn't increase even as parameters move around within it.
+On this manifold $\mathcal{M}^*$, **every point is a good solution** — low loss, gradient $\approx 0$. Gradient descent reaching any point on it "stops" in a good sense, rather than having to find one isolated point among countless local minima.
+
+### Null space — the freedom to move
+
+Why does the manifold appear? Consider the linearization of the network around $\theta_0$:
+
+$$
+f_\theta(x) \approx f_{\theta_0}(x) + J(\theta - \theta_0)
+$$
+
+where $J \in \mathbb{R}^{n \times |\theta|}$ is the **Jacobian** — $n$ rows (data points), $|\theta|$ columns (parameters). The data-fitting condition becomes the linear system $J(\theta - \theta_0) = y - f_{\theta_0}$. When $|\theta| \gg n$, $J$ has full row rank $= n$, and the general solution is:
+
+$$
+\theta = \theta_{\text{particular}} + \theta_{\text{null}}, \qquad \theta_{\text{null}} \in \ker(J)
+$$
+
+**The null space $\ker(J)$ is the "freedom to move"**: moving within the null space (of dimension $|\theta| - n$) doesn't change the network's output → doesn't change the loss. This is the geometric reason the solution set is a connected region, not isolated points.
 
 ### Neural Tangent Kernel (Jacot et al., 2018)
 
-In the infinite-width limit, $K = JJ^T$ is fixed throughout training:
+In the infinite-width limit, the Jacobian $J$ is **stable** throughout training (doesn't change with $\theta$). Then $K = JJ^T \in \mathbb{R}^{n \times n}$ is a fixed kernel, and training dynamics become:
 
 $$
-\frac{d\mathcal{L}}{dt} = -K \cdot \mathcal{L} \quad \Rightarrow \quad \text{exponential convergence, linear dynamics}
+\frac{d\mathcal{L}}{dt} = -K \cdot \mathcal{L} \quad \Rightarrow \quad \text{linear, exponential convergence}
 $$
 
-At infinite width, neural networks are **convex in function space** (though not in parameter space). As networks grow larger, the function-space landscape becomes progressively easier to optimize.
+This system is **linear and convex** — overparameterization turns the nonlinear problem into one with an analytic solution and guaranteed convergence to the global minimum. This is the limiting case that proves why overparameterization guarantees convergence.
+
+<Note type="warning">
+NTK is exact only at infinite width. Real finite-width networks **leave the NTK regime** — $J$ changes during training (feature learning happens). NTK is a useful approximation, not a full description of real networks.
+</Note>
+
+### Double Descent — breaking the bias-variance tradeoff
+
+Classical wisdom says: increasing model complexity → overfitting → test error rises (the U-curve). **Belkin et al. (2019)** showed this is only partly true:
+
+- **Underparameterized** ($|\theta| < n$): the classical U-curve holds — the model picks one of few solutions, easy to pick wrong
+- **Interpolation threshold** ($|\theta| = n$): just enough freedom to fit even the noise → solution extremely sensitive to data → **test error spikes**
+- **Overparameterized** ($|\theta| \gg n$): countless solutions on the manifold → GD picks the "simplest" one → **test error falls again** and keeps dropping as parameters are added
+
+The test-error curve has **two descents** (double descent) — with the spike sitting exactly at $|\theta| = n$. This is why enormous models (deep in the overparameterized regime) generalize well rather than overfit as classical theory predicts. **Nakkiran et al. (2019)** confirmed the phenomenon occurs both with model size and with training epochs.
+
+### Implicit bias — which solution does GD pick?
+
+When there are countless solutions on $\mathcal{M}^*$, which does gradient descent choose? **Soudry et al. (2018)** and **Gunasekar et al. (2017)** proved: on overparameterized linear models, GD converges to the **minimum-norm** solution:
+
+$$
+\theta^* = \arg\min \|\theta\| \quad \text{s.t.} \quad f_\theta(x_i) = y_i \;\; \forall i
+$$
+
+This is equivalent to **L2 regularization as $\lambda \to 0$** — yet another implicit form of regularization, added by no one. The minimum-norm solution tends to be smooth and to fit less noise → generalizes well. This is the final piece explaining double descent: in the overparameterized regime, GD's implicit bias automatically prefers the simpler solution.
+
+<Note type="result">
+Three forms of **implicit** regularization appear throughout this article — none added explicitly to the loss: (1) SGD noise penalizes sharp regions, (2) SGD's volume bias toward flat minima, (3) GD's minimum-norm preference in the overparameterized regime. Deep learning regularizes itself.
+</Note>
 
 ## The full picture
 
@@ -310,7 +363,7 @@ At infinite width, neural networks are **convex in function space** (though not 
 ## What we still don't understand
 
 - **Grokking** (Power et al., 2022): models suddenly "understand" a task after many overfit epochs — why does the loss landscape shift so dramatically so late in training?
-- **Double descent** (Belkin et al., 2019): test error can rise and then fall again as model complexity increases — breaks the classical bias-variance tradeoff.
+- **Implicit bias for nonlinear networks**: for linear models, GD's minimum-norm preference is proven; but for nonlinear neural networks, the implicit bias depends on architecture and isn't fully characterized.
 - **LLM loss landscapes in practice**: both the spin-glass theory and NTK make assumptions that don't fully match real transformers. The true landscape remains a black box.
 
 <Note type="paper">
@@ -335,4 +388,7 @@ The honest answer: deep learning **works well in practice** because of these phe
 | Zhu et al. (2019) | The Anisotropic Noise in SGD |
 | Blanc et al. (2020) | Implicit Regularization for Deep Neural Networks |
 | Belkin et al. (2019) | Reconciling Modern ML Practice and Bias-Variance Tradeoff |
+| Nakkiran et al. (2019) | Deep Double Descent |
+| Soudry et al. (2018) | The Implicit Bias of Gradient Descent on Separable Data |
+| Gunasekar et al. (2017) | Implicit Regularization in Matrix Factorization |
 | Power et al. (2022) | Grokking: Generalization Beyond Overfitting |

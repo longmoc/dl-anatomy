@@ -266,13 +266,22 @@ Từ $T_{\text{eff}} \propto \frac{\eta}{|B|}$:
 
 ## Overparameterization tạo ra không gian nghiệm
 
-Khi $|\theta| \gg n_{\text{data}}$, hệ điều kiện fit data:
+Nghe có vẻ nghịch lý: thêm tham số làm không gian tìm kiếm **lớn hơn**, tại sao lại dễ tối ưu hơn? Câu trả lời nằm ở sự thay đổi bản chất bài toán:
 
-$$
-f_\theta(x_i) = y_i, \quad i = 1, \ldots, n
-$$
+- Khi $|\theta| \ll n_{\text{data}}$: bài toán **thiếu tham số** để fit data → phải "nén" thông tin → dễ kẹt ở local minima xấu
+- Khi $|\theta| \gg n_{\text{data}}$: có **vô số cách** fit data → landscape thay đổi hoàn toàn
 
-là hệ **underconstrained** — ít phương trình hơn ẩn số rất nhiều. Tập nghiệm không phải một điểm mà là một **manifold**:
+### Từ hệ phương trình đến manifold nghiệm
+
+Nhìn ở mức data point, training là giải $n$ điều kiện $f_\theta(x_i) = y_i$, mỗi điều kiện là một hypersurface trong không gian tham số $\mathbb{R}^{|\theta|}$:
+
+| Chế độ | Tập nghiệm |
+|---|---|
+| $|\theta| < n$ | Overconstrained — thường **không có nghiệm chính xác** |
+| $|\theta| = n$ | Vừa đủ — thường **hữu hạn nghiệm cô lập** |
+| $|\theta| \gg n$ | Underconstrained — nghiệm là **manifold** chiều cao |
+
+Với chế độ overparameterized, số chiều của manifold nghiệm:
 
 $$
 \dim(\mathcal{M}^*) \approx |\theta| - n
@@ -286,17 +295,61 @@ $$
 
 *số tokens không tương đương trực tiếp với số constraint độc lập*
 
-Tập các $\theta$ cho loss thấp là một **vùng rộng lớn**, không phải điểm cô lập. Gradient descent khi rơi vào vùng này thì "mắc kẹt" theo nghĩa tốt — loss không tăng dù di chuyển trong vùng đó.
+Trên manifold $\mathcal{M}^*$ này, **mọi điểm đều là nghiệm tốt** — loss thấp, gradient $\approx 0$. Gradient descent chạm vào bất kỳ điểm nào cũng "dừng lại" theo nghĩa tốt, thay vì phải tìm đúng một điểm cô lập giữa vô số local minima.
+
+### Null space — "đường đi" tự do
+
+Tại sao manifold xuất hiện? Xét linearization của network quanh $\theta_0$:
+
+$$
+f_\theta(x) \approx f_{\theta_0}(x) + J(\theta - \theta_0)
+$$
+
+Trong đó $J \in \mathbb{R}^{n \times |\theta|}$ là **Jacobian** — $n$ hàng (data points), $|\theta|$ cột (tham số). Điều kiện fit data trở thành hệ tuyến tính $J(\theta - \theta_0) = y - f_{\theta_0}$. Khi $|\theta| \gg n$, $J$ có full row rank $= n$, và nghiệm tổng quát là:
+
+$$
+\theta = \theta_{\text{particular}} + \theta_{\text{null}}, \qquad \theta_{\text{null}} \in \ker(J)
+$$
+
+**Null space $\ker(J)$ chính là "đường đi" tự do**: di chuyển trong null space (chiều $|\theta| - n$) không thay đổi output của network → không thay đổi loss. Đây là lý do hình học khiến nghiệm là một vùng liên thông chứ không phải điểm cô lập.
 
 ### Neural Tangent Kernel (Jacot et al., 2018)
 
-Ở giới hạn infinite width, $K = JJ^T$ cố định trong suốt training:
+Ở giới hạn infinite width, Jacobian $J$ **ổn định** trong suốt training (không đổi theo $\theta$). Khi đó $K = JJ^T \in \mathbb{R}^{n \times n}$ là một kernel cố định, và training dynamics trở thành:
 
 $$
-\frac{d\mathcal{L}}{dt} = -K \cdot \mathcal{L} \quad \Rightarrow \quad \text{hội tụ exponential, tuyến tính}
+\frac{d\mathcal{L}}{dt} = -K \cdot \mathcal{L} \quad \Rightarrow \quad \text{tuyến tính, hội tụ exponential}
 $$
 
-Ở infinite width, neural network **lồi trong function space** (dù không lồi trong parameter space). Khi network đủ lớn, landscape trong function space càng ngày càng "dễ" hơn.
+Hệ này **tuyến tính và lồi** — overparameterization đưa bài toán phi tuyến về một bài toán có nghiệm giải tích, hội tụ có bảo đảm về global minimum. Đây là trường hợp giới hạn chứng minh tại sao overparameterization đảm bảo hội tụ.
+
+<Note type="warning">
+NTK chỉ chính xác ở infinite width. Mạng finite-width thực tế **thoát khỏi NTK regime** — $J$ thay đổi trong training (feature learning xảy ra). NTK là approximation hữu ích, không phải mô tả đầy đủ của mạng thực.
+</Note>
+
+### Double Descent — phá vỡ bias-variance tradeoff
+
+Wisdom cổ điển nói: tăng model complexity → overfit → test error tăng (U-curve). **Belkin et al. (2019)** chỉ ra điều này chỉ đúng một phần:
+
+- **Underparameterized** ($|\theta| < n$): U-curve cổ điển vẫn đúng — model chọn một trong số ít nghiệm, dễ chọn sai
+- **Interpolation threshold** ($|\theta| = n$): model vừa đủ bậc tự do để fit cả noise → nghiệm cực nhạy với data → **test error tăng vọt**
+- **Overparameterized** ($|\theta| \gg n$): có vô số nghiệm trên manifold → GD chọn nghiệm "đơn giản nhất" → **test error giảm trở lại** và tiếp tục giảm khi thêm tham số
+
+Đường test error có **hai lần giảm** (double descent) — đỉnh tăng vọt nằm đúng tại $|\theta| = n$. Đây là lý do các model khổng lồ (deep into overparameterized regime) generalize tốt thay vì overfit như lý thuyết cổ điển dự đoán. **Nakkiran et al. (2019)** xác nhận hiện tượng này xảy ra cả theo model size lẫn theo số epoch training.
+
+### Implicit bias — GD chọn nghiệm nào trên manifold?
+
+Khi có vô số nghiệm trên $\mathcal{M}^*$, gradient descent chọn cái nào? **Soudry et al. (2018)** và **Gunasekar et al. (2017)** chứng minh: trên overparameterized linear model, GD hội tụ về nghiệm **minimum norm**:
+
+$$
+\theta^* = \arg\min \|\theta\| \quad \text{s.t.} \quad f_\theta(x_i) = y_i \;\; \forall i
+$$
+
+Đây tương đương với **L2 regularization khi $\lambda \to 0$** — một dạng regularization implicit nữa, không cần thêm tay. Nghiệm minimum norm thường smooth, ít fit noise → generalize tốt. Đây là mảnh ghép cuối giải thích double descent: trong vùng overparameterized, implicit bias của GD tự động ưu tiên nghiệm đơn giản.
+
+<Note type="result">
+Ba dạng regularization **implicit** xuất hiện xuyên suốt bài này — không cái nào được thêm tường minh vào loss: (1) SGD noise phạt sharp region, (2) SGD bias về flat minima qua thể tích, (3) GD chọn minimum-norm solution trong vùng overparameterized. Deep learning regularize chính nó.
+</Note>
 
 ## Bức tranh tổng thể
 
@@ -310,7 +363,7 @@ $$
 ## Những gì vẫn chưa hiểu
 
 - **Grokking** (Power et al., 2022): mô hình đột ngột "hiểu" bài toán sau rất nhiều epoch overfit — tại sao loss landscape thay đổi đột ngột muộn vậy?
-- **Double descent** (Belkin et al., 2019): test error có thể tăng rồi giảm lại khi tăng model complexity — phá vỡ bias-variance tradeoff cổ điển.
+- **Implicit bias cho mạng phi tuyến**: với linear model, GD chọn minimum-norm solution đã được chứng minh; nhưng với neural network phi tuyến, implicit bias phụ thuộc architecture và chưa được đặc trưng đầy đủ.
 - **Loss landscape của LLM thực tế**: lý thuyết spin-glass và NTK đều có giả định không hoàn toàn phù hợp với transformer thực. Landscape thực sự vẫn là hộp đen.
 
 <Note type="paper">
@@ -335,4 +388,7 @@ Câu trả lời trung thực: deep learning **hoạt động tốt trong thực
 | Zhu et al. (2019) | The Anisotropic Noise in SGD |
 | Blanc et al. (2020) | Implicit Regularization for Deep Neural Networks |
 | Belkin et al. (2019) | Reconciling Modern ML Practice and Bias-Variance Tradeoff |
+| Nakkiran et al. (2019) | Deep Double Descent |
+| Soudry et al. (2018) | The Implicit Bias of Gradient Descent on Separable Data |
+| Gunasekar et al. (2017) | Implicit Regularization in Matrix Factorization |
 | Power et al. (2022) | Grokking: Generalization Beyond Overfitting |
