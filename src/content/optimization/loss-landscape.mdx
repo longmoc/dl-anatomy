@@ -31,7 +31,9 @@ Trái: loss lồi — GD luôn tìm được global minimum. Phải: loss không
 
 ## Chiều cao → saddle points, không phải local minima
 
-Trong không gian $d$ chiều, để một điểm là **local minimum**, tất cả $d$ eigenvalue của Hessian phải dương. Nếu mỗi eigenvalue độc lập có xác suất $\frac{1}{2}$ là dương:
+Một critical point ($\nabla\mathcal{L} = 0$) là **local minimum** chỉ khi tất cả $d$ eigenvalue của Hessian đều dương — tức landscape cong lên theo mọi hướng. Chỉ cần **một** eigenvalue âm, điểm đó trở thành saddle point: cong lên theo vài hướng, cong xuống theo các hướng khác.
+
+Nếu coi mỗi eigenvalue độc lập có xác suất $\frac{1}{2}$ là dương:
 
 $$
 P(\text{local minimum}) = \left(\frac{1}{2}\right)^d
@@ -40,17 +42,43 @@ $$
 | Số tham số $d$ | $P(\text{local minimum})$ |
 |---|---|
 | 10 | $\approx 0.1\%$ |
+| 100 | $\approx 10^{-30}$ |
 | 1000 | $\approx 10^{-300}$ |
 | $10^9$ (LLM nhỏ) | $\approx 10^{-300{,}000{,}000}$ |
 
-**Hầu hết critical points trong mạng lớn là saddle points** — nơi gradient bằng 0 nhưng Hessian có cả eigenvalue dương lẫn âm. Saddle points có vẻ nguy hiểm, nhưng SGD noise tự nhiên thoát ra.
+Với mạng có hàng triệu đến hàng tỷ tham số, xác suất một critical point ngẫu nhiên là local minimum gần như bằng 0. **Hầu hết critical points trong mạng lớn là saddle points** — đây là sự khác biệt cốt lõi so với optimization chiều thấp, nơi local minima xấu là mối lo chính.
 
-**Dauphin et al. (2014)** chứng minh: index của critical point (tỷ lệ eigenvalue âm) tương quan chặt với loss tại điểm đó. Với mạng lớn, critical points có loss thấp hầu như luôn là local minima tốt — không phải saddle point xấu.
+### Random Matrix Theory — Wigner Semicircle Law
 
-Random Matrix Theory cho biết phân phối eigenvalue của Hessian ngẫu nhiên tuân theo **Wigner Semicircle Law** — với mạng ngẫu nhiên, khoảng nửa số eigenvalue âm, nửa dương. Hầu như không có critical point nào là local minimum thuần tuý trong không gian cao chiều.
+Tại sao xấp xỉ "mỗi eigenvalue dương với xác suất $\frac{1}{2}$" lại hợp lý? Random Matrix Theory cho biết phân phối eigenvalue của một ma trận đối xứng ngẫu nhiên (như Hessian của mạng khởi tạo ngẫu nhiên) tuân theo **Wigner Semicircle Law**:
+
+$$
+\rho(\lambda) = \frac{1}{2\pi\sigma^2}\sqrt{4\sigma^2 - \lambda^2}
+$$
+
+Phân phối này **đối xứng quanh 0** — khoảng nửa số eigenvalue âm, nửa dương. Một critical point ngẫu nhiên hầu như luôn có cả hướng cong lên lẫn cong xuống → là saddle point.
+
+**Dauphin et al. (2014)** tinh chỉnh bức tranh này: trong mạng thực, **index** của critical point (tỷ lệ eigenvalue âm) tương quan chặt với loss tại điểm đó. Critical point loss cao → nhiều eigenvalue âm (saddle point "dốc"). Critical point loss thấp → ít eigenvalue âm, gần với local minimum thật. Tức là: loss càng thấp, điểm đó càng giống local minimum tốt — và saddle points xấu chủ yếu nằm ở vùng loss cao.
+
+### Saddle point khác plateau
+
+Cả hai đều làm gradient nhỏ, nhưng cơ chế và cách xử lý khác nhau:
+
+| | Saddle point | Plateau |
+|---|---|---|
+| Gradient $\nabla\mathcal{L}$ | $= 0$ | $\approx 0$ |
+| Hessian | Có eigenvalue âm (hướng thoát) | Tất cả eigenvalue $\approx 0$ |
+| Bản chất | Điểm yên ngựa — có lối xuống | Vùng phẳng — không có lối rõ ràng |
+| Giải pháp | SGD noise (project lên hướng âm) | Momentum, Adam (tích lũy bước) |
+
+### Cách gradient descent thoát saddle point
+
+- **Exact GD (full-batch)**: tại saddle point $\nabla\mathcal{L} = 0$ chính xác → update bằng 0 → **bị kẹt** vĩnh viễn về mặt lý thuyết.
+- **SGD**: noise $\epsilon_t$ trong gradient project lên hướng eigenvalue âm của Hessian → đẩy θ ra khỏi saddle theo hướng cong xuống → **thoát tự nhiên**, không cần can thiệp.
+- **Perturbed GD (Jin et al., 2017)**: thêm noise có chủ đích khi gradient nhỏ → đảm bảo thoát saddle point trong thời gian đa thức, có chứng minh lý thuyết chặt chẽ.
 
 <Note type="result">
-SGD noise project lên hướng eigenvalue âm của Hessian → tự nhiên thoát saddle point. Đây là lý do SGD hoạt động tốt hơn full-batch GD trên non-convex loss.
+Đây là một lý do then chốt SGD hoạt động tốt hơn full-batch GD trên non-convex loss: noise không phải khuyết điểm cần loại bỏ, mà là cơ chế **tự động thoát saddle point** — thứ mà full-batch GD thiếu hoàn toàn.
 </Note>
 
 ## Local minima tốt đều tương đương nhau

@@ -31,7 +31,9 @@ Left: convex loss — GD always finds the global minimum. Right: non-convex loss
 
 ## High dimensionality → saddle points, not local minima
 
-In $d$-dimensional space, for a point to be a **local minimum**, all $d$ eigenvalues of the Hessian must be positive. If each eigenvalue is independently positive with probability $\frac{1}{2}$:
+A critical point ($\nabla\mathcal{L} = 0$) is a **local minimum** only if all $d$ eigenvalues of the Hessian are positive — i.e. the landscape curves upward in every direction. A **single** negative eigenvalue makes it a saddle point: curving up in some directions, down in others.
+
+If we treat each eigenvalue as independently positive with probability $\frac{1}{2}$:
 
 $$
 P(\text{local minimum}) = \left(\frac{1}{2}\right)^d
@@ -40,17 +42,43 @@ $$
 | Parameters $d$ | $P(\text{local minimum})$ |
 |---|---|
 | 10 | $\approx 0.1\%$ |
+| 100 | $\approx 10^{-30}$ |
 | 1000 | $\approx 10^{-300}$ |
 | $10^9$ (small LLM) | $\approx 10^{-300{,}000{,}000}$ |
 
-**Almost all critical points in large networks are saddle points** — where the gradient is zero but the Hessian has both positive and negative eigenvalues. Saddle points may seem dangerous, but SGD noise naturally escapes them.
+For networks with millions to billions of parameters, the probability that a random critical point is a local minimum is essentially zero. **Almost all critical points in large networks are saddle points** — the core difference from low-dimensional optimization, where bad local minima are the main concern.
 
-**Dauphin et al. (2014)** proved: the index of a critical point (fraction of negative eigenvalues) strongly correlates with the loss at that point. For large networks, critical points with low loss are almost always good local minima — not bad saddle points.
+### Random Matrix Theory — Wigner Semicircle Law
 
-Random Matrix Theory tells us that Hessian eigenvalues follow the **Wigner Semicircle Law** — for a random network, roughly half the eigenvalues are negative, half positive. Almost no critical point in high-dimensional space is a pure local minimum.
+Why is the "each eigenvalue positive with probability $\frac{1}{2}$" approximation reasonable? Random Matrix Theory tells us that the eigenvalue distribution of a random symmetric matrix (like the Hessian of a randomly initialized network) follows the **Wigner Semicircle Law**:
+
+$$
+\rho(\lambda) = \frac{1}{2\pi\sigma^2}\sqrt{4\sigma^2 - \lambda^2}
+$$
+
+This distribution is **symmetric around 0** — roughly half the eigenvalues are negative, half positive. A random critical point almost always has both upward- and downward-curving directions → it's a saddle point.
+
+**Dauphin et al. (2014)** refined this picture: in real networks, the **index** of a critical point (fraction of negative eigenvalues) strongly correlates with the loss at that point. High-loss critical point → many negative eigenvalues (a "steep" saddle). Low-loss critical point → few negative eigenvalues, close to a true local minimum. In other words: the lower the loss, the more the point resembles a good local minimum — and bad saddle points mostly sit in high-loss regions.
+
+### Saddle point vs plateau
+
+Both produce small gradients, but the mechanism and the fix differ:
+
+| | Saddle point | Plateau |
+|---|---|---|
+| Gradient $\nabla\mathcal{L}$ | $= 0$ | $\approx 0$ |
+| Hessian | Has negative eigenvalues (escape directions) | All eigenvalues $\approx 0$ |
+| Nature | Saddle — there's a way down | Flat region — no clear direction |
+| Fix | SGD noise (projects onto negative directions) | Momentum, Adam (accumulate steps) |
+
+### How gradient descent escapes saddle points
+
+- **Exact GD (full-batch)**: at a saddle point $\nabla\mathcal{L} = 0$ exactly → zero update → **stuck** indefinitely in theory.
+- **SGD**: the noise $\epsilon_t$ in the gradient projects onto the Hessian's negative-eigenvalue directions → pushes θ off the saddle along the downward-curving direction → **escapes naturally**, with no intervention.
+- **Perturbed GD (Jin et al., 2017)**: adds deliberate noise when the gradient is small → provably escapes saddle points in polynomial time, with rigorous theoretical guarantees.
 
 <Note type="result">
-SGD noise projects onto negative-eigenvalue directions of the Hessian → naturally escapes saddle points. This is one reason SGD outperforms full-batch GD on non-convex losses.
+This is a key reason SGD outperforms full-batch GD on non-convex losses: noise isn't a flaw to be removed, but a mechanism for **automatically escaping saddle points** — something full-batch GD lacks entirely.
 </Note>
 
 ## All good local minima are equivalent
