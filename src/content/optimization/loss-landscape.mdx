@@ -278,9 +278,9 @@ Nhìn ở mức data point, training là giải $n$ điều kiện $f_\theta(x_i
 
 | Chế độ | Tập nghiệm |
 |---|---|
-| $|\theta| < n$ | Overconstrained — thường **không có nghiệm chính xác** |
-| $|\theta| = n$ | Vừa đủ — thường **hữu hạn nghiệm cô lập** |
-| $|\theta| \gg n$ | Underconstrained — nghiệm là **manifold** chiều cao |
+| $\lvert\theta\rvert < n$ | Overconstrained — thường **không có nghiệm chính xác** |
+| $\lvert\theta\rvert = n$ | Vừa đủ — thường **hữu hạn nghiệm cô lập** |
+| $\lvert\theta\rvert \gg n$ | Underconstrained — nghiệm là **manifold** chiều cao |
 
 Với chế độ overparameterized, số chiều của manifold nghiệm:
 
@@ -288,7 +288,7 @@ $$
 \dim(\mathcal{M}^*) \approx |\theta| - n
 $$
 
-| Model | $|\theta|$ | $n_{\text{data}}$ (approx) | $\dim(\mathcal{M}^*)$ |
+| Model | $\lvert\theta\rvert$ | $n_{\text{data}}$ (approx) | $\dim(\mathcal{M}^*)$ |
 |---|---|---|---|
 | ResNet-50 | ~25M | ~1.2M (ImageNet) | ~24M |
 | GPT-3 | ~175B | ~300B tokens* | rất lớn |
