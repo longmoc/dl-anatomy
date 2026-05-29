@@ -1,0 +1,159 @@
+---
+title: "Loss Landscape & Non-convexity"
+description: "Why neural networks aren't convex but still optimize effectively — from saddle points to mode connectivity."
+lang: en
+category: optimization
+order: 1
+translation: loss-landscape
+tags: [convexity, loss-landscape, saddle-points, local-minima, optimization]
+---
+
+import Note from '../../components/Note.astro';
+import LossLandscapeViz from '../../components/LossLandscapeViz.astro';
+
+# Loss Landscape & Non-convexity
+
+## Background: convexity in classical optimization
+
+In classical ML (linear regression, logistic regression, SVM), the first step is often to verify whether the loss function is convex:
+
+- **Convex function**: every local minimum is a global minimum → gradient descent is guaranteed to converge to the best solution
+- **Non-convex function**: may get stuck at a local minimum → no guarantees
+
+The convexity check: the Hessian $H = \nabla^2 \mathcal{L}(\theta)$ must be **positive semi-definite** everywhere — all eigenvalues $\geq 0$.
+
+For multi-layer neural networks, the loss is almost certainly **not convex**: nonlinear activation functions composed across layers create a function with infinitely many local minima and saddle points. Yet in practice, nobody checks convexity before training GPT-4.
+
+Why?
+
+## Illustration
+
+<LossLandscapeViz lang="en" />
+
+Left: convex loss (linear regression) — GD always finds the global minimum. Right: non-convex loss (neural network, simplified) — GD gets stuck at a local minimum; SGD escapes via noise.
+
+## Reason 1: High dimensionality → saddle points, not local minima
+
+In $d$-dimensional space, for a point to be a **local minimum**, all $d$ eigenvalues of the Hessian must be positive. If each eigenvalue is independently positive with probability $\frac{1}{2}$:
+
+$$
+P(\text{local minimum}) = \left(\frac{1}{2}\right)^d
+$$
+
+| Parameters $d$ | $P(\text{local minimum})$ |
+|---|---|
+| 10 | $\approx 0.1\%$ |
+| 1000 | $\approx 10^{-300}$ |
+| $10^9$ (small LLM) | $\approx 10^{-300{,}000{,}000}$ |
+
+**Almost all critical points in large networks are saddle points** — where the gradient is zero but the Hessian has both positive and negative eigenvalues. Saddle points are more dangerous than local minima for full-batch GD, but SGD noise naturally escapes them.
+
+**Dauphin et al. (2014)** — "Identifying and Attacking the Saddle Point Problem in High-dimensional Non-convex Optimization":
+> The index of a critical point (fraction of negative eigenvalues) strongly correlates with the loss at that point. For large networks, critical points with low loss are almost always good local minima, not bad saddle points.
+
+**Random Matrix Theory** tells us that the eigenvalue distribution of a random Hessian follows the **Wigner Semicircle Law**:
+
+$$
+\rho(\lambda) = \frac{1}{2\pi\sigma^2}\sqrt{4\sigma^2 - \lambda^2}
+$$
+
+→ For a random network, roughly half the eigenvalues are negative, half positive. Almost no critical point in high-dimensional space is a true local minimum.
+
+<Note type="result">
+SGD noise projects onto negative-eigenvalue directions → naturally escapes saddle points. This is one reason SGD outperforms full-batch GD on non-convex losses.
+</Note>
+
+## Reason 2: All good local minima are equivalent
+
+### Permutation symmetry
+
+A network with $n$ neurons in one layer can permute them $n!$ ways without changing the output. With $L$ layers: $n!^L$ points in parameter space all achieve the same loss. The loss landscape has **very high symmetry** — not just one local minimum but an entire cluster of equivalent ones.
+
+### Choromanska et al. (2015) — spin-glass model
+
+The loss surface of neural networks is formally related to the Hamiltonian of a **spherical spin-glass** in statistical physics. The key result:
+
+> For large enough networks, **bad local minima** (significantly higher loss than global minimum) **decrease exponentially** with model size. Good local minima cluster in a narrow low-loss band.
+
+### Mode Connectivity — Garipov et al. (2018)
+
+Local minima found by different training runs are **connected** by simple curves along which the loss barely changes:
+
+- Linear interpolation between two minima: loss rises in the middle (loss barrier)
+- Bézier curve through an optimized midpoint: low loss throughout
+
+<Note type="theorem">
+**Mode connectivity**: good local minima aren't isolated points — they're connected by valleys in the loss landscape. "Many minima" is really **one connected flat region** in high-dimensional parameter space.
+</Note>
+
+## Reason 3: SGD noise finds flat minima
+
+Not all local minima are equal. **Flat minima** (Hessian with small eigenvalues) generalize better than **sharp minima** (large eigenvalues).
+
+**Keskar et al. (2017)** — "On Large-Batch Training":
+- Large-batch GD: converges to sharp minima → lower test accuracy
+- Small-batch SGD: converges to flat minima → better generalization
+
+Why does SGD find flat minima? From the SGD ≈ Langevin dynamics connection:
+
+$$
+p(\text{stopping at minimum}) \propto \frac{1}{\sqrt{\det H}}
+$$
+
+Flat minima have small $\det H$ → higher stopping probability. SGD naturally allocates more probability mass to flat minima.
+
+## Reason 4: Overparameterization creates a solution space
+
+When the number of parameters $|\theta|$ greatly exceeds data points $n$, the system:
+
+$$
+f_\theta(x_i) = y_i \quad \forall i = 1 \ldots n
+$$
+
+is **underdetermined**: $n$ equations, $|\theta|$ unknowns. The solution set is not an isolated point but a **manifold** of dimension $\approx |\theta| - n$.
+
+Gradient descent in this space doesn't search among countless local minima — it moves along the solution manifold with few real barriers.
+
+**Neural Tangent Kernel (Jacot et al., 2018)**: in the infinite-width limit, $K = JJ^T$ is fixed throughout training and loss dynamics become:
+
+$$
+\frac{d\mathcal{L}}{dt} = -K \cdot \mathcal{L} \quad \Rightarrow \quad \text{exponential convergence, linear dynamics}
+$$
+
+→ At infinite width, neural networks are **convex in function space** (though not in parameter space).
+
+<Note type="warning">
+NTK applies exactly only at infinite width — real networks have finite width and "feature learning" (weights change significantly) is not captured by NTK. But it demonstrates: as networks get larger, the landscape becomes progressively easier to optimize.
+</Note>
+
+## The full picture
+
+| Assumption | Classical optimization | Deep learning |
+|---|---|---|
+| Convex loss? | Required | No — but not needed |
+| Bad local minima? | Dangerous | Rare in high dimensions |
+| Convergence guarantee? | Yes (exact) | No (but empirically excellent) |
+| Theoretical basis | Complete | Actively researched |
+
+## What we still don't understand
+
+- **Grokking** (Power et al., 2022): models suddenly "understand" a problem after many epochs of overfitting — why does the loss landscape shift so dramatically so late?
+- **Double descent** (Belkin et al., 2019): test error can rise then fall again as model complexity increases — breaks the classical bias-variance tradeoff.
+- **LLM loss landscapes in practice**: both the spin-glass theory and NTK make assumptions that don't fully match real transformers. The true landscape remains a black box.
+
+<Note type="paper">
+The honest answer: deep learning **works well in practice** for these 4 reasons, but theory is running 5–10 years behind empirical practice. This is why researchers keep asking "why does it work?" rather than "does it work?"
+</Note>
+
+## References
+
+| Paper | |
+|---|---|
+| Dauphin et al. (2014) | Identifying and Attacking the Saddle Point Problem |
+| Choromanska et al. (2015) | The Loss Surfaces of Multilayer Networks |
+| Keskar et al. (2017) | On Large-Batch Training for Deep Learning |
+| Garipov et al. (2018) | Loss Surfaces, Mode Connectivity, and Fast Ensembling |
+| Jacot et al. (2018) | Neural Tangent Kernel: Convergence and Generalization |
+| Jin et al. (2017) | Escape Saddle Points Efficiently with Perturbed GD |
+| Belkin et al. (2019) | Reconciling Modern ML Practice and Bias-Variance Tradeoff |
+| Power et al. (2022) | Grokking: Generalization Beyond Overfitting |

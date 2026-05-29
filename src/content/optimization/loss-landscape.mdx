@@ -1,0 +1,159 @@
+---
+title: "Loss Landscape & Non-convexity"
+description: "Tại sao neural network không lồi nhưng vẫn được tối ưu hiệu quả — từ saddle points đến mode connectivity."
+lang: vi
+category: optimization
+order: 1
+translation: loss-landscape-en
+tags: [convexity, loss-landscape, saddle-points, local-minima, optimization]
+---
+
+import Note from '../../components/Note.astro';
+import LossLandscapeViz from '../../components/LossLandscapeViz.astro';
+
+# Loss Landscape & Non-convexity
+
+## Bối cảnh: tính lồi trong optimization cổ điển
+
+Trong ML cổ điển (linear regression, logistic regression, SVM), việc đầu tiên thường làm là xác minh loss function có lồi không:
+
+- **Hàm lồi**: mọi local minimum đều là global minimum → gradient descent đảm bảo hội tụ về nghiệm tốt nhất
+- **Hàm không lồi**: có thể kẹt tại local minimum → không có đảm bảo
+
+Điều kiện kiểm tra tính lồi: Hessian $H = \nabla^2 \mathcal{L}(\theta)$ phải là **positive semi-definite** tại mọi điểm — tức mọi eigenvalue đều $\geq 0$.
+
+Với neural network nhiều layer, loss function hầu như chắc chắn **không lồi**: các layer kết hợp phi tuyến tính thông qua activation function tạo ra một hàm số có vô số local minima và saddle points. Nhưng trong thực tế, không ai kiểm tra tính lồi trước khi train GPT-4.
+
+Tại sao?
+
+## Minh hoạ
+
+<LossLandscapeViz />
+
+Trái: loss lồi (linear regression) — GD luôn tìm global minimum. Phải: loss không lồi (neural network, đã đơn giản hoá) — GD kẹt tại local minimum, SGD thoát được nhờ noise.
+
+## Lý do 1: Chiều cao → saddle points, không phải local minima
+
+Trong không gian $d$ chiều, để một điểm là **local minimum**, tất cả $d$ eigenvalue của Hessian phải dương. Nếu mỗi eigenvalue độc lập có xác suất $\frac{1}{2}$ là dương:
+
+$$
+P(\text{local minimum}) = \left(\frac{1}{2}\right)^d
+$$
+
+| Số tham số $d$ | $P(\text{local minimum})$ |
+|---|---|
+| 10 | $\approx 0.1\%$ |
+| 1000 | $\approx 10^{-300}$ |
+| $10^9$ (LLM nhỏ) | $\approx 10^{-300{,}000{,}000}$ |
+
+**Hầu hết critical points trong mạng lớn là saddle points** — nơi gradient bằng 0 nhưng Hessian có cả eigenvalue dương lẫn âm. Saddle points nguy hiểm hơn local minima khi dùng full-batch GD, nhưng SGD noise tự nhiên thoát ra.
+
+**Dauphin et al. (2014)** — "Identifying and Attacking the Saddle Point Problem in High-dimensional Non-convex Optimization":
+> Index của critical point (tỷ lệ eigenvalue âm) tương quan chặt với loss tại điểm đó. Với mạng lớn, critical points có loss thấp hầu như luôn là local minima tốt, không phải saddle point xấu.
+
+**Random Matrix Theory** cho biết phân phối eigenvalue của Hessian ngẫu nhiên tuân theo **Wigner Semicircle Law**:
+
+$$
+\rho(\lambda) = \frac{1}{2\pi\sigma^2}\sqrt{4\sigma^2 - \lambda^2}
+$$
+
+→ Với mạng ngẫu nhiên, khoảng nửa số eigenvalue âm, nửa dương. Hầu như không có critical point nào là local minimum trong không gian cao chiều.
+
+<Note type="result">
+SGD noise project lên hướng eigenvalue âm → tự nhiên thoát saddle point. Đây là một trong các lý do SGD hoạt động tốt hơn full-batch GD trên non-convex loss.
+</Note>
+
+## Lý do 2: Local minima tốt đều tương đương nhau
+
+### Đối xứng permutation
+
+Mạng với $n$ neuron trong một layer có thể hoán đổi vị trí $n!$ cách mà không thay đổi output. Với $L$ layer: $n!^L$ điểm trong parameter space cho cùng một loss. Loss landscape có cấu trúc **đối xứng rất cao** — không chỉ một local minimum mà là cả cụm đồng đều.
+
+### Choromanska et al. (2015) — mô hình spin-glass
+
+Loss surface của neural network được liên hệ với Hamiltonian của **spherical spin-glass** trong vật lý thống kê. Kết quả chính:
+
+> Với mạng đủ lớn, **local minima xấu** (loss cao hơn đáng kể so với global minimum) **giảm theo hàm mũ** theo số lượng tham số. Local minima tốt tập trung ở vùng loss rất thấp.
+
+### Mode Connectivity — Garipov et al. (2018)
+
+Các điểm tối ưu tìm được bởi các training run khác nhau **kết nối nhau** qua đường cong đơn giản mà loss gần như không đổi dọc theo đường đó:
+
+- Linear interpolation giữa hai minima: loss tăng ở giữa (loss barrier)
+- Bézier curve qua một điểm trung gian được optimize: loss thấp suốt toàn đường
+
+<Note type="theorem">
+**Mode connectivity**: mọi local minimum tốt không phải là điểm cô lập — chúng được kết nối bởi đường valley trong loss landscape. "Nhiều minimum" thực ra là **một vùng phẳng liên thông** trong không gian tham số chiều cao.
+</Note>
+
+## Lý do 3: SGD noise tìm flat minima
+
+Không phải mọi local minimum đều như nhau. **Flat minimum** (Hessian có eigenvalue nhỏ) generalize tốt hơn **sharp minimum** (Hessian có eigenvalue lớn).
+
+**Keskar et al. (2017)** — "On Large-Batch Training":
+- Large-batch GD: hội tụ về sharp minima → test accuracy thấp hơn
+- Small-batch SGD: hội tụ về flat minima → generalize tốt hơn
+
+Tại sao SGD tìm flat minima? Từ SGD ≈ Langevin dynamics:
+
+$$
+p(\text{dừng tại minimum}) \propto \frac{1}{\sqrt{\det H}}
+$$
+
+Flat minimum có $\det H$ nhỏ → xác suất "dừng" cao hơn. SGD tự nhiên phân bổ xác suất nhiều hơn cho flat minima.
+
+## Lý do 4: Overparameterization tạo ra không gian nghiệm
+
+Khi số tham số $|\theta|$ lớn hơn nhiều so với số data points $n$, hệ phương trình:
+
+$$
+f_\theta(x_i) = y_i \quad \forall i = 1 \ldots n
+$$
+
+là **underconstrained**: $n$ phương trình, $|\theta|$ ẩn. Tập nghiệm không phải là điểm cô lập mà là một **manifold** có số chiều $\approx |\theta| - n$.
+
+Gradient descent trong không gian này không tìm kiếm giữa vô số local minima — nó di chuyển dọc theo manifold nghiệm với rất ít barrier thực sự.
+
+**Neural Tangent Kernel (Jacot et al., 2018)**: tại giới hạn infinite width, $K = JJ^T$ cố định trong suốt training và loss dynamics trở thành:
+
+$$
+\frac{d\mathcal{L}}{dt} = -K \cdot \mathcal{L} \quad \Rightarrow \quad \text{hội tụ exponential, tuyến tính}
+$$
+
+→ Ở infinite width, neural network **lồi trong function space** (dù không lồi trong parameter space).
+
+<Note type="warning">
+NTK áp dụng chính xác ở infinite width — mạng thực tế có finite width và "feature learning" (weights thay đổi đáng kể) không được capture bởi NTK. Nhưng nó cho thấy: với mạng đủ lớn, landscape càng ngày càng "dễ" hơn.
+</Note>
+
+## Bức tranh tổng thể
+
+| Giả định | Optimization cổ điển | Deep learning |
+|---|---|---|
+| Loss lồi? | Bắt buộc | Không — nhưng không cần |
+| Local minima xấu? | Nguy hiểm | Hiếm trong không gian cao chiều |
+| Đảm bảo hội tụ? | Có (chính xác) | Không (nhưng thực nghiệm rất tốt) |
+| Cơ sở lý thuyết | Đầy đủ | Đang nghiên cứu |
+
+## Những gì vẫn chưa hiểu
+
+- **Grokking** (Power et al., 2022): mô hình đột ngột "hiểu" bài toán sau rất nhiều epoch overfit — tại sao loss landscape thay đổi đột ngột muộn vậy?
+- **Double descent** (Belkin et al., 2019): test error có thể tăng rồi giảm lại khi tăng model complexity — phá vỡ bias-variance tradeoff cổ điển.
+- **Loss landscape của LLM thực tế**: lý thuyết spin-glass và NTK đều có giả định không hoàn toàn phù hợp với transformer thực. Landscape thực sự vẫn là hộp đen.
+
+<Note type="paper">
+Câu trả lời trung thực: deep learning **hoạt động tốt trong thực tế** nhờ 4 lý do trên, nhưng lý thuyết vẫn đang chạy sau thực nghiệm khoảng 5–10 năm. Đây là lý do các nhà nghiên cứu thường tự hỏi "tại sao nó hoạt động?" thay vì "nó có hoạt động không?"
+</Note>
+
+## Papers tham khảo
+
+| Paper | |
+|---|---|
+| Dauphin et al. (2014) | Identifying and Attacking the Saddle Point Problem |
+| Choromanska et al. (2015) | The Loss Surfaces of Multilayer Networks |
+| Keskar et al. (2017) | On Large-Batch Training for Deep Learning |
+| Garipov et al. (2018) | Loss Surfaces, Mode Connectivity, and Fast Ensembling |
+| Jacot et al. (2018) | Neural Tangent Kernel: Convergence and Generalization |
+| Jin et al. (2017) | Escape Saddle Points Efficiently with Perturbed GD |
+| Belkin et al. (2019) | Reconciling Modern ML Practice and Bias-Variance Tradeoff |
+| Power et al. (2022) | Grokking: Generalization Beyond Overfitting |

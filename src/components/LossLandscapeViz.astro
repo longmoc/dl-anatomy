@@ -1,0 +1,380 @@
+---
+interface Props {
+  lang?: 'vi' | 'en';
+}
+const { lang = 'vi' } = Astro.props;
+
+const ui = lang === 'en'
+  ? {
+      leftTitle:  'Convex loss',
+      rightTitle: 'Neural network loss',
+      leftSub:    'e.g. linear regression',
+      rightSub:   'schematic — highly simplified',
+      localMin:   'local min',
+      globalMin:  'global min',
+      saddle:     'saddle',
+      gd:         'GD',
+      sgd:        'SGD',
+      caption:    'Left: convex loss — GD always finds the global minimum. Right: non-convex loss — GD can get stuck; SGD noise helps escape saddle points and poor local minima.',
+    }
+  : {
+      leftTitle:  'Loss lồi',
+      rightTitle: 'Loss neural network',
+      leftSub:    'vd. linear regression',
+      rightSub:   'minh hoạ — đã đơn giản hoá',
+      localMin:   'local min',
+      globalMin:  'global min',
+      saddle:     'saddle',
+      gd:         'GD',
+      sgd:        'SGD',
+      caption:    'Trái: loss lồi — GD luôn tìm được global minimum. Phải: loss không lồi — GD có thể kẹt; SGD noise giúp thoát saddle point và local minima xấu.',
+    };
+---
+
+<div class="llviz" data-lang={lang}>
+  <canvas class="llviz-canvas"></canvas>
+  <p class="llviz-caption">{ui.caption}</p>
+</div>
+
+<script>
+document.querySelectorAll('.llviz').forEach(root => {
+  const canvas = root.querySelector('.llviz-canvas') as HTMLCanvasElement;
+  const ctx    = canvas.getContext('2d')!;
+  const isEn   = root.dataset.lang === 'en';
+
+  const UI = {
+    leftTitle:  isEn ? 'Convex loss'            : 'Loss lồi',
+    rightTitle: isEn ? 'Neural network loss'    : 'Loss neural network',
+    leftSub:    isEn ? 'e.g. linear regression' : 'vd. linear regression',
+    rightSub:   isEn ? 'schematic'              : 'minh hoạ',
+    localMin:   isEn ? 'local min'  : 'local min',
+    globalMin:  isEn ? 'global min' : 'global min',
+    saddle:     isEn ? 'saddle'     : 'saddle',
+    gd:  'GD',
+    sgd: 'SGD',
+  };
+
+  // ── Convex: f(x) = 0.4*x² ─────────────────────────────
+  const fC  = (x: number) => 0.4 * x * x;
+  const dfC = (x: number) => 0.8 * x;
+
+  // ── Non-convex: double-well + sine ripple ──────────────
+  // L(x) = 0.1*(x²-4)² + 0.35*sin(5x)
+  // min near x≈-2 (global, perturbed lower) and x≈2 (local), saddle near x=0
+  const fNC  = (x: number) => 0.1 * (x * x - 4) ** 2 + 0.35 * Math.sin(5 * x);
+  const dfNC = (x: number) => 0.4 * x * (x * x - 4) + 1.75 * Math.cos(5 * x);
+  const d2NC = (x: number) => 0.4 * (3 * x * x - 4) - 8.75 * Math.sin(5 * x);
+
+  const XMIN_C = -3, XMAX_C = 3;
+  const XMIN_NC = -3.5, XMAX_NC = 3.5;
+  const LMAX_C = 4, LMAX_NC = 4;
+
+  // Find critical points of non-convex by sign-change of derivative
+  function findCriticals(fn: (x:number)=>number, df: (x:number)=>number, d2: (x:number)=>number,
+                          xmin: number, xmax: number): { x: number; type: 'min'|'max'|'saddle' }[] {
+    const N = 2000, dx = (xmax - xmin) / N;
+    const pts: { x: number; type: 'min'|'max'|'saddle' }[] = [];
+    for (let i = 0; i < N - 1; i++) {
+      const x1 = xmin + i * dx, x2 = x1 + dx;
+      if (df(x1) * df(x2) < 0) {
+        let lo = x1, hi = x2;
+        for (let k = 0; k < 25; k++) {
+          const mid = (lo + hi) / 2;
+          df(lo) * df(mid) < 0 ? hi = mid : lo = mid;
+        }
+        const xc = (lo + hi) / 2;
+        const dd = d2(xc);
+        const type = dd > 0.5 ? 'min' : dd < -0.5 ? 'max' : 'saddle';
+        pts.push({ x: xc, type });
+      }
+    }
+    return pts;
+  }
+
+  const criticals = findCriticals(fNC, dfNC, d2NC, XMIN_NC, XMAX_NC)
+    .filter(p => p.type === 'min' || p.type === 'saddle');
+
+  // Animation: GD trail on both panels
+  const GD_LR = 0.12;
+  const GD_START_C = 2.5;
+  const GD_START_NC = 2.8;
+  const SGD_START_NC = -3.0;
+  const NOISE = 0.6;
+  const MAX_TRAIL = 60;
+
+  let trailC:   number[] = [GD_START_C];
+  let trailNC:  number[] = [GD_START_NC];
+  let trailSGD: number[] = [SGD_START_NC];
+  let step = 0;
+  const TOTAL_STEPS = 80;
+  const CYCLE_MS = 5000;
+  const TICK_MS  = 60;
+
+  const randn = () => {
+    const u = Math.random() + 1e-10;
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * Math.random());
+  };
+
+  let W = 0, H = 0;
+  const SPLIT_GAP = 20;
+  let WL = 0, WR = 0;
+
+  const cv = (n: string) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+  const PAD = { l: 14, r: 14, t: 36, b: 28 };
+
+  function xToCanvas(x: number, xMin: number, xMax: number, offsetX: number, panelW: number) {
+    return offsetX + PAD.l + (x - xMin) / (xMax - xMin) * (panelW - PAD.l - PAD.r);
+  }
+  function yToCanvas(y: number, yMax: number) {
+    return (H - PAD.b) - Math.min(y, yMax) / yMax * (H - PAD.t - PAD.b);
+  }
+
+  function drawCurve(fn: (x:number)=>number, xMin: number, xMax: number, yMax: number,
+                     color: string, offsetX: number, panelW: number) {
+    ctx.beginPath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    let pen = false;
+    for (let px = PAD.l; px <= panelW - PAD.r; px++) {
+      const x  = xMin + (px - PAD.l) / (panelW - PAD.l - PAD.r) * (xMax - xMin);
+      const y  = fn(x);
+      const cx = offsetX + px;
+      const cy = yToCanvas(y, yMax);
+      if (!pen) { ctx.moveTo(cx, cy); pen = true; }
+      else ctx.lineTo(cx, cy);
+    }
+    ctx.stroke();
+  }
+
+  function drawTrail(trail: number[], fn: (x:number)=>number, xMin: number, xMax: number, yMax: number,
+                     color: string, offsetX: number, panelW: number, maxAlpha = 0.7) {
+    trail.forEach((x, i) => {
+      const alpha = 0.1 + maxAlpha * (i / trail.length);
+      ctx.beginPath();
+      ctx.arc(xToCanvas(x, xMin, xMax, offsetX, panelW), yToCanvas(fn(x), yMax), 3, 0, 2*Math.PI);
+      ctx.fillStyle = color;
+      ctx.globalAlpha = alpha;
+      ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+    if (trail.length > 0) {
+      const x = trail[trail.length - 1];
+      ctx.beginPath();
+      ctx.arc(xToCanvas(x, xMin, xMax, offsetX, panelW), yToCanvas(fn(x), yMax), 5.5, 0, 2*Math.PI);
+      ctx.fillStyle = color;
+      ctx.fill();
+      ctx.strokeStyle = cv('--bg');
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+  }
+
+  function draw() {
+    const rect = canvas.getBoundingClientRect();
+    W = rect.width; H = rect.height;
+    if (!W || !H) return;
+    const dpr = window.devicePixelRatio || 1;
+    if (canvas.width !== W * dpr) { canvas.width = W * dpr; canvas.height = H * dpr; }
+    ctx.save();
+    ctx.scale(dpr, dpr);
+
+    WL = (W - SPLIT_GAP) / 2;
+    WR = WL;
+    const offsetR = WL + SPLIT_GAP;
+
+    const bg      = cv('--bg');
+    const bg2     = cv('--bg2');
+    const border  = cv('--border');
+    const muted   = cv('--muted');
+    const accent  = cv('--accent');
+    const accent2 = cv('--accent2');
+    const amber   = cv('--amber');
+    const text    = cv('--text');
+
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    // Panel backgrounds
+    ctx.fillStyle = bg2;
+    ctx.beginPath(); ctx.roundRect(0, 0, WL, H, [6, 0, 0, 6]); ctx.fill();
+    ctx.fillStyle = bg2;
+    ctx.beginPath(); ctx.roundRect(offsetR, 0, WR, H, [0, 6, 6, 0]); ctx.fill();
+
+    // Panel titles
+    ctx.font = `bold 11px var(--mono, monospace)`;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = text;
+    ctx.fillText(UI.leftTitle, WL / 2, 14);
+    ctx.fillStyle = muted;
+    ctx.font = `10px var(--mono, monospace)`;
+    ctx.fillText(`(${UI.leftSub})`, WL / 2, 26);
+
+    ctx.font = `bold 11px var(--mono, monospace)`;
+    ctx.fillStyle = text;
+    ctx.fillText(UI.rightTitle, offsetR + WR / 2, 14);
+    ctx.fillStyle = muted;
+    ctx.font = `10px var(--mono, monospace)`;
+    ctx.fillText(`(${UI.rightSub})`, offsetR + WR / 2, 26);
+
+    // ── LEFT PANEL: convex ──────────────────────────────
+    ctx.globalAlpha = 0.7;
+    drawCurve(fC, XMIN_C, XMAX_C, LMAX_C, muted, 0, WL);
+    ctx.globalAlpha = 1;
+
+    // Global min marker
+    ctx.beginPath();
+    ctx.arc(xToCanvas(0, XMIN_C, XMAX_C, 0, WL), yToCanvas(fC(0), LMAX_C), 5, 0, 2*Math.PI);
+    ctx.fillStyle = accent2;
+    ctx.fill();
+    ctx.font = `9px var(--mono, monospace)`;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = accent2;
+    ctx.fillText(UI.globalMin, xToCanvas(0, XMIN_C, XMAX_C, 0, WL), yToCanvas(fC(0), LMAX_C) - 9);
+
+    drawTrail(trailC, fC, XMIN_C, XMAX_C, LMAX_C, accent, 0, WL);
+
+    // GD label near trail end
+    if (trailC.length > 3) {
+      const x = trailC[trailC.length - 1];
+      ctx.font = `9px var(--mono, monospace)`;
+      ctx.fillStyle = accent;
+      ctx.textAlign = 'right';
+      ctx.fillText(UI.gd, xToCanvas(x, XMIN_C, XMAX_C, 0, WL) - 8,
+                   yToCanvas(fC(x), LMAX_C) - 4);
+    }
+
+    // ── RIGHT PANEL: non-convex ─────────────────────────
+    ctx.globalAlpha = 0.7;
+    drawCurve(fNC, XMIN_NC, XMAX_NC, LMAX_NC, muted, offsetR, WR);
+    ctx.globalAlpha = 1;
+
+    // Mark critical points
+    const globalX = criticals.filter(p => p.type === 'min')
+                              .sort((a, b) => fNC(a.x) - fNC(b.x))[0]?.x ?? -2;
+
+    criticals.forEach(p => {
+      const cx = xToCanvas(p.x, XMIN_NC, XMAX_NC, offsetR, WR);
+      const cy = yToCanvas(fNC(p.x), LMAX_NC);
+      if (p.type === 'min') {
+        const isGlobal = Math.abs(p.x - globalX) < 0.3;
+        ctx.beginPath();
+        ctx.arc(cx, cy, 4.5, 0, 2*Math.PI);
+        ctx.fillStyle = isGlobal ? accent2 : amber;
+        ctx.fill();
+        ctx.font = `8.5px var(--mono, monospace)`;
+        ctx.fillStyle = isGlobal ? accent2 : amber;
+        ctx.textAlign = 'center';
+        const label = isGlobal ? UI.globalMin : UI.localMin;
+        ctx.fillText(label, cx, cy - 8);
+      } else if (p.type === 'saddle') {
+        ctx.beginPath();
+        ctx.arc(cx, cy, 3.5, 0, 2*Math.PI);
+        ctx.strokeStyle = muted;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.font = `8.5px var(--mono, monospace)`;
+        ctx.fillStyle = muted;
+        ctx.textAlign = 'center';
+        ctx.fillText(UI.saddle, cx, cy - 8);
+      }
+    });
+
+    // GD trail (purple — gets stuck at local min)
+    drawTrail(trailNC, fNC, XMIN_NC, XMAX_NC, LMAX_NC, accent, offsetR, WR);
+    if (trailNC.length > 3) {
+      const x = trailNC[trailNC.length - 1];
+      ctx.font = `9px var(--mono, monospace)`;
+      ctx.fillStyle = accent;
+      ctx.textAlign = 'left';
+      ctx.fillText(UI.gd, xToCanvas(x, XMIN_NC, XMAX_NC, offsetR, WR) + 8,
+                   yToCanvas(fNC(x), LMAX_NC) - 4);
+    }
+
+    // SGD trail (green — finds global min)
+    drawTrail(trailSGD, fNC, XMIN_NC, XMAX_NC, LMAX_NC, accent2, offsetR, WR, 0.55);
+    if (trailSGD.length > 3) {
+      const x = trailSGD[trailSGD.length - 1];
+      ctx.font = `9px var(--mono, monospace)`;
+      ctx.fillStyle = accent2;
+      ctx.textAlign = 'right';
+      ctx.fillText(UI.sgd, xToCanvas(x, XMIN_NC, XMAX_NC, offsetR, WR) - 8,
+                   yToCanvas(fNC(x), LMAX_NC) - 4);
+    }
+
+    ctx.restore();
+  }
+
+  function doStep() {
+    if (step >= TOTAL_STEPS) return;
+    step++;
+
+    // Convex GD
+    const xC = trailC[trailC.length - 1];
+    if (Math.abs(xC) > 0.05) {
+      trailC.push(Math.max(XMIN_C, Math.min(XMAX_C, xC - GD_LR * dfC(xC))));
+      if (trailC.length > MAX_TRAIL) trailC.shift();
+    }
+
+    // Non-convex GD (deterministic — gets stuck)
+    const xNC = trailNC[trailNC.length - 1];
+    const gNC = dfNC(xNC);
+    if (Math.abs(gNC) > 0.02) {
+      trailNC.push(Math.max(XMIN_NC, Math.min(XMAX_NC, xNC - GD_LR * gNC)));
+      if (trailNC.length > MAX_TRAIL) trailNC.shift();
+    }
+
+    // SGD (noisy — escapes to global minimum)
+    const xSGD = trailSGD[trailSGD.length - 1];
+    const gSGD = dfNC(xSGD) + randn() * NOISE;
+    trailSGD.push(Math.max(XMIN_NC, Math.min(XMAX_NC, xSGD - GD_LR * gSGD)));
+    if (trailSGD.length > MAX_TRAIL) trailSGD.shift();
+  }
+
+  function resetAll() {
+    trailC   = [GD_START_C];
+    trailNC  = [GD_START_NC];
+    trailSGD = [SGD_START_NC];
+    step = 0;
+  }
+
+  let lastTick = 0, elapsed = 0;
+  function loop(ts: number) {
+    if (ts - lastTick >= TICK_MS) {
+      elapsed += ts - lastTick;
+      lastTick = ts;
+      if (elapsed >= CYCLE_MS) { elapsed = 0; resetAll(); }
+      else doStep();
+      draw();
+    }
+    requestAnimationFrame(loop);
+  }
+
+  const ro = new ResizeObserver(draw);
+  ro.observe(canvas);
+  draw();
+  requestAnimationFrame(loop);
+});
+</script>
+
+<style>
+  .llviz {
+    margin: 1.75rem 0;
+  }
+  .llviz-canvas {
+    width: 100%;
+    height: 220px;
+    display: block;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+  }
+  .llviz-caption {
+    font-size: 0.78rem;
+    color: var(--muted);
+    text-align: center;
+    margin-top: 0.5rem;
+    font-style: italic;
+    line-height: 1.5;
+  }
+</style>
