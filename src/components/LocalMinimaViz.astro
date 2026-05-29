@@ -7,16 +7,16 @@ const { type, lang = 'vi' } = Astro.props;
 
 const captions: Record<string, Record<string, string>> = {
   spinglass: {
-    vi: 'Phân bố local minima theo loss value — với model đủ lớn, bad local minima (đỏ) tập trung ở complexity thấp; vùng overparameterized chỉ còn good minima (xanh).',
-    en: 'Distribution of local minima by loss value — in large models, bad local minima (red) cluster at low complexity; in the overparameterized regime only good minima (green) remain.',
+    vi: 'Xác suất gặp local minimum xấu giảm theo hàm mũ khi model lớn hơn. Với mạng đủ lớn, hầu như mọi critical point có loss thấp đều là local minimum tốt.',
+    en: 'The probability of encountering a bad local minimum decreases exponentially as models grow. In large enough networks, almost every low-loss critical point is a good local minimum.',
   },
   mode: {
-    vi: 'Linear interpolation θ_A → θ_B: loss tăng vọt ở giữa (đường đứt). Bézier curve qua điểm trung gian được tối ưu: loss gần như không đổi (đường liền).',
-    en: 'Linear interpolation θ_A → θ_B: loss spikes in the middle (dashed). Bézier curve through an optimized midpoint: loss barely changes (solid).',
+    vi: 'Loss dọc theo hai đường đi giữa cùng hai minima θ_A và θ_B. Đường thẳng (linear) vượt qua barrier cao ở giữa. Đường cong (curved) qua điểm trung gian được tối ưu: loss gần như không đổi.',
+    en: 'Loss along two paths between the same two minima θ_A and θ_B. The linear path crosses a high barrier in the middle. The curved path through an optimized midpoint: loss barely changes throughout.',
   },
   flatsharp: {
-    vi: 'Hai minimum có cùng training loss. Cùng perturbation Δε: sharp minimum chịu ΔL lớn → overfit; flat minimum ổn định → generalize tốt hơn.',
-    en: 'Two minima with equal training loss. Same perturbation Δε: sharp minimum has large ΔL → overfits; flat minimum is stable → generalizes better.',
+    vi: 'Cùng training loss tại minimum. Cùng perturbation Δε = 0.5. Sharp minimum: ΔL lớn → dễ overfit khi data thay đổi. Flat minimum: ΔL nhỏ → ổn định → generalize tốt hơn.',
+    en: 'Same training loss at minimum. Same perturbation Δε = 0.5. Sharp minimum: large ΔL → overfits when data shifts. Flat minimum: small ΔL → stable → generalizes better.',
   },
 };
 ---
@@ -30,297 +30,450 @@ const captions: Record<string, Record<string, string>> = {
 document.querySelectorAll('.lmviz').forEach(root => {
   const canvas = root.querySelector('.lmviz-canvas') as HTMLCanvasElement;
   const ctx    = canvas.getContext('2d')!;
-  const type   = (root as HTMLElement).dataset.type as 'spinglass' | 'mode' | 'flatsharp';
+  const type   = (root as HTMLElement).dataset.type as string;
   const isEn   = (root as HTMLElement).dataset.lang === 'en';
 
   const cv = (n: string) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 
-  // heights by type
-  const HEIGHT: Record<string, number> = { spinglass: 200, mode: 240, flatsharp: 210 };
+  const HEIGHTS: Record<string, number> = { spinglass: 190, mode: 230, flatsharp: 200 };
+
+  function getW() { return canvas.getBoundingClientRect().width; }
+  function getH() { return HEIGHTS[type] ?? 200; }
 
   function resize() {
-    const rect = canvas.getBoundingClientRect();
-    const dpr  = window.devicePixelRatio || 1;
-    const h    = HEIGHT[type] ?? 200;
-    canvas.style.height = h + 'px';
-    canvas.width  = rect.width  * dpr;
-    canvas.height = h * dpr;
-    ctx.scale(dpr, dpr);
+    const dpr = window.devicePixelRatio || 1;
+    const W = getW(), H = getH();
+    canvas.style.height = H + 'px';
+    canvas.width  = W * dpr;
+    canvas.height = H * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
-  // ── Shared seeded random ───────────────────────────────
-  const rand = (seed: number) => {
-    const x = Math.sin(seed * 127.1) * 43758.5453;
-    return x - Math.floor(x);
-  };
-
-  // ── 1. Spin-glass distribution ─────────────────────────
+  // ─────────────────────────────────────────────────────────
+  // 1. SPIN-GLASS: probability of bad local minima vs model size
+  // ─────────────────────────────────────────────────────────
   function drawSpinGlass() {
-    const W = canvas.getBoundingClientRect().width;
-    const H = HEIGHT.spinglass;
-    const muted  = cv('--muted');
-    const danger = cv('--danger') || cv('--amber');
-    const accent = cv('--accent');
-    const good   = cv('--accent2');
-    const bg2    = cv('--bg2');
-    const border = cv('--border');
+    const W = getW(), H = getH();
+    const accent  = cv('--accent');
+    const accent2 = cv('--accent2');
+    const amber   = cv('--amber');
+    const muted   = cv('--muted');
+    const border  = cv('--border');
+    const bg      = cv('--bg');
 
-    ctx.fillStyle = cv('--bg');
+    ctx.fillStyle = bg;
     ctx.fillRect(0, 0, W, H);
 
-    const PL=56, PR=20, PT=24, PB=42;
-    const gW=W-PL-PR, gH=H-PT-PB;
+    const PL = 52, PR = 16, PT = 18, PB = 44;
+    const gW = W - PL - PR, gH = H - PT - PB;
 
-    // Axes
+    // Log scale: x in [1, 5] representing log10(params) from 1K to 100B
+    const X_MIN = 3, X_MAX = 11;  // log10 of param counts
+    const toX = (logN: number) => PL + (logN - X_MIN) / (X_MAX - X_MIN) * gW;
+    const toY = (frac: number) => PT + (1 - frac) * gH;
+
+    // Bad minima fraction: decreases roughly as e^(-alpha * (logN - X_MIN))
+    const badFrac  = (logN: number) => Math.max(0.02, 0.95 * Math.exp(-0.5 * (logN - X_MIN)));
+    const goodFrac = (logN: number) => 1 - badFrac(logN);
+
+    // Fill areas
+    // Bad zone (above goodFrac line) in amber
+    ctx.beginPath();
+    ctx.moveTo(toX(X_MIN), toY(0));
+    for (let logN = X_MIN; logN <= X_MAX; logN += 0.05) ctx.lineTo(toX(logN), toY(goodFrac(logN)));
+    ctx.lineTo(toX(X_MAX), toY(0));
+    ctx.closePath();
+    ctx.fillStyle = amber + '22';
+    ctx.fill();
+
+    // Good zone (below goodFrac line) in accent2
+    ctx.beginPath();
+    ctx.moveTo(toX(X_MIN), toY(1));
+    for (let logN = X_MIN; logN <= X_MAX; logN += 0.05) ctx.lineTo(toX(logN), toY(goodFrac(logN)));
+    ctx.lineTo(toX(X_MAX), toY(1));
+    ctx.closePath();
+    ctx.fillStyle = accent2 + '22';
+    ctx.fill();
+
+    // Grid lines
     ctx.strokeStyle = border;
     ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(PL, PT); ctx.lineTo(PL, PT+gH); ctx.lineTo(PL+gW, PT+gH);
-    ctx.stroke();
-
-    // Labels
-    ctx.fillStyle = muted;
-    ctx.font = '10px var(--mono, monospace)';
-    ctx.textAlign = 'center';
-    const xLabel = isEn ? 'model complexity →' : 'độ phức tạp model →';
-    ctx.fillText(xLabel, PL + gW/2, H - 6);
-    ctx.save();
-    ctx.translate(14, PT + gH/2);
-    ctx.rotate(-Math.PI / 2);
-    ctx.fillText(isEn ? 'loss value →' : 'loss →', 0, 0);
-    ctx.restore();
-
-    // Interpolation threshold line
-    const thresh = 0.55;
-    ctx.strokeStyle = border;
     ctx.setLineDash([3, 5]);
-    ctx.lineWidth = 1;
-    ctx.globalAlpha = 0.6;
-    ctx.beginPath();
-    ctx.moveTo(PL + thresh*gW, PT);
-    ctx.lineTo(PL + thresh*gW, PT+gH);
-    ctx.stroke();
+    ctx.globalAlpha = 0.5;
+    [0.25, 0.5, 0.75].forEach(v => {
+      ctx.beginPath();
+      ctx.moveTo(PL, toY(v)); ctx.lineTo(PL + gW, toY(v));
+      ctx.stroke();
+    });
     ctx.setLineDash([]);
     ctx.globalAlpha = 1;
-    ctx.fillStyle = muted;
-    ctx.font = '9px var(--mono, monospace)';
-    ctx.textAlign = 'center';
-    ctx.fillText(isEn ? 'interpolation threshold' : 'ngưỡng', PL + thresh*gW, PT - 4);
 
-    // Scatter points
-    for (let i = 0; i < 70; i++) {
-      const r1 = rand(i*3+1), r2 = rand(i*3+2);
-      const c = 0.1 + 0.85 * r1;
-      const baseLoss = c < thresh
-        ? 0.55 + 0.38 * (thresh - c) / thresh + 0.12 * r2
-        : 0.04 + 0.28 * (1 - c) + 0.07 * r2;
-      const loss = Math.max(0.03, Math.min(0.97, baseLoss));
-      const col  = loss > 0.55 ? danger : loss > 0.28 ? accent : good;
-      const cx = PL + c * gW;
-      const cy = PT + (1 - loss) * gH;
-      ctx.beginPath();
-      ctx.arc(cx, cy, 4, 0, Math.PI*2);
-      ctx.fillStyle = col + 'cc';
-      ctx.fill();
+    // Separation curve
+    ctx.beginPath();
+    ctx.strokeStyle = muted;
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.7;
+    for (let i = 0; i <= 200; i++) {
+      const logN = X_MIN + i / 200 * (X_MAX - X_MIN);
+      const x = toX(logN), y = toY(goodFrac(logN));
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
     }
-
-    // Legend
-    const leg = isEn
-      ? [{ c: danger, l: 'Bad local minima (high loss)' }, { c: accent, l: 'Intermediate' }, { c: good, l: 'Good local minima (low loss)' }]
-      : [{ c: danger, l: 'Local minima xấu (loss cao)' }, { c: accent, l: 'Vùng trung gian' }, { c: good, l: 'Local minima tốt (loss thấp)' }];
-    leg.forEach(({ c, l }, i) => {
-      const lx = PL + 10, ly = PT + 14 + i * 18;
-      ctx.beginPath(); ctx.arc(lx, ly, 4.5, 0, Math.PI*2);
-      ctx.fillStyle = c; ctx.fill();
-      ctx.fillStyle = muted;
-      ctx.font = '10px var(--mono, monospace)'; ctx.textAlign = 'left';
-      ctx.fillText(l, lx + 9, ly + 4);
-    });
-  }
-
-  // ── 2. Mode connectivity ───────────────────────────────
-  function drawMode() {
-    const W = canvas.getBoundingClientRect().width;
-    const H = HEIGHT.mode;
-    const muted  = cv('--muted');
-    const accent = cv('--accent');
-    const amber  = cv('--amber');
-    const good   = cv('--accent2');
-    const danger = cv('--danger') || '#c04040';
-
-    ctx.fillStyle = cv('--bg');
-    ctx.fillRect(0, 0, W, H);
-
-    const PL=50, PR=20, PT=24, PB=42;
-    const gW=W-PL-PR, gH=H-PT-PB;
-
-    const toX = (t: number) => PL + t * gW;
-    const toY = (v: number) => PT + (1-v) * gH;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
 
     // Axes
-    ctx.strokeStyle = cv('--border');
+    ctx.strokeStyle = border;
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(PL, PT); ctx.lineTo(PL, PT+gH); ctx.lineTo(PL+gW, PT+gH);
+    ctx.moveTo(PL, PT); ctx.lineTo(PL, PT + gH); ctx.lineTo(PL + gW, PT + gH);
     ctx.stroke();
 
+    // Y-axis ticks
+    ctx.fillStyle = muted;
+    ctx.font = '10px var(--mono, monospace)';
+    ctx.textAlign = 'right';
+    [0, 0.25, 0.5, 0.75, 1].forEach(v => {
+      ctx.fillText(`${Math.round(v * 100)}%`, PL - 5, toY(v) + 4);
+    });
+
+    // X-axis ticks (log scale)
+    ctx.textAlign = 'center';
+    const ticks: [number, string][] = [
+      [3, '1K'], [5, '100K'], [7, '10M'], [9, '1B'], [11, '100B'],
+    ];
+    ticks.forEach(([logN, label]) => {
+      ctx.fillText(label, toX(logN), PT + gH + 14);
+      ctx.strokeStyle = border;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(toX(logN), PT + gH); ctx.lineTo(toX(logN), PT + gH + 4);
+      ctx.stroke();
+    });
+
+    // Reference model markers
+    const models: [number, string][] = [
+      [7.4, 'ResNet-50'],
+      [11.24, 'GPT-3'],
+    ];
+    models.forEach(([logN, name]) => {
+      const x = toX(Math.min(logN, X_MAX - 0.1));
+      ctx.strokeStyle = muted;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([2, 4]);
+      ctx.globalAlpha = 0.4;
+      ctx.beginPath();
+      ctx.moveTo(x, PT + 4); ctx.lineTo(x, PT + gH);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = muted;
+      ctx.font = '9px var(--mono, monospace)';
+      ctx.textAlign = 'center';
+      ctx.fillText(name, Math.min(x, PL + gW - 20), PT + 12);
+    });
+
+    // Zone labels (inside the zones)
+    ctx.font = '10px var(--mono, monospace)';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = amber;
+    ctx.fillText(isEn ? '← bad local minima' : '← local minima xấu', PL + 6, toY(0.15));
+    ctx.fillStyle = accent2;
+    ctx.fillText(isEn ? '← good local minima' : '← local minima tốt', PL + 6, toY(0.88));
+
+    // Axis labels
     ctx.fillStyle = muted;
     ctx.font = '10px var(--mono, monospace)';
     ctx.textAlign = 'center';
-    ctx.fillText('t  (0 = θ_A,   1 = θ_B)', PL+gW/2, H-6);
+    ctx.fillText(isEn ? 'model size (params)' : 'kích thước model (tham số)', PL + gW / 2, H - 4);
     ctx.save();
-    ctx.translate(14, PT+gH/2); ctx.rotate(-Math.PI/2);
-    ctx.fillText(isEn ? 'loss' : 'loss', 0, 0);
+    ctx.translate(12, PT + gH / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText(isEn ? 'fraction of minima' : 'tỷ lệ minima', 0, 0);
     ctx.restore();
+  }
 
-    const linearLoss = (t: number) => 0.10 + 0.74 * Math.pow(Math.sin(Math.PI * t), 2);
-    const curvedLoss = (t: number) => 0.10 + 0.04 * Math.sin(Math.PI * t);
+  // ─────────────────────────────────────────────────────────
+  // 2. MODE CONNECTIVITY: loss along linear vs curved path
+  // ─────────────────────────────────────────────────────────
+  function drawMode() {
+    const W = getW(), H = getH();
+    const amber   = cv('--amber');
+    const accent2 = cv('--accent2');
+    const accent  = cv('--accent');
+    const muted   = cv('--muted');
+    const border  = cv('--border');
+    const bg      = cv('--bg');
+    const bg2     = cv('--bg2');
+
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    const PL = 52, PR = 20, PT = 20, PB = 52;
+    const gW = W - PL - PR, gH = H - PT - PB;
+
+    const toX = (t: number) => PL + t * gW;
+    const toY = (v: number) => PT + (1 - v) * gH;
+
+    // Functions: both normalized to [0,1] y-range
+    const linearLoss = (t: number) => 0.08 + 0.76 * Math.pow(Math.sin(Math.PI * t), 2);
+    const curvedLoss = (t: number) => 0.08 + 0.05 * Math.sin(Math.PI * t);
+
+    // Grid
+    ctx.strokeStyle = border;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 5]);
+    ctx.globalAlpha = 0.5;
+    [0.25, 0.5, 0.75].forEach(v => {
+      ctx.beginPath();
+      ctx.moveTo(PL, toY(v)); ctx.lineTo(PL + gW, toY(v));
+      ctx.stroke();
+    });
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
 
     // Fill under curves
-    const drawFill = (fn: (t:number)=>number, col: string) => {
+    const fillUnder = (fn: (t: number) => number, col: string) => {
       ctx.beginPath();
       ctx.moveTo(toX(0), toY(fn(0)));
-      for (let i=1; i<=200; i++) { const t=i/200; ctx.lineTo(toX(t), toY(fn(t))); }
-      ctx.lineTo(toX(1), toY(0)); ctx.lineTo(toX(0), toY(0));
+      for (let i = 1; i <= 200; i++) {
+        const t = i / 200;
+        ctx.lineTo(toX(t), toY(fn(t)));
+      }
+      ctx.lineTo(toX(1), toY(0));
+      ctx.lineTo(toX(0), toY(0));
       ctx.closePath();
-      ctx.fillStyle = col + '22';
+      ctx.fillStyle = col + '1a';
       ctx.fill();
     };
-    drawFill(linearLoss, amber);
-    drawFill(curvedLoss, good);
+    fillUnder(linearLoss, amber);
+    fillUnder(curvedLoss, accent2);
 
     // Draw curves
-    const drawCurve = (fn: (t:number)=>number, col: string, dash: boolean) => {
-      ctx.strokeStyle = col; ctx.lineWidth = 2.2;
-      ctx.setLineDash(dash ? [5,4] : []);
+    const drawCurve = (fn: (t: number) => number, col: string, dashed: boolean) => {
       ctx.beginPath();
-      for (let i=0; i<=200; i++) {
-        const t=i/200, x=toX(t), y=toY(fn(t));
-        i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash(dashed ? [6, 4] : []);
+      for (let i = 0; i <= 200; i++) {
+        const t = i / 200;
+        const x = toX(t), y = toY(fn(t));
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
       }
-      ctx.stroke(); ctx.setLineDash([]);
+      ctx.stroke();
+      ctx.setLineDash([]);
     };
     drawCurve(linearLoss, amber, true);
-    drawCurve(curvedLoss, good, false);
+    drawCurve(curvedLoss, accent2, false);
 
-    // Endpoints θ_A, θ_B
+    // Axes
+    ctx.strokeStyle = border;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(PL, PT); ctx.lineTo(PL, PT + gH); ctx.lineTo(PL + gW, PT + gH);
+    ctx.stroke();
+
+    // Y-axis ticks
+    ctx.fillStyle = muted;
+    ctx.font = '10px var(--mono, monospace)';
+    ctx.textAlign = 'right';
+    [0, 0.25, 0.5, 0.75, 1].forEach(v => {
+      ctx.fillText(v.toFixed(2), PL - 5, toY(v) + 4);
+    });
+
+    // X-axis: θ_A at left, θ_B at right
+    ctx.fillStyle = muted;
+    ctx.font = '10px var(--mono, monospace)';
+    ctx.textAlign = 'center';
+    ctx.fillText('t = 0', toX(0), PT + gH + 14);
+    ctx.fillText('t = 1', toX(1), PT + gH + 14);
+
+    // θ_A and θ_B endpoint dots
     [0, 1].forEach(t => {
-      ctx.beginPath(); ctx.arc(toX(t), toY(linearLoss(t)), 5.5, 0, Math.PI*2);
-      ctx.fillStyle = accent; ctx.fill();
-      ctx.strokeStyle = cv('--bg'); ctx.lineWidth = 1.5; ctx.stroke();
+      const x = toX(t), y = toY(linearLoss(t));
+      ctx.beginPath();
+      ctx.arc(x, y, 5.5, 0, 2 * Math.PI);
+      ctx.fillStyle = accent;
+      ctx.fill();
+      ctx.strokeStyle = bg;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      // Label at bottom
       ctx.fillStyle = accent;
       ctx.font = 'bold 10px var(--mono, monospace)';
       ctx.textAlign = 'center';
-      ctx.fillText(t===0 ? 'θ_A' : 'θ_B', toX(t), toY(linearLoss(t)) - 9);
+      ctx.fillText(t === 0 ? 'θ_A' : 'θ_B', x, PT + gH + 28);
     });
 
-    // Legend
-    const leg = isEn
-      ? [{ col: amber, dash: true,  l: 'Linear path — loss spikes in the middle' },
-         { col: good,  dash: false, l: 'Curved path — loss nearly unchanged' },
-         { col: accent,dash: false, l: 'θ_A and θ_B (two training runs)' }]
-      : [{ col: amber, dash: true,  l: 'Linear path — loss tăng mạnh ở giữa' },
-         { col: good,  dash: false, l: 'Curved path — loss gần như không đổi' },
-         { col: accent,dash: false, l: 'θ_A và θ_B (hai lần train)' }];
-    leg.forEach(({ col, dash, l }, i) => {
-      const lx=PL+10, ly=PT+12+i*18;
-      if (col===accent) {
-        ctx.beginPath(); ctx.arc(lx, ly, 4.5, 0, Math.PI*2);
-        ctx.fillStyle=col; ctx.fill();
-      } else {
-        ctx.strokeStyle=col; ctx.lineWidth=2;
-        ctx.setLineDash(dash ? [4,3] : []);
-        ctx.beginPath(); ctx.moveTo(lx-4, ly); ctx.lineTo(lx+8, ly); ctx.stroke();
-        ctx.setLineDash([]);
-      }
-      ctx.fillStyle=muted; ctx.font='10px var(--mono, monospace)'; ctx.textAlign='left';
-      ctx.fillText(l, lx+14, ly+4);
+    // Axis labels
+    ctx.fillStyle = muted;
+    ctx.font = '10px var(--mono, monospace)';
+    ctx.textAlign = 'center';
+    ctx.fillText(isEn ? 'interpolation t' : 'tham số t', PL + gW / 2, H - 4);
+    ctx.save();
+    ctx.translate(12, PT + gH / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText(isEn ? 'loss L(θ(t))' : 'loss L(θ(t))', 0, 0);
+    ctx.restore();
+
+    // Legend — right side, vertically stacked, away from curves
+    const legX = PL + gW - 4;
+    const legItems = isEn
+      ? [{ col: amber, dash: true, label: 'Linear path' }, { col: accent2, dash: false, label: 'Curved path' }]
+      : [{ col: amber, dash: true, label: 'Linear path' }, { col: accent2, dash: false, label: 'Curved path' }];
+    legItems.forEach(({ col, dash, label }, i) => {
+      const ly = PT + 8 + i * 18;
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash(dash ? [5, 3] : []);
+      ctx.beginPath();
+      ctx.moveTo(legX - 26, ly); ctx.lineTo(legX - 6, ly);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = muted;
+      ctx.font = '10px var(--mono, monospace)';
+      ctx.textAlign = 'right';
+      ctx.fillText(label, legX - 30, ly + 4);
     });
   }
 
-  // ── 3. Flat vs Sharp ───────────────────────────────────
+  // ─────────────────────────────────────────────────────────
+  // 3. FLAT VS SHARP: two side-by-side parabolas
+  // ─────────────────────────────────────────────────────────
   function drawFlatSharp() {
-    const W = canvas.getBoundingClientRect().width;
-    const H = HEIGHT.flatsharp;
-    const muted  = cv('--muted');
-    const amber  = cv('--amber');
-    const good   = cv('--accent2');
-    const accent = cv('--accent');
+    const W = getW(), H = getH();
+    const amber   = cv('--amber');
+    const accent2 = cv('--accent2');
+    const accent  = cv('--accent');
+    const muted   = cv('--muted');
+    const border  = cv('--border');
+    const bg      = cv('--bg');
 
-    ctx.fillStyle = cv('--bg');
+    ctx.fillStyle = bg;
     ctx.fillRect(0, 0, W, H);
 
-    const PL=30, PR=30, PT=28, PB=48;
-    const gW=W-PL-PR, gH=H-PT-PB;
+    const MID = W / 2;
+    const GAP = 16;
+    const PT = 40, PB = 48, PL_INNER = 14, PR_INNER = 14;
 
-    const toX = (x: number) => PL + (x+4)/8 * gW;
-    const toY = (v: number) => PT + (1-v/1.5) * gH;
+    const drawPanel = (
+      offsetX: number, panelW: number,
+      fn: (x: number) => number,
+      col: string,
+      titleLabel: string,
+      dlLabel: string,
+    ) => {
+      const gW = panelW - PL_INNER - PR_INNER;
+      const gH = H - PT - PB;
+      const X_RANGE = 2.4;
 
-    // Baseline
-    ctx.strokeStyle = cv('--border'); ctx.lineWidth=1;
-    ctx.beginPath();
-    ctx.moveTo(PL, PT+gH); ctx.lineTo(PL+gW, PT+gH);
-    ctx.stroke();
+      const toX = (x: number) => offsetX + PL_INNER + (x + X_RANGE) / (2 * X_RANGE) * gW;
+      const toY = (y: number) => PT + Math.max(0, (1 - y / 1.2)) * gH;
 
-    const sharpFn = (x: number) => 0.06 + 2.4*(x+2)*(x+2);
-    const flatFn  = (x: number) => 0.06 + 0.20*(x-2)*(x-2);
-
-    const drawCurve = (fn: (x:number)=>number, xMin: number, xMax: number, col: string) => {
-      ctx.strokeStyle=col; ctx.lineWidth=2.5;
-      ctx.beginPath(); let first=true;
-      for (let i=0; i<=300; i++) {
-        const x=xMin+(xMax-xMin)*i/300, y=fn(x);
-        if (y>1.5) { first=true; continue; }
-        const cx=toX(x), cy=toY(y);
-        first ? ctx.moveTo(cx,cy) : ctx.lineTo(cx,cy);
-        first=false;
+      // Curve fill
+      ctx.beginPath();
+      ctx.moveTo(toX(-X_RANGE), toY(fn(-X_RANGE)));
+      for (let i = 1; i <= 200; i++) {
+        const x = -X_RANGE + i / 200 * 2 * X_RANGE;
+        const y = fn(x);
+        if (y > 1.2) { ctx.moveTo(toX(x), toY(1.2)); continue; }
+        ctx.lineTo(toX(x), toY(y));
       }
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 2.5;
       ctx.stroke();
-    };
-    drawCurve(sharpFn, -3.5, -0.5, amber);
-    drawCurve(flatFn,   0.3,  3.8, good);
 
-    // Balls at minima
-    [-2, 2].forEach(x => {
-      const fn = x < 0 ? sharpFn : flatFn;
-      ctx.beginPath(); ctx.arc(toX(x), toY(fn(x)), 6, 0, Math.PI*2);
-      ctx.fillStyle = accent; ctx.fill();
-      ctx.strokeStyle = cv('--bg'); ctx.lineWidth=1.5; ctx.stroke();
-    });
+      // Baseline
+      ctx.strokeStyle = border;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(offsetX + PL_INNER, PT + gH);
+      ctx.lineTo(offsetX + PL_INNER + gW, PT + gH);
+      ctx.stroke();
 
-    // Perturbation arrows and Δ labels
-    const drawPerturb = (x0: number, fn: (x:number)=>number, col: string) => {
-      const dx=0.35;
-      const y0=fn(x0), y1=fn(x0+dx);
-      const cx0=toX(x0), cy0=toY(y0), cx1=toX(x0+dx), cy1=toY(y1);
-      ctx.strokeStyle=col+'aa'; ctx.lineWidth=1.5; ctx.setLineDash([3,3]);
-      ctx.beginPath(); ctx.moveTo(cx0,cy0); ctx.lineTo(cx1,cy1); ctx.stroke();
+      // Ball at minimum (x=0)
+      ctx.beginPath();
+      ctx.arc(toX(0), toY(fn(0)), 5.5, 0, 2 * Math.PI);
+      ctx.fillStyle = accent;
+      ctx.fill();
+      ctx.strokeStyle = bg;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Perturbation bracket: show Δε = 0.5 and corresponding ΔL
+      const eps = 0.5;
+      const deltaL = fn(eps) - fn(0);
+      const bx0 = toX(0), bx1 = toX(eps);
+      const by = PT + gH + 16;
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 1.5;
+      // bracket
+      ctx.beginPath();
+      ctx.moveTo(bx0, by - 4); ctx.lineTo(bx0, by + 4);
+      ctx.moveTo(bx0, by); ctx.lineTo(bx1, by);
+      ctx.moveTo(bx1, by - 4); ctx.lineTo(bx1, by + 4);
+      ctx.stroke();
+      // Δε label
+      ctx.fillStyle = muted;
+      ctx.font = '9px var(--mono, monospace)';
+      ctx.textAlign = 'center';
+      ctx.fillText('Δε=0.5', (bx0 + bx1) / 2, by + 14);
+      // Vertical line showing ΔL
+      const vy0 = toY(fn(0)), vy1 = toY(fn(eps));
+      ctx.strokeStyle = col + 'aa';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.moveTo(toX(eps), vy0); ctx.lineTo(toX(eps), vy1);
+      ctx.stroke();
       ctx.setLineDash([]);
-      const dl=(y1-y0).toFixed(2);
-      ctx.fillStyle=col; ctx.font='bold 10px var(--mono, monospace)'; ctx.textAlign='center';
-      const lab = isEn ? `Δε=0.35  ΔL=${dl}` : `Δε=0.35  ΔL=${dl}`;
-      ctx.fillText(lab, (cx0+cx1)/2, Math.min(cy0,cy1)-7);
+      // ΔL label to the right of the vertical line
+      ctx.fillStyle = col;
+      ctx.font = 'bold 10px var(--mono, monospace)';
+      ctx.textAlign = 'left';
+      ctx.fillText(`ΔL=${deltaL.toFixed(2)}`, toX(eps) + 4, (vy0 + vy1) / 2 + 4);
+
+      // Panel title at top
+      ctx.fillStyle = col;
+      ctx.font = 'bold 11px var(--mono, monospace)';
+      ctx.textAlign = 'center';
+      ctx.fillText(titleLabel, offsetX + panelW / 2, PT - 12);
     };
-    drawPerturb(-2, sharpFn, amber);
-    drawPerturb( 2, flatFn,  good);
 
-    // Labels
-    ctx.font='bold 11px var(--mono, monospace)'; ctx.textAlign='center';
-    ctx.fillStyle=amber; ctx.fillText(isEn ? 'Sharp minimum' : 'Sharp minimum', toX(-2), toY(0)-8);
-    ctx.fillStyle=good;  ctx.fillText(isEn ? 'Flat minimum'  : 'Flat minimum',  toX(2),  toY(0)-8);
+    const panelW = (W - GAP) / 2;
+    const sharpFn = (x: number) => 0.05 + 2.2 * x * x;
+    const flatFn  = (x: number) => 0.05 + 0.28 * x * x;
 
-    ctx.font='10px var(--mono, monospace)'; ctx.fillStyle=muted; ctx.textAlign='center';
-    const sub = isEn
-      ? 'Same training loss — very different generalization behavior'
-      : 'Cùng training loss — generalization hoàn toàn khác nhau';
-    ctx.fillText(sub, PL+gW/2, H-8);
+    drawPanel(0, panelW, sharpFn, amber,
+      isEn ? 'Sharp minimum' : 'Sharp minimum',
+      '');
+    drawPanel(panelW + GAP, panelW, flatFn, accent2,
+      isEn ? 'Flat minimum' : 'Flat minimum',
+      '');
+
+    // Bottom note
+    ctx.fillStyle = muted;
+    ctx.font = '10px var(--mono, monospace)';
+    ctx.textAlign = 'center';
+    ctx.fillText(
+      isEn ? 'Same training loss at minimum  ·  same Δε  →  very different ΔL'
+           : 'Cùng training loss tại minimum  ·  cùng Δε  →  ΔL khác nhau rõ rệt',
+      W / 2, H - 6
+    );
+
+    // Divider
+    ctx.strokeStyle = border;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(panelW + GAP / 2, PT - 24);
+    ctx.lineTo(panelW + GAP / 2, H - 24);
+    ctx.stroke();
   }
 
   function draw() {
     resize();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    if (type === 'spinglass')  drawSpinGlass();
-    else if (type === 'mode')  drawMode();
+    if (type === 'spinglass') drawSpinGlass();
+    else if (type === 'mode') drawMode();
     else if (type === 'flatsharp') drawFlatSharp();
   }
 

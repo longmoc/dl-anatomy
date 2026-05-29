@@ -117,6 +117,37 @@ $$
 Các local minima tốt không phải hố cô lập — chúng nằm trên cùng một **vùng phẳng liên thông** trong không gian tham số. "Nhiều minimum" thực ra là một vùng rộng lớn mà gradient descent khi rơi vào thì ổn định ở đó.
 </Note>
 
+### Flat vs Sharp — không phải mọi minima tốt đều như nhau
+
+Tất cả những gì trên nói rằng local minima tốt là "tương đương nhau" — nhưng có một sự phân biệt quan trọng hơn: không phải mọi local minima tốt đều **generalize** như nhau. Đo bằng Hessian:
+
+$$
+\mathcal{L}(\theta + \epsilon) - \mathcal{L}(\theta) \approx \frac{1}{2}\epsilon^T H \epsilon
+$$
+
+<LocalMinimaViz type="flatsharp" />
+
+| | Sharp minimum | Flat minimum |
+|---|---|---|
+| Eigenvalue của $H$ | Lớn | Nhỏ |
+| Perturbation nhỏ $\epsilon$ | Loss tăng mạnh | Loss ổn định |
+| Distribution shift (train→test) | Loss test tăng vọt → overfit | Loss test tăng không đáng kể → generalize tốt |
+| SGD tìm được? | Hiếm — bị noise "rung ra" | Thường xuyên — volume lớn hơn |
+
+#### Tại sao SGD bias về flat minima
+
+Xác suất dừng tại một minimum tỷ lệ với **thể tích** vùng xung quanh nó:
+
+$$
+p(\text{dừng tại minimum}) \propto \frac{1}{\sqrt{\det H}}
+$$
+
+Flat minimum có $\det H$ nhỏ → xác suất dừng cao hơn — không phải vì SGD "biết" flat tốt hơn, mà đơn giản vì flat minimum **chiếm thể tích lớn hơn** trong không gian tham số.
+
+**Keskar et al. (2017)** xác nhận thực nghiệm: batch size nhỏ → noise nhiều → SGD tìm flat minima → generalize tốt hơn. Batch size lớn → noise ít → SGD tìm sharp minima → generalize kém hơn.
+
+**Hochreiter & Schmidhuber (1997)** — bài báo kinh điển định nghĩa flat minimum và kết nối với MDL (Minimum Description Length): flat minimum tương ứng với model có **độ phức tạp mô tả thấp hơn**.
+
 ## Overparameterization tạo ra không gian nghiệm
 
 Khi $|\theta| \gg n_{\text{data}}$, hệ điều kiện fit data:
@@ -150,37 +181,6 @@ $$
 $$
 
 Ở infinite width, neural network **lồi trong function space** (dù không lồi trong parameter space). Khi network đủ lớn, landscape trong function space càng ngày càng "dễ" hơn.
-
-## Flat vs Sharp Minima
-
-Hai minima có thể có cùng training loss nhưng **khác nhau về generalization**. Đo bằng Hessian:
-
-$$
-\mathcal{L}(\theta + \epsilon) - \mathcal{L}(\theta) \approx \frac{1}{2}\epsilon^T H \epsilon
-$$
-
-<LocalMinimaViz type="flatsharp" />
-
-| | Sharp minimum | Flat minimum |
-|---|---|---|
-| Eigenvalue của $H$ | Lớn | Nhỏ |
-| Perturbation nhỏ $\epsilon$ | Loss tăng mạnh | Loss ổn định |
-| Distribution shift (train→test) | Loss test tăng vọt → overfit | Loss test tăng không đáng kể → generalize tốt |
-| SGD tìm được? | Hiếm — bị noise "rung ra" | Thường xuyên — volume lớn hơn |
-
-### Tại sao SGD bias về flat minima
-
-Xác suất dừng tại một minimum tỷ lệ với **thể tích** vùng xung quanh nó:
-
-$$
-p(\text{dừng tại minimum}) \propto \frac{1}{\sqrt{\det H}}
-$$
-
-Flat minimum có $\det H$ nhỏ → xác suất dừng cao hơn — không phải vì SGD "biết" flat tốt hơn, mà đơn giản vì flat minimum **chiếm thể tích lớn hơn** trong không gian tham số.
-
-**Keskar et al. (2017)** xác nhận thực nghiệm: batch size nhỏ → noise nhiều → SGD tìm flat minima → generalize tốt hơn. Batch size lớn → noise ít → SGD tìm sharp minima → generalize kém hơn.
-
-**Hochreiter & Schmidhuber (1997)** — bài báo kinh điển định nghĩa flat minimum chính thức và kết nối với MDL (Minimum Description Length): flat minimum tương ứng với model có **độ phức tạp mô tả thấp hơn**.
 
 ## Bức tranh tổng thể
 

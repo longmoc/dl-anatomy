@@ -117,6 +117,37 @@ $$
 Good local minima aren't isolated holes — they lie on the same **connected flat region** in parameter space. "Many minima" is really one large region that gradient descent, once it enters, stays stable in.
 </Note>
 
+### Flat vs Sharp — not all good minima are equal
+
+Everything above argues that good local minima are "equivalent" — but there is one important distinction: not all good local minima **generalize** equally well. Measured by the Hessian:
+
+$$
+\mathcal{L}(\theta + \epsilon) - \mathcal{L}(\theta) \approx \frac{1}{2}\epsilon^T H \epsilon
+$$
+
+<LocalMinimaViz type="flatsharp" lang="en" />
+
+| | Sharp minimum | Flat minimum |
+|---|---|---|
+| Eigenvalues of $H$ | Large | Small |
+| Small perturbation $\epsilon$ | Large loss increase | Stable loss |
+| Distribution shift (train→test) | Test loss spikes → overfits | Test loss barely changes → generalizes well |
+| Found by SGD? | Rarely — noise "shakes it out" | Frequently — occupies larger volume |
+
+#### Why SGD is biased toward flat minima
+
+The probability of stopping at a minimum is proportional to the **volume** of the surrounding region:
+
+$$
+p(\text{stopping at minimum}) \propto \frac{1}{\sqrt{\det H}}
+$$
+
+A flat minimum has small $\det H$ → higher stopping probability — not because SGD "knows" flat is better, but simply because flat minima **occupy more volume** in parameter space.
+
+**Keskar et al. (2017)** confirmed this empirically: small batch → more noise → SGD finds flat minima → better generalization. Large batch → less noise → sharp minima → worse generalization.
+
+**Hochreiter & Schmidhuber (1997)** — the classic paper formally defining flat minima and connecting them to MDL (Minimum Description Length): a flat minimum corresponds to a model with **lower description complexity**.
+
 ## Overparameterization creates a solution space
 
 When $|\theta| \gg n_{\text{data}}$, the system:
@@ -150,37 +181,6 @@ $$
 $$
 
 At infinite width, neural networks are **convex in function space** (though not in parameter space). As networks grow larger, the function-space landscape becomes progressively easier to optimize.
-
-## Flat vs Sharp Minima
-
-Two minima may have the same training loss but **very different generalization**. Measured by the Hessian:
-
-$$
-\mathcal{L}(\theta + \epsilon) - \mathcal{L}(\theta) \approx \frac{1}{2}\epsilon^T H \epsilon
-$$
-
-<LocalMinimaViz type="flatsharp" lang="en" />
-
-| | Sharp minimum | Flat minimum |
-|---|---|---|
-| Eigenvalues of $H$ | Large | Small |
-| Small perturbation $\epsilon$ | Large loss increase | Stable loss |
-| Distribution shift (train→test) | Test loss spikes → overfits | Test loss barely changes → generalizes well |
-| Found by SGD? | Rarely — noise "shakes it out" | Frequently — occupies larger volume |
-
-### Why SGD is biased toward flat minima
-
-The probability of stopping at a minimum is proportional to the **volume** of the surrounding region:
-
-$$
-p(\text{stopping at minimum}) \propto \frac{1}{\sqrt{\det H}}
-$$
-
-A flat minimum has small $\det H$ → higher stopping probability — not because SGD "knows" flat is better, but simply because flat minima **occupy more volume** in parameter space.
-
-**Keskar et al. (2017)** confirmed this empirically: small batch size → more noise → SGD finds flat minima → better generalization. Large batch → less noise → sharp minima → worse generalization.
-
-**Hochreiter & Schmidhuber (1997)** — the classic paper formally defining flat minima and connecting them to MDL (Minimum Description Length): a flat minimum corresponds to a model with **lower description complexity**.
 
 ## The full picture
 
