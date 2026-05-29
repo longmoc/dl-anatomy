@@ -278,9 +278,9 @@ At the data-point level, training solves $n$ conditions $f_\theta(x_i) = y_i$, e
 
 | Regime | Solution set |
 |---|---|
-| $|\theta| < n$ | Overconstrained — usually **no exact solution** |
-| $|\theta| = n$ | Just enough — usually **finitely many isolated solutions** |
-| $|\theta| \gg n$ | Underconstrained — solutions form a high-dimensional **manifold** |
+| $\lvert\theta\rvert < n$ | Overconstrained — usually **no exact solution** |
+| $\lvert\theta\rvert = n$ | Just enough — usually **finitely many isolated solutions** |
+| $\lvert\theta\rvert \gg n$ | Underconstrained — solutions form a high-dimensional **manifold** |
 
 In the overparameterized regime, the dimension of the solution manifold:
 
@@ -288,7 +288,7 @@ $$
 \dim(\mathcal{M}^*) \approx |\theta| - n
 $$
 
-| Model | $|\theta|$ | $n_{\text{data}}$ (approx) | $\dim(\mathcal{M}^*)$ |
+| Model | $\lvert\theta\rvert$ | $n_{\text{data}}$ (approx) | $\dim(\mathcal{M}^*)$ |
 |---|---|---|---|
 | ResNet-50 | ~25M | ~1.2M (ImageNet) | ~24M |
 | GPT-3 | ~175B | ~300B tokens* | very large |
