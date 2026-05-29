@@ -1,0 +1,251 @@
+---
+interface Props {
+  lang?: 'vi' | 'en';
+}
+const { lang = 'vi' } = Astro.props;
+
+const ui = lang === 'en'
+  ? {
+      test: 'Test error',
+      train: 'Train error',
+      classical: 'Classical prediction',
+      caption: 'Double descent. Classical theory expects test error to keep rising past the sweet spot (dashed). In reality, it spikes at the interpolation threshold |θ| = n, then descends again — large overparameterized models land in the second valley.',
+    }
+  : {
+      test: 'Test error',
+      train: 'Train error',
+      classical: 'Dự đoán cổ điển',
+      caption: 'Double descent. Lý thuyết cổ điển kỳ vọng test error tăng mãi sau sweet spot (đường đứt). Thực tế: tăng vọt tại interpolation threshold |θ| = n rồi giảm trở lại — model overparameterized lớn rơi vào valley thứ hai.',
+    };
+---
+
+<div class="ddviz" data-lang={lang}>
+  <canvas class="ddviz-canvas"></canvas>
+  <div class="ddviz-legend">
+    <span class="ddviz-item"><span class="ddviz-line ddviz-test"></span>{ui.test}</span>
+    <span class="ddviz-item"><span class="ddviz-line ddviz-train"></span>{ui.train}</span>
+    <span class="ddviz-item"><span class="ddviz-line ddviz-classical"></span>{ui.classical}</span>
+  </div>
+  <p class="ddviz-caption">{ui.caption}</p>
+</div>
+
+<script>
+document.querySelectorAll('.ddviz').forEach(root => {
+  const canvas = root.querySelector('.ddviz-canvas') as HTMLCanvasElement;
+  const ctx    = canvas.getContext('2d')!;
+  const isEn   = (root as HTMLElement).dataset.lang === 'en';
+
+  const cv = (n: string) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+  const XT = 0.45; // interpolation threshold (|θ| = n)
+
+  // Test error — double descent shape
+  const testErr = (x: number) =>
+    0.13 + 0.45 * Math.exp(-x / 0.08) + 0.52 * Math.exp(-Math.pow((x - XT) / 0.08, 2));
+
+  // Train error — monotonically decreases to ~0 at/after threshold
+  const trainErr = (x: number) => 0.5 * Math.exp(-x / 0.13);
+
+  // Classical prediction — U-curve that keeps rising after the sweet spot
+  const SWEET = 0.25;
+  const classicalErr = (x: number) =>
+    x < SWEET ? testErr(x) : 0.151 + 0.62 * (x - SWEET);
+
+  const PL = 40, PR = 16, PT = 30, PB = 38;
+  let W = 0, H = 0;
+  const Y_MAX = 0.72;
+  const tx = (x: number) => PL + x * (W - PL - PR);
+  const ty = (e: number) => PT + (1 - e / Y_MAX) * (H - PT - PB);
+
+  let hoverX: number | null = null;
+
+  function curve(fn: (x: number) => number, color: string, width: number, dash: number[], xStart = 0, xEnd = 1) {
+    ctx.beginPath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.setLineDash(dash);
+    let started = false;
+    for (let i = 0; i <= 300; i++) {
+      const x = xStart + (xEnd - xStart) * i / 300;
+      const y = ty(Math.min(fn(x), Y_MAX));
+      const cx = tx(x);
+      if (!started) { ctx.moveTo(cx, y); started = true; }
+      else ctx.lineTo(cx, y);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  function draw() {
+    const rect = canvas.getBoundingClientRect();
+    W = rect.width; H = rect.height;
+    if (!W || !H) return;
+    const dpr = window.devicePixelRatio || 1;
+    if (canvas.width !== W * dpr) { canvas.width = W * dpr; canvas.height = H * dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const bg     = cv('--bg');
+    const bg2    = cv('--bg2');
+    const border = cv('--border');
+    const muted  = cv('--muted');
+    const accent = cv('--accent');
+    const accent2= cv('--accent2');
+    const amber  = cv('--amber');
+    const text   = cv('--text');
+
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    // Regime shading: modern regime (right of threshold) subtly tinted
+    ctx.fillStyle = accent2 + '0e';
+    ctx.fillRect(tx(XT), PT, tx(1) - tx(XT), H - PT - PB);
+
+    // Threshold vertical line
+    ctx.strokeStyle = muted;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 4]);
+    ctx.globalAlpha = 0.7;
+    ctx.beginPath();
+    ctx.moveTo(tx(XT), PT - 4);
+    ctx.lineTo(tx(XT), H - PB);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = muted;
+    ctx.font = '10px var(--mono, monospace)';
+    ctx.textAlign = 'center';
+    ctx.fillText('|θ| = n', tx(XT), PT - 8);
+
+    // Regime labels
+    ctx.fillStyle = muted;
+    ctx.font = '9px var(--mono, monospace)';
+    ctx.textAlign = 'center';
+    ctx.fillText(isEn ? 'classical regime' : 'chế độ cổ điển', tx(XT / 2), H - PB + 24);
+    ctx.fillText(isEn ? 'modern (overparameterized)' : 'hiện đại (overparameterized)', tx(XT + (1 - XT) / 2), H - PB + 24);
+
+    // Axes
+    ctx.strokeStyle = border;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(PL, PT); ctx.lineTo(PL, H - PB); ctx.lineTo(W - PR, H - PB);
+    ctx.stroke();
+
+    // Curves
+    curve(classicalErr, amber, 1.8, [5, 4], SWEET, 1);   // classical prediction (dashed), only past sweet spot
+    curve(trainErr, accent2, 2, []);                      // train error
+    curve(testErr, accent, 2.5, []);                      // test error (main)
+
+    // Axis labels
+    ctx.fillStyle = muted;
+    ctx.font = '10px var(--mono, monospace)';
+    ctx.textAlign = 'center';
+    ctx.fillText(isEn ? 'model complexity (|θ|) →' : 'độ phức tạp model (|θ|) →', PL + (W - PL - PR) / 2, H - 4);
+    ctx.save();
+    ctx.translate(12, PT + (H - PT - PB) / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('error', 0, 0);
+    ctx.restore();
+
+    // Hover readout
+    if (hoverX !== null) {
+      const x = hoverX;
+      ctx.strokeStyle = muted;
+      ctx.lineWidth = 1;
+      ctx.globalAlpha = 0.4;
+      ctx.beginPath();
+      ctx.moveTo(tx(x), PT); ctx.lineTo(tx(x), H - PB);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+
+      // dots on test + train
+      [[testErr(x), accent], [trainErr(x), accent2]].forEach(([e, col]) => {
+        ctx.beginPath();
+        ctx.arc(tx(x), ty(Math.min(e as number, Y_MAX)), 4, 0, 2 * Math.PI);
+        ctx.fillStyle = col as string;
+        ctx.fill();
+        ctx.strokeStyle = bg; ctx.lineWidth = 1.5; ctx.stroke();
+      });
+
+      // tooltip
+      const regime = x < XT ? (isEn ? 'classical' : 'cổ điển') : (isEn ? 'modern' : 'hiện đại');
+      const line1 = `${isEn ? 'test' : 'test'} = ${testErr(x).toFixed(2)}`;
+      const line2 = `${isEn ? 'regime' : 'chế độ'}: ${regime}`;
+      ctx.font = '10px var(--mono, monospace)';
+      const bw = Math.max(ctx.measureText(line1).width, ctx.measureText(line2).width) + 14;
+      let bx = tx(x) + 8;
+      if (bx + bw > W - PR) bx = tx(x) - bw - 8;
+      ctx.fillStyle = bg2;
+      ctx.strokeStyle = border;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(bx, PT + 2, bw, 32, 5);
+      ctx.fill(); ctx.stroke();
+      ctx.fillStyle = accent;
+      ctx.textAlign = 'left';
+      ctx.fillText(line1, bx + 7, PT + 14);
+      ctx.fillStyle = muted;
+      ctx.fillText(line2, bx + 7, PT + 27);
+    }
+  }
+
+  canvas.addEventListener('mousemove', e => {
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left - PL) / (W - PL - PR);
+    hoverX = (x >= 0 && x <= 1) ? x : null;
+    draw();
+  });
+  canvas.addEventListener('mouseleave', () => { hoverX = null; draw(); });
+
+  const ro = new ResizeObserver(draw);
+  ro.observe(canvas);
+  draw();
+});
+</script>
+
+<style>
+  .ddviz {
+    margin: 1.5rem 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--bg2);
+  }
+  .ddviz-canvas {
+    width: 100%;
+    height: 210px;
+    display: block;
+    background: var(--bg);
+    cursor: crosshair;
+  }
+  .ddviz-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem 1.1rem;
+    padding: 0.5rem 0.9rem 0.4rem;
+    border-top: 1px solid var(--border);
+  }
+  .ddviz-item {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    color: var(--muted);
+  }
+  .ddviz-line {
+    width: 20px; height: 3px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+  .ddviz-test     { background: var(--accent); }
+  .ddviz-train    { background: var(--accent2); }
+  .ddviz-classical{ background: var(--amber); opacity: 0.7; }
+  .ddviz-caption {
+    font-size: 0.78rem;
+    color: var(--muted);
+    text-align: center;
+    padding: 0.25rem 1rem 0.6rem;
+    font-style: italic;
+    line-height: 1.5;
+  }
+</style>

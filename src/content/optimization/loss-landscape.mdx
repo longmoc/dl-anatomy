@@ -12,6 +12,7 @@ import Note from '../../components/Note.astro';
 import LossLandscapeViz from '../../components/LossLandscapeViz.astro';
 import LocalMinimaViz from '../../components/LocalMinimaViz.astro';
 import WignerViz from '../../components/WignerViz.astro';
+import DoubleDescentViz from '../../components/DoubleDescentViz.astro';
 
 # Loss Landscape & Non-convexity
 
@@ -336,6 +337,8 @@ Wisdom cổ điển nói: tăng model complexity → overfit → test error tăn
 - **Overparameterized** ($|\theta| \gg n$): có vô số nghiệm trên manifold → GD chọn nghiệm "đơn giản nhất" → **test error giảm trở lại** và tiếp tục giảm khi thêm tham số
 
 Đường test error có **hai lần giảm** (double descent) — đỉnh tăng vọt nằm đúng tại $|\theta| = n$. Đây là lý do các model khổng lồ (deep into overparameterized regime) generalize tốt thay vì overfit như lý thuyết cổ điển dự đoán. **Nakkiran et al. (2019)** xác nhận hiện tượng này xảy ra cả theo model size lẫn theo số epoch training.
+
+<DoubleDescentViz />
 
 ### Implicit bias — GD chọn nghiệm nào trên manifold?
 

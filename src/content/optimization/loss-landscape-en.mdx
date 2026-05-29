@@ -12,6 +12,7 @@ import Note from '../../components/Note.astro';
 import LossLandscapeViz from '../../components/LossLandscapeViz.astro';
 import LocalMinimaViz from '../../components/LocalMinimaViz.astro';
 import WignerViz from '../../components/WignerViz.astro';
+import DoubleDescentViz from '../../components/DoubleDescentViz.astro';
 
 # Loss Landscape & Non-convexity
 
@@ -336,6 +337,8 @@ Classical wisdom says: increasing model complexity → overfitting → test erro
 - **Overparameterized** ($|\theta| \gg n$): countless solutions on the manifold → GD picks the "simplest" one → **test error falls again** and keeps dropping as parameters are added
 
 The test-error curve has **two descents** (double descent) — with the spike sitting exactly at $|\theta| = n$. This is why enormous models (deep in the overparameterized regime) generalize well rather than overfit as classical theory predicts. **Nakkiran et al. (2019)** confirmed the phenomenon occurs both with model size and with training epochs.
+
+<DoubleDescentViz lang="en" />
 
 ### Implicit bias — which solution does GD pick?
 
