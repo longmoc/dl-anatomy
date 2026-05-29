@@ -6,16 +6,10 @@ const { lang = 'vi' } = Astro.props;
 
 const ui = lang === 'en'
   ? {
-      steps: 'Training steps',
-      lr: 'η (normalized)',
-      replay: '↺ Replay',
       labels: ['Step decay', 'Cosine', 'Cosine + warmup', 'WSD'],
       caption: 'All schedules normalized to η_max = 1. Warmup = 10% of total steps. WSD stable phase = 70%, decay phase = 20%.',
     }
   : {
-      steps: 'Bước huấn luyện',
-      lr: 'η (chuẩn hoá)',
-      replay: '↺ Chạy lại',
       labels: ['Step decay', 'Cosine', 'Cosine + warmup', 'WSD'],
       caption: 'Tất cả schedule chuẩn hoá về η_max = 1. Warmup = 10% tổng số bước. WSD: ổn định 70%, decay 20%.',
     };
@@ -24,15 +18,12 @@ const ui = lang === 'en'
 <div class="lrviz" data-lang={lang}>
   <canvas class="lrviz-canvas"></canvas>
   <div class="lrviz-legend">
-    <span class="lrviz-item"><span class="lrviz-dot lrviz-step"></span>{ui.labels[0]}</span>
-    <span class="lrviz-item"><span class="lrviz-dot lrviz-cos"></span>{ui.labels[1]}</span>
-    <span class="lrviz-item"><span class="lrviz-dot lrviz-cowarm"></span>{ui.labels[2]}</span>
-    <span class="lrviz-item"><span class="lrviz-dot lrviz-wsd"></span>{ui.labels[3]}</span>
+    <span class="lrviz-item"><span class="lrviz-swatch lrviz-step"></span>{ui.labels[0]}</span>
+    <span class="lrviz-item"><span class="lrviz-swatch lrviz-cos"></span>{ui.labels[1]}</span>
+    <span class="lrviz-item"><span class="lrviz-swatch lrviz-cowarm"></span>{ui.labels[2]}</span>
+    <span class="lrviz-item"><span class="lrviz-swatch lrviz-wsd"></span>{ui.labels[3]}</span>
   </div>
-  <div class="lrviz-bottom">
-    <p class="lrviz-caption">{ui.caption}</p>
-    <button class="lrviz-replay">{ui.replay}</button>
-  </div>
+  <p class="lrviz-caption">{ui.caption}</p>
 </div>
 
 <script>
@@ -41,55 +32,55 @@ document.querySelectorAll('.lrviz').forEach(root => {
   const ctx    = canvas.getContext('2d')!;
   const isEn   = root.dataset.lang === 'en';
 
-  const T = 1000;
-  const W_STEPS  = 100;  // warmup steps (10%)
-  const S_END    = 800;  // stable phase ends (WSD)
-  const ETA_MIN  = 0.02;
+  const T       = 1000;
+  const W_STEPS = 100;
+  const S_END   = 800;
+  const ETA_MIN = 0.02;
 
-  // --- Schedule functions (return η in [0,1] for step t ∈ [0,T]) ---
-  function stepDecay(t: number): number {
+  const NAMES = isEn
+    ? ['Step decay', 'Cosine', 'Cosine + warmup', 'WSD']
+    : ['Step decay', 'Cosine', 'Cosine + warmup', 'WSD'];
+
+  function stepDecay(t: number) {
     if (t < 400) return 1.0;
     if (t < 700) return 0.3;
     if (t < 900) return 0.09;
     return 0.027;
   }
-  function cosine(t: number): number {
+  function cosine(t: number) {
     return ETA_MIN + (1 - ETA_MIN) * 0.5 * (1 + Math.cos(Math.PI * t / T));
   }
-  function cosineWarmup(t: number): number {
-    if (t < W_STEPS) return (t / W_STEPS);
+  function cosineWarmup(t: number) {
+    if (t < W_STEPS) return t / W_STEPS;
     const tp = t - W_STEPS, Tp = T - W_STEPS;
     return ETA_MIN + (1 - ETA_MIN) * 0.5 * (1 + Math.cos(Math.PI * tp / Tp));
   }
-  function wsd(t: number): number {
-    if (t < W_STEPS) return t / W_STEPS;           // warmup
-    if (t < S_END)   return 1.0;                   // stable
-    const td = t - S_END, Td = T - S_END;           // decay
+  function wsd(t: number) {
+    if (t < W_STEPS) return t / W_STEPS;
+    if (t < S_END)   return 1.0;
+    const td = t - S_END, Td = T - S_END;
     return ETA_MIN + (1 - ETA_MIN) * 0.5 * (1 + Math.cos(Math.PI * td / Td));
   }
 
-  type ScheduleDef = { fn: (t: number) => number; colorVar: string; dash: number[] };
-  const SCHEDULES: ScheduleDef[] = [
+  type Sched = { fn: (t: number) => number; colorVar: string; dash: number[] };
+  const SCHEDS: Sched[] = [
     { fn: stepDecay,    colorVar: '--amber',   dash: [] },
     { fn: cosine,       colorVar: '--muted',   dash: [5, 4] },
     { fn: cosineWarmup, colorVar: '--accent2', dash: [] },
     { fn: wsd,          colorVar: '--accent',  dash: [] },
   ];
 
-  const PL = 42, PR = 16, PT = 14, PB = 36;
+  const PL = 42, PR = 16, PT = 16, PB = 36;
   let W = 0, H = 0;
   const tx = (t: number) => PL + (t / T) * (W - PL - PR);
   const ty = (v: number) => (H - PB) - v * (H - PT - PB);
   const cv = (n: string) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 
-  // Animation: draw cursor moving across chart
-  const CYCLE = 4000;
-  const TICK  = 40;
-  let progress = 1.0; // 0→1, fully drawn on load
-  let elapsed  = 0;
-  let animating = false;
+  // Hover state
+  let hoverStep: number | null = null;
+  let nearestIdx  = -1;
 
-  function draw(pct: number) {
+  function draw() {
     const rect = canvas.getBoundingClientRect();
     W = rect.width; H = rect.height;
     if (!W || !H) return;
@@ -105,7 +96,7 @@ document.querySelectorAll('.lrviz').forEach(root => {
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, W, H);
 
-    // Grid lines + y-axis ticks
+    // Horizontal grid lines
     ctx.strokeStyle = border;
     ctx.lineWidth = 1;
     ctx.setLineDash([3, 5]);
@@ -119,7 +110,7 @@ document.querySelectorAll('.lrviz').forEach(root => {
     ctx.setLineDash([]);
     ctx.globalAlpha = 1;
 
-    // Axis tick labels
+    // Y-axis tick labels
     ctx.fillStyle = muted;
     ctx.font = `10px var(--mono, monospace)`;
     ctx.textAlign = 'right';
@@ -127,31 +118,22 @@ document.querySelectorAll('.lrviz').forEach(root => {
       ctx.fillText(v.toFixed(v === 0 ? 0 : 2), PL - 5, ty(v) + 3.5);
     });
 
-    // Warmup marker
-    ctx.strokeStyle = muted;
+    // Phase markers (warmup, WSD stable end)
+    const markerAlpha = hoverStep !== null ? 0.15 : 0.3;
+    ctx.setLineDash([2, 6]);
     ctx.lineWidth = 1;
-    ctx.setLineDash([2, 5]);
-    ctx.globalAlpha = 0.35;
-    ctx.beginPath();
-    ctx.moveTo(tx(W_STEPS), PT);
-    ctx.lineTo(tx(W_STEPS), H - PB);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.globalAlpha = 1;
-
-    // WSD phase markers
-    ctx.setLineDash([2, 5]);
-    ctx.globalAlpha = 0.2;
-    [S_END].forEach(step => {
+    [[W_STEPS, 0.35], [S_END, 0.2]].forEach(([step, a]) => {
+      ctx.strokeStyle = muted;
+      ctx.globalAlpha = (a as number) * (hoverStep !== null ? 0.6 : 1);
       ctx.beginPath();
-      ctx.moveTo(tx(step), PT);
-      ctx.lineTo(tx(step), H - PB);
+      ctx.moveTo(tx(step as number), PT);
+      ctx.lineTo(tx(step as number), H - PB);
       ctx.stroke();
     });
     ctx.setLineDash([]);
     ctx.globalAlpha = 1;
 
-    // X-axis
+    // X-axis baseline
     ctx.strokeStyle = border;
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -161,6 +143,7 @@ document.querySelectorAll('.lrviz').forEach(root => {
 
     // X tick labels
     ctx.fillStyle = muted;
+    ctx.font = `10px var(--mono, monospace)`;
     ctx.textAlign = 'center';
     [0, 0.25, 0.5, 0.75, 1.0].forEach(f => {
       const t = Math.round(f * T);
@@ -169,27 +152,24 @@ document.querySelectorAll('.lrviz').forEach(root => {
 
     // Axis labels
     ctx.fillStyle = muted;
-    ctx.font = `10px var(--mono, monospace)`;
-    ctx.textAlign = 'center';
-    const stepLabel = isEn ? 'step' : 'bước';
-    ctx.fillText(stepLabel, PL + (W - PL - PR) / 2, H - 2);
-    // y label rotated
+    ctx.fillText(isEn ? 'step' : 'bước', PL + (W - PL - PR) / 2, H - 2);
     ctx.save();
     ctx.translate(10, PT + (H - PT - PB) / 2);
     ctx.rotate(-Math.PI / 2);
     ctx.fillText('η', 0, 0);
     ctx.restore();
 
-    // Draw schedule curves up to pct
-    const tMax = pct * T;
-    SCHEDULES.forEach(s => {
+    // Schedule curves
+    SCHEDS.forEach((s, i) => {
       const color = cv(s.colorVar);
+      const isHovered = i === nearestIdx && hoverStep !== null;
+      ctx.globalAlpha = hoverStep !== null && !isHovered ? 0.3 : 1;
       ctx.beginPath();
       ctx.strokeStyle = color;
-      ctx.lineWidth = 2;
+      ctx.lineWidth = isHovered ? 2.5 : 2;
       ctx.setLineDash(s.dash);
       let started = false;
-      for (let t = 0; t <= Math.min(tMax, T); t += 2) {
+      for (let t = 0; t <= T; t += 2) {
         const x = tx(t), y = ty(s.fn(t));
         if (!started) { ctx.moveTo(x, y); started = true; }
         else ctx.lineTo(x, y);
@@ -197,46 +177,111 @@ document.querySelectorAll('.lrviz').forEach(root => {
       ctx.stroke();
       ctx.setLineDash([]);
     });
+    ctx.globalAlpha = 1;
 
-    // Cursor line
-    if (pct < 1) {
+    // Hover overlay
+    if (hoverStep !== null) {
+      const hs = hoverStep;
+
+      // Vertical cursor line
       ctx.strokeStyle = muted;
       ctx.lineWidth = 1;
-      ctx.globalAlpha = 0.4;
+      ctx.globalAlpha = 0.35;
       ctx.beginPath();
-      ctx.moveTo(tx(tMax), PT);
-      ctx.lineTo(tx(tMax), H - PB);
+      ctx.moveTo(tx(hs), PT);
+      ctx.lineTo(tx(hs), H - PB);
       ctx.stroke();
       ctx.globalAlpha = 1;
+
+      // Dots on each curve
+      SCHEDS.forEach((s, i) => {
+        const color = cv(s.colorVar);
+        const isNearest = i === nearestIdx;
+        ctx.beginPath();
+        ctx.arc(tx(hs), ty(s.fn(hs)), isNearest ? 5 : 3.5, 0, 2 * Math.PI);
+        ctx.fillStyle = color;
+        ctx.globalAlpha = isNearest ? 1 : 0.45;
+        ctx.fill();
+        ctx.strokeStyle = bg;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      });
+
+      // Tooltip for nearest schedule
+      if (nearestIdx >= 0) {
+        const s   = SCHEDS[nearestIdx];
+        const eta = s.fn(hs);
+        const color = cv(s.colorVar);
+        const stepLabel = isEn ? 'step' : 'bước';
+        const line1 = NAMES[nearestIdx];
+        const line2 = `${stepLabel} ${hs}  η = ${eta.toFixed(2)}`;
+
+        ctx.font = `bold 11px var(--mono, monospace)`;
+        const w1 = ctx.measureText(line1).width;
+        ctx.font = `10px var(--mono, monospace)`;
+        const w2 = ctx.measureText(line2).width;
+        const boxW = Math.max(w1, w2) + 16;
+        const boxH = 38;
+
+        // Position: right of cursor unless too close to right edge
+        let bx = tx(hs) + 10;
+        if (bx + boxW > W - PR - 4) bx = tx(hs) - boxW - 10;
+        const curveY = ty(eta);
+        let by = curveY - boxH / 2;
+        by = Math.max(PT + 2, Math.min(H - PB - boxH - 2, by));
+
+        // Box background
+        ctx.fillStyle = cv('--bg2');
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.roundRect(bx, by, boxW, boxH, 5);
+        ctx.fill();
+        ctx.stroke();
+
+        // Text
+        ctx.fillStyle = color;
+        ctx.font = `bold 11px var(--mono, monospace)`;
+        ctx.textAlign = 'left';
+        ctx.fillText(line1, bx + 8, by + 14);
+        ctx.fillStyle = muted;
+        ctx.font = `10px var(--mono, monospace)`;
+        ctx.fillText(line2, bx + 8, by + 28);
+      }
     }
 
     ctx.restore();
   }
 
-  // Start with full draw, replay animates from start
-  draw(1.0);
+  // Mouse tracking
+  canvas.addEventListener('mousemove', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const cssX = e.clientX - rect.left;
+    const cssY = e.clientY - rect.top;
+    const rawT = (cssX - PL) / (W - PL - PR) * T;
+    if (rawT < 0 || rawT > T) { hoverStep = null; nearestIdx = -1; draw(); return; }
+    hoverStep = Math.round(rawT);
 
-  let lastTick = 0;
-  function loop(ts: number) {
-    if (!animating) return;
-    if (ts - lastTick >= TICK) {
-      elapsed += ts - lastTick;
-      lastTick = ts;
-      progress = Math.min(elapsed / CYCLE, 1.0);
-      draw(progress);
-      if (progress >= 1.0) { animating = false; }
-    }
-    requestAnimationFrame(loop);
-  }
-
-  root.querySelector('.lrviz-replay')?.addEventListener('click', () => {
-    progress = 0; elapsed = 0; animating = true;
-    lastTick = 0;
-    requestAnimationFrame(loop);
+    let minDist = Infinity;
+    nearestIdx = -1;
+    SCHEDS.forEach((s, i) => {
+      const dist = Math.abs(cssY - ty(s.fn(hoverStep!)));
+      if (dist < minDist) { minDist = dist; nearestIdx = i; }
+    });
+    if (minDist > 32) nearestIdx = -1;
+    draw();
   });
 
-  const ro = new ResizeObserver(() => draw(progress));
+  canvas.addEventListener('mouseleave', () => {
+    hoverStep = null;
+    nearestIdx = -1;
+    draw();
+  });
+
+  const ro = new ResizeObserver(draw);
   ro.observe(canvas);
+  draw();
 });
 </script>
 
@@ -247,31 +292,32 @@ document.querySelectorAll('.lrviz').forEach(root => {
     border-radius: 10px;
     overflow: hidden;
     background: var(--bg2);
-    padding-bottom: 0.25rem;
   }
   .lrviz-canvas {
     width: 100%;
     height: 210px;
     display: block;
     background: var(--bg);
+    cursor: crosshair;
   }
   .lrviz-legend {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.75rem 1.1rem;
-    padding: 0.55rem 0.9rem 0.35rem;
+    gap: 0.6rem 1.1rem;
+    padding: 0.5rem 0.9rem 0.4rem;
     border-top: 1px solid var(--border);
   }
   .lrviz-item {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: 0.45rem;
     font-family: var(--mono);
     font-size: 0.75rem;
     color: var(--muted);
   }
-  .lrviz-dot {
-    width: 22px; height: 3px;
+  .lrviz-swatch {
+    width: 20px;
+    height: 3px;
     border-radius: 2px;
     flex-shrink: 0;
   }
@@ -279,33 +325,12 @@ document.querySelectorAll('.lrviz').forEach(root => {
   .lrviz-cos    { background: var(--muted); }
   .lrviz-cowarm { background: var(--accent2); }
   .lrviz-wsd    { background: var(--accent); }
-  .lrviz-bottom {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0.35rem 0.9rem 0.6rem;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-  }
   .lrviz-caption {
     font-size: 0.78rem;
     color: var(--muted);
+    text-align: center;
+    padding: 0.3rem 1rem 0.65rem;
     font-style: italic;
     line-height: 1.5;
-    flex: 1;
   }
-  .lrviz-replay {
-    font-family: var(--mono);
-    font-size: 0.75rem;
-    padding: 0.22em 0.75em;
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    background: var(--bg);
-    color: var(--muted);
-    cursor: pointer;
-    white-space: nowrap;
-    transition: color 0.12s, border-color 0.12s;
-    flex-shrink: 0;
-  }
-  .lrviz-replay:hover { color: var(--text); border-color: var(--text); }
 </style>
