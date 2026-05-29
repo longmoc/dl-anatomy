@@ -366,9 +366,7 @@ Four phenomena — high dimensionality, the solution manifold, SGD noise, and ov
 | Flat minima generalize better | SGD noise + volume in parameter space | SGD + small batch naturally prefers generalization |
 | Large models generalize rather than overfit | Overparameterization + implicit minimum-norm bias | Double descent — scale is a friend, not a foe |
 
-## Why modern research doesn't check convexity
-
-Today's deep learning papers almost never analyze the convexity of the loss. Not because it's unimportant — but because the question has changed:
+Because of these mechanisms, today's deep learning papers almost never analyze the convexity of the loss. Not because it's unimportant — but because the question has changed:
 
 | Reason | Explanation |
 |---|---|
