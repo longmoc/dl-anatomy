@@ -8,12 +8,12 @@ const L = lang === 'en'
   ? {
       mom: 'Momentum', adam: 'Adam',
       replay: '↺ Replay',
-      caption: 'L(x,y) = 50x² + y²  —  gradient scale differs 100× between axes. Momentum must use small lr to keep x stable → y converges slowly. Adam normalizes each axis independently.',
+      caption: 'L(x,y) = 50x² + y²  —  condition number κ = 50 (curvature in x is 50× greater than y). Momentum must use small lr to keep x stable → y converges slowly. Adam normalizes each axis independently.',
     }
   : {
       mom: 'Momentum', adam: 'Adam',
       replay: '↺ Chạy lại',
-      caption: 'L(x,y) = 50x² + y²  —  gradient theo x lớn hơn y gấp 100 lần. Momentum phải dùng lr nhỏ để x không dao động → y hội tụ rất chậm. Adam chuẩn hoá từng chiều độc lập.',
+      caption: 'L(x,y) = 50x² + y²  —  condition number κ = 50 (curvature theo x lớn hơn y 50 lần). Momentum phải dùng lr nhỏ để x không dao động → y hội tụ rất chậm. Adam chuẩn hoá từng chiều độc lập.',
     };
 ---
 
