@@ -356,21 +356,44 @@ Ba dạng regularization **implicit** xuất hiện xuyên suốt bài này — 
 
 ## Bức tranh tổng thể
 
+Bốn hiện tượng — chiều cao, manifold nghiệm, SGD noise, overparameterization — cộng hưởng với nhau để tạo ra behavior tốt mà lý thuyết convexity không dự đoán được:
+
 | Quan sát | Cơ chế | Hệ quả |
 |---|---|---|
+| Hầu hết critical points là saddle, không phải local min | Chiều cao + Wigner law (§saddle) | Local minima xấu cực hiếm |
 | Nhiều local minima có loss thấp tương đương | Symmetry + overparameterization | Không cần tìm global minimum |
 | Các minima tốt kết nối với nhau | Loss landscape là manifold liên thông | Gradient descent không bị kẹt trong vùng tốt |
-| Flat minima tốt hơn sharp minima | Hessian eigenvalue nhỏ → ổn định với perturbation | SGD + small batch tự nhiên ưu tiên generalization |
-| Local minima xấu nằm ở loss cao | Xác suất giảm theo chiều cao (Choromanska) | Gradient descent thực tế không gặp chúng |
+| Flat minima tốt hơn sharp minima | SGD noise + thể tích trong parameter space | SGD + small batch tự nhiên ưu tiên generalization |
+| Model lớn generalize tốt thay vì overfit | Overparameterization + implicit minimum-norm bias | Double descent — scale là bạn, không phải kẻ thù |
 
-## Những gì vẫn chưa hiểu
+## Tại sao nghiên cứu hiện đại không kiểm tra tính lồi
 
-- **Grokking** (Power et al., 2022): mô hình đột ngột "hiểu" bài toán sau rất nhiều epoch overfit — tại sao loss landscape thay đổi đột ngột muộn vậy?
-- **Implicit bias cho mạng phi tuyến**: với linear model, GD chọn minimum-norm solution đã được chứng minh; nhưng với neural network phi tuyến, implicit bias phụ thuộc architecture và chưa được đặc trưng đầy đủ.
-- **Loss landscape của LLM thực tế**: lý thuyết spin-glass và NTK đều có giả định không hoàn toàn phù hợp với transformer thực. Landscape thực sự vẫn là hộp đen.
+Các paper deep learning hiện nay gần như không bao giờ phân tích tính lồi của loss. Không phải vì nó không quan trọng — mà vì câu hỏi đã thay đổi:
+
+| Lý do | Giải thích |
+|---|---|
+| Biết là không lồi | Hiển nhiên với mọi mạng phi tuyến — không cần chứng minh lại |
+| Không cần bảo đảm lý thuyết chặt | Thực nghiệm đã chứng minh thay cho lý thuyết — cái gì chạy được thì dùng |
+| Câu hỏi đã dịch chuyển | Không còn là "có hội tụ không?" mà là "hội tụ đến đâu và generalize thế nào?" |
+| Scale giải quyết vấn đề | Model càng lớn, landscape càng "hiền" theo nghĩa thực tế (xem NTK, double descent) |
+
+## Lý thuyết chạy sau thực nghiệm
+
+Đây là điểm dị thường của deep learning so với toàn bộ lịch sử toán học ứng dụng: **người ta dùng được trước khi hiểu được tại sao nó hoạt động.** Thông thường lý thuyết đi trước (chứng minh điều kiện đủ) rồi ứng dụng mới theo sau. Deep learning đảo ngược thứ tự đó.
+
+Một số kết quả lý thuyết đang cố bắt kịp:
+
+- **Neural Tangent Kernel**: ở infinite width, network hành xử như kernel method → bài toán trở nên lồi. Nhưng mạng finite-width thực tế thoát khỏi regime này.
+- **Loss landscape theory**: spin-glass, mode connectivity, simplexes — đang được nghiên cứu tích cực nhưng chưa có mô tả đầy đủ cho transformer thực.
+- **Grokking** (Power et al., 2022): model đột nhiên generalize sau khi đã overfit rất lâu — chưa hiểu hoàn toàn tại sao landscape thay đổi muộn vậy.
+- **Implicit bias cho mạng phi tuyến**: minimum-norm solution đã chứng minh cho linear model, nhưng với neural network phi tuyến vẫn phụ thuộc architecture và chưa được đặc trưng đầy đủ.
+
+## Tóm lại
+
+Hồi học cơ bản ta kiểm tra tính lồi vì đó là **điều kiện đủ** để tối ưu hoạt động — và là nền tảng lý thuyết duy nhất ta có lúc đó. Deep learning phá vỡ điều kiện này, nhưng bù lại bằng **overparameterization + SGD noise + high dimensionality** — những thứ cộng hưởng tạo ra behavior tốt mà lý thuyết convexity không hề dự đoán.
 
 <Note type="paper">
-Câu trả lời trung thực: deep learning **hoạt động tốt trong thực tế** nhờ các hiện tượng trên, nhưng lý thuyết vẫn đang chạy sau thực nghiệm khoảng 5–10 năm. Đây là lý do các nhà nghiên cứu thường tự hỏi "tại sao nó hoạt động?" thay vì "nó có hoạt động không?"
+Convexity vẫn quan trọng để hiểu **tại sao** gradient descent hoạt động trong trường hợp đơn giản. Nhưng deep learning là một regime hoàn toàn khác — lý thuyết hiện tại vẫn chưa giải thích đầy đủ, và đang chạy sau thực nghiệm khoảng 5–10 năm. Đó là lý do câu hỏi đặc trưng của deep learning không phải "nó có hoạt động không?" mà là "tại sao nó hoạt động?"
 </Note>
 
 ## Papers tham khảo

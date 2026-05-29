@@ -356,21 +356,44 @@ Three forms of **implicit** regularization appear throughout this article — no
 
 ## The full picture
 
+Four phenomena — high dimensionality, the solution manifold, SGD noise, and overparameterization — resonate together to produce good behavior that convexity theory never predicted:
+
 | Observation | Mechanism | Consequence |
 |---|---|---|
+| Most critical points are saddles, not local minima | High dimensionality + Wigner law (§saddle) | Bad local minima are extremely rare |
 | Many local minima have equivalent low loss | Symmetry + overparameterization | No need to find the global minimum |
 | Good minima are connected | Loss landscape is a connected manifold | Gradient descent doesn't get trapped in good regions |
-| Flat minima generalize better | Small Hessian eigenvalues → stable under perturbation | SGD + small batch naturally prefers generalization |
-| Bad local minima occur at high loss | Probability decreases with model size (Choromanska) | Gradient descent rarely encounters them |
+| Flat minima generalize better | SGD noise + volume in parameter space | SGD + small batch naturally prefers generalization |
+| Large models generalize rather than overfit | Overparameterization + implicit minimum-norm bias | Double descent — scale is a friend, not a foe |
 
-## What we still don't understand
+## Why modern research doesn't check convexity
 
-- **Grokking** (Power et al., 2022): models suddenly "understand" a task after many overfit epochs — why does the loss landscape shift so dramatically so late in training?
-- **Implicit bias for nonlinear networks**: for linear models, GD's minimum-norm preference is proven; but for nonlinear neural networks, the implicit bias depends on architecture and isn't fully characterized.
-- **LLM loss landscapes in practice**: both the spin-glass theory and NTK make assumptions that don't fully match real transformers. The true landscape remains a black box.
+Today's deep learning papers almost never analyze the convexity of the loss. Not because it's unimportant — but because the question has changed:
+
+| Reason | Explanation |
+|---|---|
+| We know it's non-convex | Obvious for any nonlinear network — no need to re-prove it |
+| Tight theoretical guarantees aren't needed | Experiments prove it instead of theory — what works gets used |
+| The question has shifted | No longer "does it converge?" but "where does it converge, and how does it generalize?" |
+| Scale solves the problem | The larger the model, the "tamer" the landscape in practice (see NTK, double descent) |
+
+## Theory running behind practice
+
+This is what makes deep learning anomalous in the entire history of applied mathematics: **people used it before understanding why it works.** Normally theory comes first (proving sufficient conditions), then applications follow. Deep learning reversed that order.
+
+Some theoretical results are trying to catch up:
+
+- **Neural Tangent Kernel**: at infinite width, the network behaves like a kernel method → the problem becomes convex. But real finite-width networks leave this regime.
+- **Loss landscape theory**: spin-glass, mode connectivity, simplexes — actively researched, but no complete description for real transformers yet.
+- **Grokking** (Power et al., 2022): models suddenly generalize long after overfitting — still not fully understood why the landscape shifts so late.
+- **Implicit bias for nonlinear networks**: the minimum-norm solution is proven for linear models, but for nonlinear networks it depends on architecture and isn't fully characterized.
+
+## Summary
+
+In introductory courses we check convexity because it is the **sufficient condition** for optimization to work — and was the only theoretical foundation we had at the time. Deep learning breaks that condition, but compensates with **overparameterization + SGD noise + high dimensionality** — which resonate to produce good behavior that convexity theory never predicted.
 
 <Note type="paper">
-The honest answer: deep learning **works well in practice** because of these phenomena, but theory is running 5–10 years behind empirical practice. This is why researchers keep asking "why does it work?" rather than "does it work?"
+Convexity still matters for understanding **why** gradient descent works in the simple case. But deep learning is an entirely different regime — current theory doesn't fully explain it, and runs 5–10 years behind empirical practice. That's why the defining question of deep learning isn't "does it work?" but "why does it work?"
 </Note>
 
 ## References
