@@ -148,6 +148,83 @@ Flat minimum có $\det H$ nhỏ → xác suất dừng cao hơn — không phả
 
 **Hochreiter & Schmidhuber (1997)** — bài báo kinh điển định nghĩa flat minimum và kết nối với MDL (Minimum Description Length): flat minimum tương ứng với model có **độ phức tạp mô tả thấp hơn**.
 
+## SGD noise là regularizer tự nhiên
+
+Trong ML cổ điển, regularizer được thêm **tường minh** vào loss:
+
+$$
+\mathcal{L}_{\text{reg}}(\theta) = \mathcal{L}(\theta) + \lambda\|\theta\|^2
+$$
+
+SGD tự nó làm điều tương tự — nhưng **ngầm**, không cần thêm tay.
+
+### Cấu trúc noise của SGD
+
+Gradient thực tế của SGD là ước lượng ngẫu nhiên của true gradient:
+
+$$
+\tilde{g}_t = \nabla\mathcal{L}(\theta_t) + \epsilon_t
+$$
+
+$$
+\text{Cov}(\epsilon_t) = \frac{1}{|B|}\Sigma(\theta_t)
+$$
+
+Trong đó $\Sigma(\theta_t) = \text{Cov}_{i \sim \text{data}}[\nabla\ell_i(\theta_t)]$ là **gradient covariance matrix** — đặc trưng của data distribution tại vị trí $\theta_t$ hiện tại.
+
+Hai tính chất quan trọng:
+
+**1. Noise tỷ lệ nghịch với batch size** — $\text{Var}(\epsilon_t) \propto \frac{1}{|B|}$. Batch nhỏ → noise lớn → regularization mạnh hơn.
+
+**2. Noise phụ thuộc vị trí $\theta$** — tại vùng loss thấp, các individual gradient $\nabla\ell_i$ thường đồng thuận → $\Sigma$ nhỏ → noise nhỏ → ổn định. Tại sharp minimum, $\nabla\ell_i$ phân tán → $\Sigma$ lớn → noise lớn → model bị đẩy đi. Đây là cơ chế tự ổn định.
+
+### SGD ≈ Langevin Dynamics
+
+Khi learning rate nhỏ và step liên tục, SGD xấp xỉ một **Stochastic Differential Equation (Langevin dynamics)**:
+
+$$
+d\theta = -\nabla\mathcal{L}(\theta)\,dt + \sqrt{\eta \cdot \Sigma(\theta)}\,dW_t
+$$
+
+Trong đó $dW_t$ là Wiener process (Brownian motion). Nhiệt độ hiệu dụng của hệ:
+
+$$
+T_{\text{eff}} \propto \frac{\eta}{|B|}
+$$
+
+**Phân phối dừng** (stationary distribution) của hệ Langevin:
+
+$$
+p(\theta) \propto \exp\!\left(-\frac{\mathcal{L}(\theta)}{T_{\text{eff}}}\right)
+$$
+
+Đây chính xác là **Gibbs distribution** trong vật lý thống kê — và là **Bayesian posterior** với prior uniform trên $\theta$.
+
+<Note type="theorem">
+SGD không chỉ tìm một điểm $\theta^*$ — về mặt lý thuyết, nó đang **sample từ posterior** của $\theta$ với "nhiệt độ" $T_{\text{eff}} = \eta/|B|$. Learning rate lớn, batch nhỏ → nhiệt độ cao → SGD khám phá landscape rộng. Learning rate nhỏ, batch lớn → nhiệt độ thấp → SGD bám vào vùng hiện tại.
+</Note>
+
+### Implicit regularizer
+
+Kỳ vọng loss sau một SGD step với noise $\epsilon$:
+
+$$
+\mathbb{E}[\mathcal{L}(\theta_{t+1})] \approx \mathcal{L}(\theta_t) - \eta\|\nabla\mathcal{L}\|^2 + \underbrace{\frac{\eta^2}{2}\,\text{tr}(H\Sigma)}_{\text{noise penalty}}
+$$
+
+Term $\frac{\eta^2}{2}\,\text{tr}(H\Sigma)$ là **implicit regularizer**: lớn khi $H$ lớn (sharp region) → SGD bị phạt khi ở vùng curvature cao; nhỏ khi $H$ nhỏ (flat region) → SGD thoải mái ở đó. Không cần thêm $\lambda\|\theta\|^2$ vào loss — SGD tự động phạt các vùng sharp.
+
+### Linear scaling rule
+
+Từ $T_{\text{eff}} \propto \frac{\eta}{|B|}$:
+
+> Tăng batch size $k$ lần ≡ giảm nhiệt độ $k$ lần → cần tăng learning rate $k$ lần để bù. Đây là lý do khi train trên nhiều GPU (batch lớn hơn), người ta scale LR theo số GPU — không phải kinh nghiệm, mà có cơ sở lý thuyết từ SDE.
+
+| Batch size | Hội tụ về | Generalization |
+|---|---|---|
+| Nhỏ | Flat minima | Tốt |
+| Lớn | Sharp minima | Kém hơn |
+
 ## Overparameterization tạo ra không gian nghiệm
 
 Khi $|\theta| \gg n_{\text{data}}$, hệ điều kiện fit data:
@@ -214,5 +291,8 @@ Câu trả lời trung thực: deep learning **hoạt động tốt trong thực
 | Jacot et al. (2018) | Neural Tangent Kernel: Convergence and Generalization |
 | Jin et al. (2017) | Escape Saddle Points Efficiently with Perturbed GD |
 | Hochreiter & Schmidhuber (1997) | Flat Minima |
+| Smith & Le (2018) | A Bayesian Perspective on Generalization and SGD |
+| Zhu et al. (2019) | The Anisotropic Noise in SGD |
+| Blanc et al. (2020) | Implicit Regularization for Deep Neural Networks |
 | Belkin et al. (2019) | Reconciling Modern ML Practice and Bias-Variance Tradeoff |
 | Power et al. (2022) | Grokking: Generalization Beyond Overfitting |

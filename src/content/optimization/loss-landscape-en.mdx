@@ -148,6 +148,83 @@ A flat minimum has small $\det H$ → higher stopping probability — not becaus
 
 **Hochreiter & Schmidhuber (1997)** — the classic paper formally defining flat minima and connecting them to MDL (Minimum Description Length): a flat minimum corresponds to a model with **lower description complexity**.
 
+## SGD noise as a natural regularizer
+
+In classical ML, a regularizer is added **explicitly** to the loss:
+
+$$
+\mathcal{L}_{\text{reg}}(\theta) = \mathcal{L}(\theta) + \lambda\|\theta\|^2
+$$
+
+SGD does the same thing on its own — but **implicitly**, with no extra term.
+
+### The structure of SGD noise
+
+The gradient SGD actually uses is a stochastic estimate of the true gradient:
+
+$$
+\tilde{g}_t = \nabla\mathcal{L}(\theta_t) + \epsilon_t
+$$
+
+$$
+\text{Cov}(\epsilon_t) = \frac{1}{|B|}\Sigma(\theta_t)
+$$
+
+where $\Sigma(\theta_t) = \text{Cov}_{i \sim \text{data}}[\nabla\ell_i(\theta_t)]$ is the **gradient covariance matrix** — a property of the data distribution at the current position $\theta_t$.
+
+Two important properties:
+
+**1. Noise is inversely proportional to batch size** — $\text{Var}(\epsilon_t) \propto \frac{1}{|B|}$. Smaller batch → more noise → stronger regularization.
+
+**2. Noise depends on position $\theta$** — in low-loss regions, individual gradients $\nabla\ell_i$ tend to agree → $\Sigma$ small → little noise → stable. At a sharp minimum, the $\nabla\ell_i$ scatter → $\Sigma$ large → more noise → the model gets pushed away. This is a self-stabilizing mechanism.
+
+### SGD ≈ Langevin Dynamics
+
+When the learning rate is small and steps are treated as continuous, SGD approximates a **Stochastic Differential Equation (Langevin dynamics)**:
+
+$$
+d\theta = -\nabla\mathcal{L}(\theta)\,dt + \sqrt{\eta \cdot \Sigma(\theta)}\,dW_t
+$$
+
+where $dW_t$ is a Wiener process (Brownian motion). The system's effective temperature:
+
+$$
+T_{\text{eff}} \propto \frac{\eta}{|B|}
+$$
+
+The **stationary distribution** of this Langevin system:
+
+$$
+p(\theta) \propto \exp\!\left(-\frac{\mathcal{L}(\theta)}{T_{\text{eff}}}\right)
+$$
+
+This is exactly the **Gibbs distribution** from statistical physics — and the **Bayesian posterior** under a uniform prior on $\theta$.
+
+<Note type="theorem">
+SGD doesn't just find a point $\theta^*$ — theoretically, it **samples from the posterior** over $\theta$ at "temperature" $T_{\text{eff}} = \eta/|B|$. Large learning rate, small batch → high temperature → SGD explores the landscape broadly. Small learning rate, large batch → low temperature → SGD sticks close to the current region.
+</Note>
+
+### Implicit regularizer
+
+The expected loss after one SGD step with noise $\epsilon$:
+
+$$
+\mathbb{E}[\mathcal{L}(\theta_{t+1})] \approx \mathcal{L}(\theta_t) - \eta\|\nabla\mathcal{L}\|^2 + \underbrace{\frac{\eta^2}{2}\,\text{tr}(H\Sigma)}_{\text{noise penalty}}
+$$
+
+The term $\frac{\eta^2}{2}\,\text{tr}(H\Sigma)$ is an **implicit regularizer**: large when $H$ is large (sharp region) → SGD is penalized for staying in high-curvature areas; small when $H$ is small (flat region) → SGD is comfortable there. No need to add $\lambda\|\theta\|^2$ — SGD automatically penalizes sharp regions.
+
+### Linear scaling rule
+
+From $T_{\text{eff}} \propto \frac{\eta}{|B|}$:
+
+> Increasing batch size by $k$ ≡ decreasing temperature by $k$ → learning rate must increase by $k$ to compensate. This is why, when training across many GPUs (larger batch), practitioners scale LR by the number of GPUs — not folklore, but grounded in the SDE theory.
+
+| Batch size | Converges to | Generalization |
+|---|---|---|
+| Small | Flat minima | Good |
+| Large | Sharp minima | Worse |
+
 ## Overparameterization creates a solution space
 
 When $|\theta| \gg n_{\text{data}}$, the system:
@@ -214,5 +291,8 @@ The honest answer: deep learning **works well in practice** because of these phe
 | Jacot et al. (2018) | Neural Tangent Kernel: Convergence and Generalization |
 | Jin et al. (2017) | Escape Saddle Points Efficiently with Perturbed GD |
 | Hochreiter & Schmidhuber (1997) | Flat Minima |
+| Smith & Le (2018) | A Bayesian Perspective on Generalization and SGD |
+| Zhu et al. (2019) | The Anisotropic Noise in SGD |
+| Blanc et al. (2020) | Implicit Regularization for Deep Neural Networks |
 | Belkin et al. (2019) | Reconciling Modern ML Practice and Bias-Variance Tradeoff |
 | Power et al. (2022) | Grokking: Generalization Beyond Overfitting |
