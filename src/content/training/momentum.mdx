@@ -83,9 +83,9 @@ Ba thuật toán cùng minimize $L(x,y) = 0.04x^2 + 4y^2$ ($\kappa = 100$):
 <MomentumViz />
 
 **Quan sát:**
-- **SGD (xám)**: zigzag rõ rệt dọc trục $y$, tiến rất chậm theo $x$
-- **Momentum (vàng)**: dao động $y$ nhanh chóng tắt dần, $x$ hội tụ nhanh hơn đáng kể
-- **Nesterov (tím)**: $y$ ổn định gần như ngay lập tức, đường đi mượt nhất trong ba
+- **SGD (xám)**: $y$ hội tụ nhanh (gradient lớn), nhưng $x$ tiến cực chậm — đây là bottleneck thực sự của valley hẹp
+- **Momentum (vàng)**: tích lũy gradient $x$ nhỏ nhưng nhất quán → $x$ hội tụ nhanh hơn rõ rệt
+- **Nesterov (tím)**: look-ahead giúp không overshoot, đường đi mượt và ngắn nhất trong ba
 
 ## Tóm tắt hội tụ
 

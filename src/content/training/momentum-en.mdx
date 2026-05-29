@@ -83,9 +83,9 @@ All three methods minimize $L(x,y) = 0.04x^2 + 4y^2$ ($\kappa = 100$):
 <MomentumViz lang="en" />
 
 **Observations:**
-- **SGD (gray)**: clear zigzag along $y$, very slow progress along $x$
-- **Momentum (amber)**: $y$ oscillations dampen quickly, $x$ converges significantly faster
-- **Nesterov (purple)**: $y$ stabilizes almost immediately, smoothest path of the three
+- **SGD (gray)**: $y$ converges quickly (large gradient), but $x$ barely moves — this slow $x$-descent is the real bottleneck in narrow valleys
+- **Momentum (amber)**: accumulates the small but consistent $x$-gradients → $x$ converges visibly faster
+- **Nesterov (purple)**: look-ahead prevents overshoot, producing the shortest and smoothest path of the three
 
 ## Convergence summary
 
