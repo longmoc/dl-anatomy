@@ -1,0 +1,326 @@
+---
+interface Props {
+  lang?: 'vi' | 'en';
+}
+const { lang = 'vi' } = Astro.props;
+
+type PanelDef = { labelVi: string; labelEn: string; noteVi: string; noteEn: string; noteStyle: 'good' | 'warn' | 'muted' };
+const PANELS: PanelDef[] = [
+  { labelVi: 'Adam',           labelEn: 'Adam',           noteVi: 'tham chiếu',              noteEn: 'reference',              noteStyle: 'muted' },
+  { labelVi: 'Lion',           labelEn: 'Lion',           noteVi: 'bước cố định ±lr',         noteEn: 'constant step ±lr',       noteStyle: 'warn'  },
+  { labelVi: 'Schedule-free',  labelEn: 'Schedule-free',  noteVi: 'z (nội) + x (trung bình)', noteEn: 'z (internal) + x (avg)',   noteStyle: 'good'  },
+];
+
+const replayLabel = lang === 'en' ? '↺ Replay' : '↺ Chạy lại';
+---
+
+<div class="noviz" data-lang={lang}>
+  <div class="noviz-grid">
+    {PANELS.map((p, i) => (
+      <div class="noviz-panel">
+        <canvas class="noviz-canvas" data-idx={i}></canvas>
+        <div class="noviz-info">
+          <span class="noviz-title">{lang === 'en' ? p.labelEn : p.labelVi}</span>
+          <span class={`noviz-note noviz-note-${p.noteStyle}`}>
+            {lang === 'en' ? p.noteEn : p.noteVi}
+          </span>
+        </div>
+      </div>
+    ))}
+  </div>
+  <div class="noviz-footer">
+    <button class="noviz-replay">{replayLabel}</button>
+  </div>
+</div>
+
+<script>
+document.querySelectorAll('.noviz').forEach(root => {
+  // Loss: L(θ) = 0.1*(θ²-4)²   minima at ±2
+  const loss  = (x: number) => 0.1 * (x * x - 4) ** 2;
+  const dloss = (x: number) => 0.4 * x * (x * x - 4);
+  const randn = () => {
+    const u = Math.random() + 1e-10;
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * Math.random());
+  };
+
+  const XMIN = -3.2, XMAX = 3.2, LMAX = 3.4;
+  const THETA0 = 3.1;
+  const TRAIL = 140;
+  const CYCLE = 6000;
+  const TICK  = 65;
+
+  const PL = 14, PR = 14, PT = 14, PB = 24;
+  const tx = (x: number, W: number) => PL + (x - XMIN) / (XMAX - XMIN) * (W - PL - PR);
+  const ty = (y: number, H: number) => H - PB - Math.min(Math.max(y, 0), LMAX) / LMAX * (H - PT - PB);
+  const cv = (n: string) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const clamp = (v: number) => Math.max(XMIN + 0.05, Math.min(XMAX - 0.05, v));
+
+  // ─── Panel state types ───────────────────────────────────────────
+  type AdamState = { theta: number; m: number; v: number; t: number; trail: number[]; converged: boolean };
+  type LionState = { theta: number; m: number; trail: number[]; converged: boolean };
+  type SFState   = { z: number; x: number; mz: number; vz: number; t: number; trailZ: number[]; trailX: number[]; converged: boolean };
+
+  // Adam
+  const A_LR = 0.10, A_B1 = 0.9, A_B2 = 0.999, A_EPS = 1e-8;
+  function makeAdam(): AdamState { return { theta: THETA0, m: 0, v: 0, t: 0, trail: [], converged: false }; }
+  function stepAdam(s: AdamState) {
+    if (s.converged) return;
+    s.t++;
+    const g = dloss(s.theta);
+    s.m = A_B1 * s.m + (1 - A_B1) * g;
+    s.v = A_B2 * s.v + (1 - A_B2) * g * g;
+    const mh = s.m / (1 - A_B1 ** s.t);
+    const vh = s.v / (1 - A_B2 ** s.t);
+    s.theta = clamp(s.theta - A_LR * mh / (Math.sqrt(vh) + A_EPS));
+    s.trail.push(s.theta);
+    if (s.trail.length > TRAIL) s.trail.shift();
+    if (Math.abs(Math.abs(s.theta) - 2) < 0.12) s.converged = true;
+  }
+
+  // Lion  (sign-based, β1 for update candidate, β2 for momentum)
+  const L_LR = 0.020, L_B1 = 0.9, L_B2 = 0.99;
+  function makeLion(): LionState { return { theta: THETA0, m: 0, trail: [], converged: false }; }
+  function stepLion(s: LionState) {
+    if (s.converged) return;
+    const g  = dloss(s.theta);
+    const c  = L_B1 * s.m + (1 - L_B1) * g;      // update candidate
+    s.theta  = clamp(s.theta - L_LR * Math.sign(c));
+    s.m      = L_B2 * s.m + (1 - L_B2) * g;       // update momentum
+    s.trail.push(s.theta);
+    if (s.trail.length > TRAIL) s.trail.shift();
+    if (Math.abs(Math.abs(s.theta) - 2) < 0.12) s.converged = true;
+  }
+
+  // Schedule-free Adam (simplified): z = Adam iterate, x = Polyak average
+  const SF_LR = 0.10, SF_B1 = 0.9, SF_B2 = 0.999, SF_B = 0.98;
+  function makeSF(): SFState { return { z: THETA0, x: THETA0, mz: 0, vz: 0, t: 0, trailZ: [], trailX: [], converged: false }; }
+  function stepSF(s: SFState) {
+    if (s.converged) return;
+    s.t++;
+    // gradient at interpolation point y = (1-β)*x + β*z
+    const y  = (1 - SF_B) * s.x + SF_B * s.z;
+    const g  = dloss(y);
+    s.mz = SF_B1 * s.mz + (1 - SF_B1) * g;
+    s.vz = SF_B2 * s.vz + (1 - SF_B2) * g * g;
+    const mh = s.mz / (1 - SF_B1 ** s.t);
+    const vh = s.vz / (1 - SF_B2 ** s.t);
+    s.z  = clamp(s.z - SF_LR * mh / (Math.sqrt(vh) + SF_B2));
+    // Polyak-Ruppert averaging: x is running average of z
+    s.x  = clamp(s.x + (s.z - s.x) / s.t);
+    s.trailZ.push(s.z);
+    s.trailX.push(s.x);
+    if (s.trailZ.length > TRAIL) s.trailZ.shift();
+    if (s.trailX.length > TRAIL) s.trailX.shift();
+    if (Math.abs(Math.abs(s.x) - 2) < 0.12) s.converged = true;
+  }
+
+  let adam = makeAdam();
+  let lion = makeLion();
+  let sf   = makeSF();
+
+  const canvases = Array.from(root.querySelectorAll('.noviz-canvas')) as HTMLCanvasElement[];
+
+  function drawPanel(canvas: HTMLCanvasElement, idx: number) {
+    const rect = canvas.getBoundingClientRect();
+    const W = rect.width, H = rect.height;
+    if (!W || !H) return;
+    const dpr = window.devicePixelRatio || 1;
+    if (canvas.width !== W * dpr) { canvas.width = W * dpr; canvas.height = H * dpr; }
+    const ctx = canvas.getContext('2d')!;
+    ctx.save();
+    ctx.scale(dpr, dpr);
+
+    const accent  = cv('--accent');
+    const accent2 = cv('--accent2');
+    const amber   = cv('--amber');
+    const muted   = cv('--muted');
+    const bg      = cv('--bg');
+
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    // Minima guides
+    ctx.save();
+    ctx.setLineDash([2, 6]);
+    ctx.strokeStyle = accent2;
+    ctx.lineWidth = 1;
+    ctx.globalAlpha = 0.3;
+    [-2, 2].forEach(xm => {
+      ctx.beginPath();
+      ctx.moveTo(tx(xm, W), PT);
+      ctx.lineTo(tx(xm, W), H - PB);
+      ctx.stroke();
+    });
+    ctx.restore();
+
+    // Loss curve
+    ctx.beginPath();
+    ctx.strokeStyle = muted;
+    ctx.lineWidth = 1.5;
+    ctx.globalAlpha = 0.5;
+    let pen = false;
+    for (let px = PL; px <= W - PR; px++) {
+      const x = XMIN + (px - PL) / (W - PL - PR) * (XMAX - XMIN);
+      const py = ty(loss(x), H);
+      if (!pen) { ctx.moveTo(px, py); pen = true; }
+      else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    // Min labels
+    ctx.font = `9px var(--mono, monospace)`;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = accent2;
+    ctx.globalAlpha = 0.5;
+    ctx.fillText('−2', tx(-2, W), H - 5);
+    ctx.fillText('+2', tx(2, W),  H - 5);
+    ctx.globalAlpha = 1;
+
+    if (idx === 0) {
+      // Adam: single trail + dot
+      drawTrail(ctx, adam.trail.map(θ => [θ, loss(θ)]), accent, W, H);
+      drawDot(ctx, adam.theta, loss(adam.theta), adam.converged ? accent2 : accent, bg, W, H);
+    } else if (idx === 1) {
+      // Lion: single trail + dot (amber)
+      drawTrail(ctx, lion.trail.map(θ => [θ, loss(θ)]), amber, W, H);
+      drawDot(ctx, lion.theta, loss(lion.theta), lion.converged ? accent2 : amber, bg, W, H);
+    } else {
+      // Schedule-free: z trail (faded) + x trail (solid) + two dots
+      drawTrail(ctx, sf.trailZ.map(θ => [θ, loss(θ)]), muted, W, H, 0.25);
+      drawTrail(ctx, sf.trailX.map(θ => [θ, loss(θ)]), accent2, W, H);
+      // z dot (small, faded)
+      ctx.beginPath();
+      ctx.arc(tx(sf.z, W), ty(loss(sf.z), H), 3.5, 0, 2*Math.PI);
+      ctx.fillStyle = muted;
+      ctx.globalAlpha = 0.45;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      // x dot (main, accent2)
+      drawDot(ctx, sf.x, loss(sf.x), sf.converged ? accent : accent2, bg, W, H);
+    }
+
+    ctx.restore();
+  }
+
+  function drawTrail(ctx: CanvasRenderingContext2D, pts: [number,number][], color: string, W: number, H: number, maxAlpha = 0.6) {
+    pts.forEach(([x, y], i) => {
+      ctx.globalAlpha = 0.08 + maxAlpha * (i / pts.length);
+      ctx.beginPath();
+      ctx.arc(tx(x, W), ty(y, H), 2, 0, 2*Math.PI);
+      ctx.fillStyle = color;
+      ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+  }
+
+  function drawDot(ctx: CanvasRenderingContext2D, x: number, y: number, color: string, bg: string, W: number, H: number) {
+    ctx.beginPath();
+    ctx.arc(tx(x, W), ty(y, H), 6, 0, 2*Math.PI);
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.strokeStyle = bg;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+
+  function drawAll() { canvases.forEach((c, i) => drawPanel(c, i)); }
+
+  function stepAll() {
+    stepAdam(adam);
+    stepLion(lion);
+    stepSF(sf);
+  }
+
+  function resetAll() {
+    adam = makeAdam();
+    lion = makeLion();
+    sf   = makeSF();
+  }
+
+  let lastTick = 0, elapsed = 0;
+  function loop(ts: number) {
+    if (ts - lastTick >= TICK) {
+      elapsed += ts - lastTick;
+      lastTick = ts;
+      if (elapsed >= CYCLE) { elapsed = 0; resetAll(); }
+      else stepAll();
+      drawAll();
+    }
+    requestAnimationFrame(loop);
+  }
+
+  root.querySelector('.noviz-replay')!.addEventListener('click', () => {
+    elapsed = 0; resetAll(); drawAll();
+  });
+
+  const ro = new ResizeObserver(drawAll);
+  canvases.forEach(c => ro.observe(c));
+  drawAll();
+  requestAnimationFrame(loop);
+});
+</script>
+
+<style>
+  .noviz { margin: 1.75rem 0; }
+
+  .noviz-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+  }
+  @media (max-width: 540px) { .noviz-grid { grid-template-columns: 1fr; } }
+
+  .noviz-panel {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--bg2);
+  }
+
+  .noviz-canvas {
+    width: 100%;
+    height: 160px;
+    display: block;
+    background: var(--bg);
+  }
+
+  .noviz-info {
+    display: flex;
+    flex-direction: column;
+    padding: 0.5rem 0.75rem 0.55rem;
+    gap: 0.15rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .noviz-title {
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .noviz-note { font-size: 0.75rem; line-height: 1.4; }
+  .noviz-note-good  { color: var(--accent2); }
+  .noviz-note-warn  { color: var(--amber); }
+  .noviz-note-muted { color: var(--muted); }
+
+  .noviz-footer {
+    margin-top: 0.6rem;
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .noviz-replay {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    padding: 0.22em 0.75em;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg2);
+    color: var(--muted);
+    cursor: pointer;
+    transition: color 0.12s, border-color 0.12s;
+  }
+  .noviz-replay:hover { color: var(--text); border-color: var(--text); }
+</style>

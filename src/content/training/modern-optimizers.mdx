@@ -1,0 +1,159 @@
+---
+title: "Lion, Muon & Schedule-free"
+description: "Ba paradigm mới trong optimization: sign-based update, orthogonal gradient, và loại bỏ hoàn toàn LR schedule."
+lang: vi
+category: training
+order: 5
+parent: optimizers
+translation: modern-optimizers-en
+tags: [lion, muon, schedule-free, modern, optimizer]
+---
+
+import Note from '../../components/Note.astro';
+import NewOptimizerViz from '../../components/NewOptimizerViz.astro';
+
+# Lion, Muon & Schedule-free
+
+Ba optimizer này không phải cải tiến nhỏ — mỗi cái đặt câu hỏi về một giả định nền tảng của Adam.
+
+## Lion — EvoLved Sign Momentum
+
+**Chen et al. (2023)** — không được thiết kế bởi con người. Lion là kết quả của một chương trình AutoML tìm kiếm các update rule trong không gian biểu thức toán học. Kết quả tìm được đơn giản đến bất ngờ.
+
+### Thuật toán
+
+$$
+c_t = \beta_1 m_{t-1} + (1-\beta_1) g_t \qquad \text{(update candidate)}
+$$
+
+$$
+\theta_t = \theta_{t-1} - \eta \cdot \text{sign}(c_t) \qquad \text{(bước cố định)}
+$$
+
+$$
+m_t = \beta_2 m_{t-1} + (1-\beta_2) g_t \qquad \text{(cập nhật momentum)}
+$$
+
+**Điểm khác biệt so với Adam:**
+
+| | Adam | Lion |
+|---|---|---|
+| Step size | Adaptive: $\eta \cdot \hat{m}/\sqrt{\hat{v}}$ | Cố định: $\pm\eta$ |
+| States | $m$, $v$ (2 buffers) | $m$ (1 buffer) |
+| Memory | 2× tham số | 1× tham số |
+| $\beta$ typical | $\beta_1=0.9$, $\beta_2=0.999$ | $\beta_1=0.9$, $\beta_2=0.99$ |
+
+<Note type="intuition">
+Lion hỏi: "gradient đang tích lũy theo hướng nào?" rồi bước đúng một lượng cố định $\pm\eta$ theo hướng đó. Không quan tâm gradient lớn hay nhỏ — chỉ cần biết hướng. Đây là lý do cần $\beta_2$ nhỏ hơn Adam (0.99 thay vì 0.999): momentum cần quên nhanh hơn để phản ứng tốt với thay đổi hướng gradient.
+</Note>
+
+**Hệ quả thực tế**: vì step size cố định, Lion cần lr nhỏ hơn Adam (thường 3–10× nhỏ hơn). Và cần LR schedule để hội tụ tốt — không thì sẽ "nảy" quanh minimum thay vì dừng lại.
+
+## Muon — Momentum + Orthogonalization
+
+**Kosson et al. (2024)** — được thiết kế có chủ đích cho weight matrix trong transformer.
+
+### Ý tưởng: Nesterov + orthogonalize
+
+Muon áp dụng Nesterov momentum bình thường, nhưng sau đó **orthogonalize** gradient update trước khi cập nhật:
+
+$$
+G \leftarrow \text{orthogonalize}(G) \qquad W \leftarrow W - \eta \cdot G
+$$
+
+"Orthogonalize" ở đây có nghĩa: transform $G$ sao cho nó gần nhất với một **orthogonal matrix** theo Frobenius norm. Thực hiện bằng Newton-Schulz iterations (vài bước lặp giải phương trình đa thức).
+
+### Tại sao orthogonalize?
+
+Weight matrix $W \in \mathbb{R}^{m \times n}$ trong transformer có cấu trúc hình học đặc biệt. Adam scale từng phần tử của $W$ riêng lẻ — không tôn trọng cấu trúc ma trận. Orthogonal update "trải đều" gradient update trên toàn bộ singular value spectrum của $W$, tương tự như second-order methods nhưng với chi phí thấp hơn nhiều.
+
+<Note type="result">
+Muon hiện được dùng trong một số LLM training run gần đây và cho kết quả tốt hơn AdamW ở cùng số bước. Tuy nhiên nó chỉ áp dụng cho **weight matrices** — bias, embedding, layernorm parameters vẫn cần Adam/AdamW.
+</Note>
+
+## Schedule-free Adam
+
+**Defazio et al. (2024)** — loại bỏ hoàn toàn câu hỏi "dùng schedule gì, T bao nhiêu, η_min bao nhiêu."
+
+### Ý tưởng: averaging = implicit schedule
+
+Duy trì hai iterate:
+- $z_t$: iterate nội tại, được cập nhật bởi Adam bình thường
+- $x_t$: iterate được báo cáo (dùng cho inference và tính gradient), là trung bình có trọng số của $z$
+
+Gradient được tính tại **interpolation point** $y_t = (1-\beta) x_{t-1} + \beta z_{t-1}$, không phải tại $z$ hay $x$:
+
+$$
+y_t = (1-\beta)\,x_{t-1} + \beta\,z_{t-1}
+$$
+
+$$
+z_t = \text{Adam}(z_{t-1},\,\nabla f(y_t))
+$$
+
+$$
+x_t = x_{t-1} + \frac{z_t - x_{t-1}}{t}
+$$
+
+$x_t$ là **Polyak-Ruppert average** của toàn bộ lịch sử $z$ — và về mặt lý thuyết, averaging này tương đương với cosine decay ngầm định. Optimizer không cần biết $T$ vì average tự nhiên "discount" các iterate cũ theo thời gian.
+
+<Note type="theorem">
+Polyak (1990) và Ruppert (1988) chứng minh rằng trung bình của các iterate SGD hội tụ với tốc độ tối ưu $O(1/t)$, tốt hơn iterate cuối cùng. Schedule-free Adam xây dựng trên insight này: khai thác averaging để loại bỏ cần schedule mà vẫn đảm bảo hội tụ.
+</Note>
+
+## Minh hoạ so sánh
+
+<NewOptimizerViz />
+
+**Quan sát:**
+- **Adam (tím)**: hội tụ mượt, step size thu nhỏ dần khi gradient giảm
+- **Lion (vàng)**: bước luôn bằng $\pm\eta$ — trail nhìn "rời rạc" hơn, bounce nhẹ quanh minimum trước khi ổn định
+- **Schedule-free (xanh + xám)**: $z$ (xám mờ) di chuyển giống Adam nội tại; $x$ (xanh) là average — ổn định hơn $z$ và hội tụ tốt dù không có schedule
+
+## So sánh tổng quan
+
+| | Adam | Lion | Muon | Schedule-free |
+|---|---|---|---|---|
+| Memory | 2× | **1×** | 1× | 2× |
+| LR schedule | Cần | Cần | Cần | **Không cần** |
+| Step size | Adaptive | **Cố định** | Adaptive | Adaptive |
+| Designed for | Mọi task | Vision lớn | Transformer W | Mọi task |
+| Maturity | Rất cao | Trung bình | Thấp | Trung bình |
+
+## Thực hành
+
+**Lion**: lr ÷ 3 đến ÷ 10 so với Adam tương đương. Cần warmup + cosine. Phù hợp khi memory là bottleneck (train model rất lớn).
+
+**Muon**: chỉ apply cho weight matrices (Linear, Attention — không phải embedding hay LayerNorm). Kết hợp với AdamW cho phần còn lại.
+
+**Schedule-free**: dùng như AdamW bình thường — không cần T, không cần η_min, không cần scheduler object trong training loop. Phù hợp khi không biết trước số bước training hoặc muốn simplify code.
+
+```python
+# Schedule-free Adam (pytorch-optimizer library)
+from schedulefree import AdamWScheduleFree
+optimizer = AdamWScheduleFree(model.parameters(), lr=1e-3)
+
+# Training loop: call optimizer.train() / optimizer.eval() thay vì scheduler.step()
+optimizer.train()
+for batch in dataloader:
+    loss = model(batch)
+    loss.backward()
+    optimizer.step()
+    optimizer.zero_grad()
+
+# Evaluation
+optimizer.eval()
+```
+
+<Note type="warning">
+Cả ba optimizer trên vẫn đang được nghiên cứu tích cực. Kết quả benchmark chưa thống nhất trên mọi task. Với production system, AdamW + cosine warmup vẫn là lựa chọn an toàn nhất. Thử các optimizer mới khi: (1) bạn hiểu rõ tradeoff, hoặc (2) có specific constraint (memory, unknown T).
+</Note>
+
+## Papers tham khảo
+
+| Paper | |
+|---|---|
+| Chen et al. (2023) | Symbolic Discovery of Optimization Algorithms (Lion) |
+| Kosson et al. (2024) | Muon: Momentum + Nesterov with Orthogonalization |
+| Defazio et al. (2024) | Road to Schedule-Free Learning |
+| Polyak & Juditsky (1992) | Acceleration of Stochastic Approximation by Averaging |

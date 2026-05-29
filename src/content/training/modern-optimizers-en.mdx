@@ -1,0 +1,159 @@
+---
+title: "Lion, Muon & Schedule-free"
+description: "Three new optimization paradigms: sign-based updates, orthogonal gradients, and eliminating the LR schedule entirely."
+lang: en
+category: training
+order: 5
+parent: optimizers
+translation: modern-optimizers
+tags: [lion, muon, schedule-free, modern, optimizer]
+---
+
+import Note from '../../components/Note.astro';
+import NewOptimizerViz from '../../components/NewOptimizerViz.astro';
+
+# Lion, Muon & Schedule-free
+
+These three optimizers aren't minor improvements — each questions a foundational assumption of Adam.
+
+## Lion — EvoLved Sign Momentum
+
+**Chen et al. (2023)** — not designed by humans. Lion is the result of an AutoML program searching the space of mathematical update rules. The discovered rule is surprisingly simple.
+
+### Algorithm
+
+$$
+c_t = \beta_1 m_{t-1} + (1-\beta_1) g_t \qquad \text{(update candidate)}
+$$
+
+$$
+\theta_t = \theta_{t-1} - \eta \cdot \text{sign}(c_t) \qquad \text{(fixed step)}
+$$
+
+$$
+m_t = \beta_2 m_{t-1} + (1-\beta_2) g_t \qquad \text{(update momentum)}
+$$
+
+**Key differences from Adam:**
+
+| | Adam | Lion |
+|---|---|---|
+| Step size | Adaptive: $\eta \cdot \hat{m}/\sqrt{\hat{v}}$ | Fixed: $\pm\eta$ |
+| States | $m$, $v$ (2 buffers) | $m$ (1 buffer) |
+| Memory | 2× params | 1× params |
+| $\beta$ typical | $\beta_1=0.9$, $\beta_2=0.999$ | $\beta_1=0.9$, $\beta_2=0.99$ |
+
+<Note type="intuition">
+Lion asks: "which direction is the gradient accumulating toward?" then takes exactly $\pm\eta$ in that direction. It doesn't care about gradient magnitude — only direction. This is why $\beta_2$ should be smaller than in Adam (0.99 vs 0.999): momentum needs to forget faster to respond to gradient direction changes.
+</Note>
+
+**Practical consequence**: because the step size is fixed, Lion needs a smaller lr than Adam (typically 3–10× smaller). It also needs an LR schedule to converge well — otherwise it will bounce around the minimum instead of stopping.
+
+## Muon — Momentum + Orthogonalization
+
+**Kosson et al. (2024)** — deliberately designed for weight matrices in transformers.
+
+### Idea: Nesterov + orthogonalize
+
+Muon applies standard Nesterov momentum, then **orthogonalizes** the gradient update before applying it:
+
+$$
+G \leftarrow \text{orthogonalize}(G) \qquad W \leftarrow W - \eta \cdot G
+$$
+
+"Orthogonalize" means: transform $G$ into the closest **orthogonal matrix** under Frobenius norm. Implemented via Newton-Schulz iterations (a few polynomial matrix iterations).
+
+### Why orthogonalize?
+
+A weight matrix $W \in \mathbb{R}^{m \times n}$ in a transformer has special geometric structure. Adam scales each element of $W$ independently — ignoring the matrix structure. Orthogonal updates "spread" the gradient update uniformly across the singular value spectrum of $W$, similar to second-order methods but at much lower cost.
+
+<Note type="result">
+Muon has been used in several recent LLM training runs and shows better results than AdamW at the same step count. However, it only applies to **weight matrices** — biases, embeddings, and layernorm parameters still need Adam/AdamW.
+</Note>
+
+## Schedule-free Adam
+
+**Defazio et al. (2024)** — eliminates entirely the questions "which schedule?", "what T?", "what η_min?"
+
+### Idea: averaging = implicit schedule
+
+Maintains two iterates:
+- $z_t$: internal iterate, updated by standard Adam
+- $x_t$: reported iterate (used for inference and gradient computation), a weighted average of $z$
+
+Gradients are computed at an **interpolation point** $y_t = (1-\beta) x_{t-1} + \beta z_{t-1}$, not at $z$ or $x$:
+
+$$
+y_t = (1-\beta)\,x_{t-1} + \beta\,z_{t-1}
+$$
+
+$$
+z_t = \text{Adam}(z_{t-1},\,\nabla f(y_t))
+$$
+
+$$
+x_t = x_{t-1} + \frac{z_t - x_{t-1}}{t}
+$$
+
+$x_t$ is the **Polyak-Ruppert average** of the full history of $z$ — and theoretically, this averaging is equivalent to an implicit cosine decay. The optimizer doesn't need to know $T$ because the average naturally discounts old iterates over time.
+
+<Note type="theorem">
+Polyak (1990) and Ruppert (1988) proved that the average of SGD iterates converges at the optimal rate $O(1/t)$, better than the final iterate. Schedule-free Adam builds on this insight: use averaging to eliminate the need for a schedule while maintaining convergence guarantees.
+</Note>
+
+## Comparison visualization
+
+<NewOptimizerViz lang="en" />
+
+**Observations:**
+- **Adam (purple)**: smooth convergence, step size naturally shrinks as gradient decreases
+- **Lion (amber)**: steps always equal $\pm\eta$ — trail looks more "discrete," light bouncing near minimum before settling
+- **Schedule-free (green + gray)**: $z$ (faded gray) moves like internal Adam; $x$ (green) is the average — more stable than $z$ and converges well without any schedule
+
+## Overall comparison
+
+| | Adam | Lion | Muon | Schedule-free |
+|---|---|---|---|---|
+| Memory | 2× | **1×** | 1× | 2× |
+| LR schedule | Required | Required | Required | **Not needed** |
+| Step size | Adaptive | **Fixed** | Adaptive | Adaptive |
+| Designed for | All tasks | Large vision | Transformer W | All tasks |
+| Maturity | Very high | Medium | Low | Medium |
+
+## In practice
+
+**Lion**: use lr ÷ 3 to ÷ 10 vs equivalent Adam. Still needs warmup + cosine. Good when memory is the bottleneck.
+
+**Muon**: apply only to weight matrices (Linear, Attention — not embeddings or LayerNorm). Combine with AdamW for everything else.
+
+**Schedule-free**: use like AdamW — no T, no η_min, no scheduler object in the training loop. Ideal when training duration is unknown or you want to simplify the training setup.
+
+```python
+# Schedule-free Adam (pytorch-optimizer library)
+from schedulefree import AdamWScheduleFree
+optimizer = AdamWScheduleFree(model.parameters(), lr=1e-3)
+
+# Training loop: call optimizer.train() / optimizer.eval() instead of scheduler.step()
+optimizer.train()
+for batch in dataloader:
+    loss = model(batch)
+    loss.backward()
+    optimizer.step()
+    optimizer.zero_grad()
+
+# Evaluation
+optimizer.eval()
+```
+
+<Note type="warning">
+All three optimizers are still being actively researched. Benchmark results are not consistent across all tasks. For production systems, AdamW + cosine warmup remains the safest choice. Try these when: (1) you understand the trade-offs, or (2) you have a specific constraint (memory, unknown T).
+</Note>
+
+## References
+
+| Paper | |
+|---|---|
+| Chen et al. (2023) | Symbolic Discovery of Optimization Algorithms (Lion) |
+| Kosson et al. (2024) | Muon: Momentum + Nesterov with Orthogonalization |
+| Defazio et al. (2024) | Road to Schedule-Free Learning |
+| Polyak & Juditsky (1992) | Acceleration of Stochastic Approximation by Averaging |
