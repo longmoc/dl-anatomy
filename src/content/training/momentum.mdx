@@ -1,0 +1,123 @@
+---
+title: "Momentum & Nesterov"
+description: "Tại sao momentum tăng tốc SGD trong valley hẹp, và Nesterov 'look-ahead' cải thiện điều gì."
+lang: vi
+category: training
+order: 2
+parent: optimizers
+translation: momentum-en
+tags: [momentum, nesterov, optimization, convergence]
+---
+
+import Note from '../../components/Note.astro';
+import MomentumViz from '../../components/MomentumViz.astro';
+
+# Momentum & Nesterov
+
+## Vấn đề SGD gặp trong valley hẹp
+
+Loss landscape thực tế thường có dạng **valley hẹp** (ravine) — curvature rất khác nhau theo các hướng khác nhau. Ví dụ: một hướng có độ dốc thay đổi nhanh (high curvature), một hướng thay đổi chậm (low curvature).
+
+SGD phải dùng learning rate đủ nhỏ để không dao động ở hướng curvature cao, nhưng điều đó làm nó tiến rất chậm ở hướng curvature thấp.
+
+**Condition number** $\kappa = L/\mu$ — tỷ lệ curvature lớn nhất / nhỏ nhất của loss. Khi $\kappa$ lớn:
+- SGD: cần $O(\kappa)$ bước để hội tụ
+- Momentum: chỉ cần $O(\sqrt{\kappa})$ bước
+
+Với $\kappa = 100$: SGD cần ~100 bước, Momentum chỉ cần ~10.
+
+## Heavy Ball momentum (Polyak, 1964)
+
+Thêm "quán tính" — thay vì reset hoàn toàn mỗi bước, giữ lại một phần vận tốc cũ:
+
+$$
+v_{t+1} = \beta v_t + \nabla\mathcal{L}(\theta_t)
+$$
+
+$$
+\theta_{t+1} = \theta_t - \eta\, v_{t+1}
+$$
+
+$\beta \in [0,1)$ là momentum coefficient — thường $\beta = 0.9$.
+
+**Unrolling** cho thấy $v_t$ là exponentially weighted sum của gradient lịch sử:
+
+$$
+v_t = \sum_{k=0}^{t} \beta^{t-k}\,\nabla\mathcal{L}(\theta_k)
+$$
+
+Ở hướng dao động, gradient liên tục đổi dấu → triệt tiêu nhau trong $v$. Ở hướng nhất quán, gradient cùng chiều → tích lũy → bước lớn hơn.
+
+**Khuếch đại effective gradient**: khi gần hội tụ, $v \to \frac{1}{1-\beta}\nabla\mathcal{L}(\theta)$. Với $\beta = 0.9$: gradient được khuếch đại $10\times$ — cần giảm $\eta$ tương ứng so với SGD thuần.
+
+<Note type="warning">
+Heavy Ball không có đảm bảo hội tụ tổng quát cho hàm lồi phi tuyến và thậm chí có thể diverge. Chứng minh $O(\sqrt{\kappa})$ chỉ đúng cho quadratic với $\beta$ được đặt tối ưu biết trước $\kappa$.
+</Note>
+
+## Nesterov Accelerated Gradient (Nesterov, 1983)
+
+Heavy Ball tính gradient tại *nơi đang đứng* $\theta_t$. Nesterov tính gradient tại *nơi momentum sẽ đưa ta đến* — "look-ahead":
+
+$$
+\theta_{\text{look}} = \theta_t - \eta\beta v_t
+$$
+
+$$
+v_{t+1} = \beta v_t + \nabla\mathcal{L}(\theta_{\text{look}})
+$$
+
+$$
+\theta_{t+1} = \theta_t - \eta\, v_{t+1}
+$$
+
+**Trực giác**: nếu đang đi nhanh về phía minimum, gradient tại $\theta_{\text{look}}$ sẽ nhỏ hơn (hoặc chỉ về hướng minimum) — cho phép "phanh" sớm hơn và không overshoot. Heavy Ball vẫn tính gradient tại điểm cũ, nên "biết" muộn hơn rằng mình sắp vượt qua minimum.
+
+<Note type="theorem">
+Nesterov đạt tốc độ hội tụ $O(1/t^2)$ cho hàm lồi trơn, so với $O(1/t)$ của GD — và đây là tốc độ **tối ưu** (optimal) với mọi thuật toán first-order. Trong thực tế, lợi ích chính là hội tụ mượt mà hơn và ít overshoot hơn Heavy Ball.
+</Note>
+
+## Minh hoạ: valley hẹp
+
+Ba thuật toán cùng minimize $L(x,y) = 0.04x^2 + 4y^2$ ($\kappa = 100$):
+
+<MomentumViz />
+
+**Quan sát:**
+- **SGD (xám)**: zigzag rõ rệt dọc trục $y$, tiến rất chậm theo $x$
+- **Momentum (vàng)**: dao động $y$ nhanh chóng tắt dần, $x$ hội tụ nhanh hơn đáng kể
+- **Nesterov (tím)**: $y$ ổn định gần như ngay lập tức, đường đi mượt nhất trong ba
+
+## Tóm tắt hội tụ
+
+| | GD | Heavy Ball | Nesterov |
+|---|---|---|---|
+| Quadratic | $O(\kappa)$ | $O(\sqrt{\kappa})$ | $O(\sqrt{\kappa})$ |
+| Lồi trơn (convex smooth) | $O(1/t)$ | không đảm bảo | $O(1/t^2)$ |
+| Thực tế deep learning | — | tốt | tốt hơn |
+
+Heavy Ball và Nesterov đều đạt $O(\sqrt{\kappa})$ trên quadratic, nhưng Heavy Ball cần biết $\kappa$ để đặt $\beta$ tối ưu trong khi Nesterov thích nghi hơn.
+
+## Thực hành
+
+```python
+# PyTorch
+optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9)             # Heavy Ball
+optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9, nesterov=True)  # NAG
+```
+
+- $\beta = 0.9$: default phổ biến. Có thể tăng lên $0.95$–$0.99$ cho bài toán smooth.
+- Khi tăng $\beta$: giảm $\eta$ tương ứng vì effective gradient scale tăng theo $1/(1-\beta)$.
+- Momentum ít dùng hơn trong LLM training hiện đại — Adam đã tích hợp momentum ($\beta_1 = 0.9$).
+
+## Kết nối với các optimizer hiện đại
+
+- **Adam**: dùng EMA của gradient (momentum bậc 1, $\beta_1$) cộng EMA của $g^2$ (momentum bậc 2, $\beta_2$) để scale per-dimension
+- **Muon** (2024): Nesterov momentum + orthogonalization của gradient matrix — thiết kế cho weight matrix trong LLM
+
+## Papers tham khảo
+
+| Paper | |
+|---|---|
+| Polyak (1964) | Some methods of speeding up the convergence of iteration methods |
+| Nesterov (1983) | A method of solving a convex programming problem with convergence rate $O(1/k^2)$ |
+| Sutskever et al. (2013) | On the importance of initialization and momentum in deep learning |

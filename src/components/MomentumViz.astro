@@ -1,0 +1,301 @@
+---
+interface Props {
+  lang?: 'vi' | 'en';
+}
+const { lang = 'vi' } = Astro.props;
+
+const labels = lang === 'en'
+  ? { sgd: 'SGD', mom: 'Momentum', nest: 'Nesterov', replay: '↺ Replay', caption: 'L(x,y) = 0.04x² + 4y²  —  condition number κ = 100. All three start at the same point.' }
+  : { sgd: 'SGD', mom: 'Momentum', nest: 'Nesterov', replay: '↺ Chạy lại', caption: 'L(x,y) = 0.04x² + 4y²  —  condition number κ = 100. Ba thuật toán cùng xuất phát từ một điểm.' };
+---
+
+<div class="mviz" data-lang={lang}>
+  <canvas class="mviz-canvas"></canvas>
+  <div class="mviz-footer">
+    <div class="mviz-legend">
+      <span class="mviz-dot mviz-c-sgd"></span><span>{labels.sgd}</span>
+      <span class="mviz-dot mviz-c-mom"></span><span>{labels.mom}</span>
+      <span class="mviz-dot mviz-c-nest"></span><span>{labels.nest}</span>
+    </div>
+    <button class="mviz-replay">{labels.replay}</button>
+  </div>
+  <p class="mviz-caption">{labels.caption}</p>
+</div>
+
+<script>
+document.querySelectorAll('.mviz').forEach(root => {
+  const canvas = root.querySelector('.mviz-canvas') as HTMLCanvasElement;
+  const ctx    = canvas.getContext('2d')!;
+
+  // Loss: L(x,y) = 0.04x² + 4y²  — κ = 100
+  const grad = (x: number, y: number): [number,number] => [0.08 * x, 8 * y];
+
+  const START: [number,number] = [4.5, 0.8];
+
+  type Vec2 = [number, number];
+
+  type Traj = {
+    theta: Vec2;
+    vel:   Vec2;
+    trail: Vec2[];
+    // Nesterov needs prev vel for lookahead
+    update: (vel: Vec2, theta: Vec2, lr: number, beta: number) => { newTheta: Vec2; newVel: Vec2 };
+    lr: number;
+    beta: number;
+    converged: boolean;
+  };
+
+  function makeSGD(lr: number): Traj {
+    return {
+      theta: [...START] as Vec2, vel: [0,0], trail: [],
+      lr, beta: 0,
+      converged: false,
+      update(_vel, theta, lr) {
+        const g = grad(theta[0], theta[1]);
+        return {
+          newTheta: [theta[0] - lr*g[0], theta[1] - lr*g[1]],
+          newVel: [0,0],
+        };
+      },
+    };
+  }
+
+  function makeMomentum(lr: number, beta: number): Traj {
+    return {
+      theta: [...START] as Vec2, vel: [0,0], trail: [],
+      lr, beta,
+      converged: false,
+      update(vel, theta, lr, beta) {
+        const g = grad(theta[0], theta[1]);
+        const nv: Vec2 = [beta*vel[0] + g[0], beta*vel[1] + g[1]];
+        return {
+          newTheta: [theta[0] - lr*nv[0], theta[1] - lr*nv[1]],
+          newVel: nv,
+        };
+      },
+    };
+  }
+
+  function makeNesterov(lr: number, beta: number): Traj {
+    return {
+      theta: [...START] as Vec2, vel: [0,0], trail: [],
+      lr, beta,
+      converged: false,
+      update(vel, theta, lr, beta) {
+        const look: Vec2 = [theta[0] - lr*beta*vel[0], theta[1] - lr*beta*vel[1]];
+        const g = grad(look[0], look[1]);
+        const nv: Vec2 = [beta*vel[0] + g[0], beta*vel[1] + g[1]];
+        return {
+          newTheta: [theta[0] - lr*nv[0], theta[1] - lr*nv[1]],
+          newVel: nv,
+        };
+      },
+    };
+  }
+
+  const trajs: Traj[] = [
+    makeSGD(0.22),
+    makeMomentum(0.10, 0.9),
+    makeNesterov(0.10, 0.9),
+  ];
+
+  const TRAIL = 120;
+  const CYCLE = 5500;
+  const TICK  = 65;
+
+  // View
+  const XMIN = -5.5, XMAX = 5.5, YMIN = -1.7, YMAX = 1.7;
+  const PL=24, PR=12, PT=14, PB=14;
+  let W = 0, H = 0;
+  const tx = (x: number) => PL + (x-XMIN)/(XMAX-XMIN)*(W-PL-PR);
+  const ty = (y: number) => PT + (YMAX-y)/(YMAX-YMIN)*(H-PT-PB);
+  const cv = (n: string) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+  // Colors (read each draw so dark-mode toggle works)
+  const COLORS = [
+    () => cv('--muted'),    // SGD
+    () => cv('--amber'),    // Momentum
+    () => cv('--accent'),   // Nesterov
+  ];
+
+  function drawContour(level: number, alpha: number) {
+    // L = 0.04x² + 4y² = c → x²/(c/0.04) + y²/(c/4) = 1
+    const a = Math.sqrt(level / 0.04); // semi-axis x
+    const b = Math.sqrt(level / 4);    // semi-axis y
+    ctx.beginPath();
+    ctx.ellipse(tx(0), ty(0), a*(W-PL-PR)/(XMAX-XMIN), b*(H-PT-PB)/(YMAX-YMIN), 0, 0, 2*Math.PI);
+    ctx.globalAlpha = alpha;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  function draw() {
+    const rect = canvas.getBoundingClientRect();
+    W = rect.width; H = rect.height;
+    if (!W || !H) return;
+    const dpr = window.devicePixelRatio || 1;
+    if (canvas.width !== W*dpr) { canvas.width = W*dpr; canvas.height = H*dpr; }
+    ctx.save();
+    ctx.scale(dpr, dpr);
+
+    const bg     = cv('--bg');
+    const border = cv('--border');
+    const accent2= cv('--accent2');
+
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    // Contour lines
+    ctx.strokeStyle = border;
+    ctx.lineWidth = 1;
+    [0.08, 0.25, 0.6, 1.4, 3.0].forEach((c, i) =>
+      drawContour(c, 0.25 + i * 0.08));
+
+    // Minimum marker
+    ctx.beginPath();
+    ctx.arc(tx(0), ty(0), 3.5, 0, 2*Math.PI);
+    ctx.fillStyle = accent2;
+    ctx.globalAlpha = 0.7;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // Trajectories
+    trajs.forEach((t, ci) => {
+      const color = COLORS[ci]();
+      // Trail
+      t.trail.forEach((pt, i) => {
+        ctx.globalAlpha = 0.08 + 0.55 * (i / t.trail.length);
+        ctx.beginPath();
+        ctx.arc(tx(pt[0]), ty(pt[1]), 1.8, 0, 2*Math.PI);
+        ctx.fillStyle = color;
+        ctx.fill();
+      });
+      ctx.globalAlpha = 1;
+      // Current dot
+      ctx.beginPath();
+      ctx.arc(tx(t.theta[0]), ty(t.theta[1]), t.converged ? 4.5 : 5.5, 0, 2*Math.PI);
+      ctx.fillStyle = color;
+      ctx.fill();
+      ctx.strokeStyle = bg;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    });
+
+    ctx.restore();
+  }
+
+  function stepTraj(t: Traj) {
+    if (t.converged) return;
+    const { newTheta, newVel } = t.update(t.vel, t.theta, t.lr, t.beta);
+    // clamp to view
+    t.theta = [
+      Math.max(XMIN+0.1, Math.min(XMAX-0.1, newTheta[0])),
+      Math.max(YMIN+0.1, Math.min(YMAX-0.1, newTheta[1])),
+    ];
+    t.vel = newVel;
+    t.trail.push([...t.theta] as Vec2);
+    if (t.trail.length > TRAIL) t.trail.shift();
+    const d = Math.sqrt(t.theta[0]**2 + t.theta[1]**2);
+    if (d < 0.15) t.converged = true;
+  }
+
+  function resetAll() {
+    trajs.forEach(t => {
+      t.theta = [...START] as Vec2;
+      t.vel = [0, 0];
+      t.trail.length = 0;
+      t.converged = false;
+    });
+  }
+
+  let lastTick = 0, elapsed = 0;
+  function loop(ts: number) {
+    if (ts - lastTick >= TICK) {
+      elapsed += ts - lastTick;
+      lastTick = ts;
+      if (elapsed >= CYCLE) { elapsed = 0; resetAll(); }
+      else trajs.forEach(stepTraj);
+      draw();
+    }
+    requestAnimationFrame(loop);
+  }
+
+  root.querySelector('.mviz-replay')!.addEventListener('click', () => {
+    elapsed = 0; resetAll(); draw();
+  });
+
+  const ro = new ResizeObserver(draw);
+  ro.observe(canvas);
+  draw();
+  requestAnimationFrame(loop);
+});
+</script>
+
+<style>
+  .mviz {
+    margin: 1.75rem 0;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--bg2);
+  }
+
+  .mviz-canvas {
+    width: 100%;
+    height: 220px;
+    display: block;
+    background: var(--bg);
+  }
+
+  .mviz-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.55rem 0.9rem;
+    border-top: 1px solid var(--border);
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .mviz-legend {
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    color: var(--muted);
+  }
+  .mviz-legend span + span { margin-left: -0.5rem; }
+
+  .mviz-dot {
+    display: inline-block;
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .mviz-c-sgd  { background: var(--muted); }
+  .mviz-c-mom  { background: var(--amber); }
+  .mviz-c-nest { background: var(--accent); }
+
+  .mviz-replay {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    padding: 0.22em 0.75em;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg);
+    color: var(--muted);
+    cursor: pointer;
+    transition: color 0.12s, border-color 0.12s;
+  }
+  .mviz-replay:hover { color: var(--text); border-color: var(--text); }
+
+  .mviz-caption {
+    font-size: 0.78rem;
+    color: var(--muted);
+    text-align: center;
+    padding: 0.4rem 1rem 0.65rem;
+    font-style: italic;
+    line-height: 1.5;
+  }
+</style>

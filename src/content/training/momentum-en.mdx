@@ -1,0 +1,123 @@
+---
+title: "Momentum & Nesterov"
+description: "Why momentum accelerates SGD in narrow valleys, and what Nesterov's look-ahead actually improves."
+lang: en
+category: training
+order: 2
+parent: optimizers
+translation: momentum
+tags: [momentum, nesterov, optimization, convergence]
+---
+
+import Note from '../../components/Note.astro';
+import MomentumViz from '../../components/MomentumViz.astro';
+
+# Momentum & Nesterov
+
+## The problem SGD faces in narrow valleys
+
+Real loss landscapes often take the form of a **narrow valley** (ravine) — curvature differs dramatically across directions. One direction changes steeply (high curvature), another changes slowly (low curvature).
+
+SGD must use a small enough learning rate to avoid oscillating in the high-curvature direction, but this causes extremely slow progress in the low-curvature direction.
+
+**Condition number** $\kappa = L/\mu$ — ratio of largest to smallest curvature of the loss. When $\kappa$ is large:
+- SGD: needs $O(\kappa)$ steps to converge
+- Momentum: needs only $O(\sqrt{\kappa})$ steps
+
+For $\kappa = 100$: SGD needs ~100 steps, Momentum needs ~10.
+
+## Heavy Ball momentum (Polyak, 1964)
+
+Add "inertia" — instead of discarding all velocity each step, keep a fraction of the old one:
+
+$$
+v_{t+1} = \beta v_t + \nabla\mathcal{L}(\theta_t)
+$$
+
+$$
+\theta_{t+1} = \theta_t - \eta\, v_{t+1}
+$$
+
+$\beta \in [0,1)$ is the momentum coefficient — typically $\beta = 0.9$.
+
+**Unrolling** reveals that $v_t$ is an exponentially weighted sum of past gradients:
+
+$$
+v_t = \sum_{k=0}^{t} \beta^{t-k}\,\nabla\mathcal{L}(\theta_k)
+$$
+
+In oscillating directions, gradients keep flipping sign → cancel out in $v$. In consistent directions, gradients point the same way → accumulate → larger effective step.
+
+**Effective gradient amplification**: near convergence, $v \to \frac{1}{1-\beta}\nabla\mathcal{L}(\theta)$. With $\beta = 0.9$: gradient is amplified $10\times$ — the learning rate must be scaled down accordingly compared to plain SGD.
+
+<Note type="warning">
+Heavy Ball has no general convergence guarantee for non-quadratic convex functions and can actually diverge. The $O(\sqrt{\kappa})$ proof applies only to quadratics with $\beta$ tuned optimally given prior knowledge of $\kappa$.
+</Note>
+
+## Nesterov Accelerated Gradient (Nesterov, 1983)
+
+Heavy Ball computes the gradient at the *current position* $\theta_t$. Nesterov computes it at the *position momentum will carry us to* — the "look-ahead":
+
+$$
+\theta_{\text{look}} = \theta_t - \eta\beta v_t
+$$
+
+$$
+v_{t+1} = \beta v_t + \nabla\mathcal{L}(\theta_{\text{look}})
+$$
+
+$$
+\theta_{t+1} = \theta_t - \eta\, v_{t+1}
+$$
+
+**Intuition**: if we're moving fast toward the minimum, the gradient at $\theta_{\text{look}}$ will already be smaller (or correcting direction) — allowing us to "brake" earlier and avoid overshooting. Heavy Ball only discovers the gradient at the old position, so it learns too late that it's about to overshoot.
+
+<Note type="theorem">
+Nesterov achieves $O(1/t^2)$ convergence for smooth convex functions, vs $O(1/t)$ for GD — and this rate is **optimal** among all first-order methods. In practice, the main benefit is smoother convergence and less overshoot compared to Heavy Ball.
+</Note>
+
+## Illustration: the narrow valley
+
+All three methods minimize $L(x,y) = 0.04x^2 + 4y^2$ ($\kappa = 100$):
+
+<MomentumViz lang="en" />
+
+**Observations:**
+- **SGD (gray)**: clear zigzag along $y$, very slow progress along $x$
+- **Momentum (amber)**: $y$ oscillations dampen quickly, $x$ converges significantly faster
+- **Nesterov (purple)**: $y$ stabilizes almost immediately, smoothest path of the three
+
+## Convergence summary
+
+| | GD | Heavy Ball | Nesterov |
+|---|---|---|---|
+| Quadratic | $O(\kappa)$ | $O(\sqrt{\kappa})$ | $O(\sqrt{\kappa})$ |
+| Smooth convex | $O(1/t)$ | no guarantee | $O(1/t^2)$ |
+| Deep learning practice | — | good | better |
+
+Both Heavy Ball and Nesterov achieve $O(\sqrt{\kappa})$ on quadratics, but Heavy Ball requires knowing $\kappa$ to set $\beta$ optimally, while Nesterov is more adaptive.
+
+## In practice
+
+```python
+# PyTorch
+optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9)                # Heavy Ball
+optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9, nesterov=True) # NAG
+```
+
+- $\beta = 0.9$: widely used default. Can go up to $0.95$–$0.99$ for smooth problems.
+- When increasing $\beta$: reduce $\eta$ accordingly, since the effective gradient scale grows as $1/(1-\beta)$.
+- Momentum is less common in modern LLM training — Adam already incorporates momentum ($\beta_1 = 0.9$).
+
+## Connection to modern optimizers
+
+- **Adam**: uses EMA of gradients (1st-order momentum, $\beta_1$) plus EMA of $g^2$ (2nd-order momentum, $\beta_2$) for per-dimension scaling
+- **Muon** (2024): Nesterov momentum + orthogonalization of the gradient matrix — designed for weight matrices in LLMs
+
+## References
+
+| Paper | |
+|---|---|
+| Polyak (1964) | Some methods of speeding up the convergence of iteration methods |
+| Nesterov (1983) | A method of solving a convex programming problem with convergence rate $O(1/k^2)$ |
+| Sutskever et al. (2013) | On the importance of initialization and momentum in deep learning |
