@@ -48,17 +48,23 @@ $$
 
 Với mạng có hàng triệu đến hàng tỷ tham số, xác suất một critical point ngẫu nhiên là local minimum gần như bằng 0. **Hầu hết critical points trong mạng lớn là saddle points** — đây là sự khác biệt cốt lõi so với optimization chiều thấp, nơi local minima xấu là mối lo chính.
 
+<Note type="warning">
+Đây là argument xác suất đơn giản hoá — thực tế các eigenvalue của Hessian **không độc lập** với nhau. Nhưng kết luận định tính (saddle points áp đảo ở chiều cao) vẫn đúng và được xác nhận bởi Random Matrix Theory.
+</Note>
+
 ### Random Matrix Theory — Wigner Semicircle Law
 
 Tại sao xấp xỉ "mỗi eigenvalue dương với xác suất $\frac{1}{2}$" lại hợp lý? Random Matrix Theory cho biết phân phối eigenvalue của một ma trận đối xứng ngẫu nhiên (như Hessian của mạng khởi tạo ngẫu nhiên) tuân theo **Wigner Semicircle Law**:
 
 $$
-\rho(\lambda) = \frac{1}{2\pi\sigma^2}\sqrt{4\sigma^2 - \lambda^2}
+\rho(\lambda) = \frac{1}{2\pi\sigma^2}\sqrt{4\sigma^2 - \lambda^2}, \quad \lambda \in [-2\sigma,\, 2\sigma]
 $$
 
-Phân phối này **đối xứng quanh 0** — khoảng nửa số eigenvalue âm, nửa dương. Một critical point ngẫu nhiên hầu như luôn có cả hướng cong lên lẫn cong xuống → là saddle point.
+Eigenvalue tập trung trong khoảng $[-2\sigma, 2\sigma]$, phân phối **đối xứng quanh 0** — khoảng nửa số eigenvalue âm, nửa dương. Một critical point ngẫu nhiên hầu như luôn có cả hướng cong lên lẫn cong xuống → là saddle point.
 
-**Dauphin et al. (2014)** tinh chỉnh bức tranh này: trong mạng thực, **index** của critical point (tỷ lệ eigenvalue âm) tương quan chặt với loss tại điểm đó. Critical point loss cao → nhiều eigenvalue âm (saddle point "dốc"). Critical point loss thấp → ít eigenvalue âm, gần với local minimum thật. Tức là: loss càng thấp, điểm đó càng giống local minimum tốt — và saddle points xấu chủ yếu nằm ở vùng loss cao.
+Nhưng phổ eigenvalue **dịch chuyển theo loss**: tại critical point loss cao (xa global min), phân phối cân bằng quanh 0 → index $\approx 0.5$ → saddle point dốc. Tại critical point loss thấp (gần global min), phổ dịch về phía dương → ít eigenvalue âm → gần local minimum thật.
+
+**Dauphin et al. (2014)** — paper quan trọng nhất về vấn đề này — chứng minh chính xác mối quan hệ đó: **index** của critical point (tỷ lệ eigenvalue âm) tương quan chặt với loss tại điểm đó. Tức là loss càng thấp, điểm đó càng giống local minimum tốt — và saddle points xấu chủ yếu nằm ở vùng loss cao.
 
 ### Saddle point khác plateau
 
@@ -76,6 +82,8 @@ Cả hai đều làm gradient nhỏ, nhưng cơ chế và cách xử lý khác n
 - **Exact GD (full-batch)**: tại saddle point $\nabla\mathcal{L} = 0$ chính xác → update bằng 0 → **bị kẹt** vĩnh viễn về mặt lý thuyết.
 - **SGD**: noise $\epsilon_t$ trong gradient project lên hướng eigenvalue âm của Hessian → đẩy θ ra khỏi saddle theo hướng cong xuống → **thoát tự nhiên**, không cần can thiệp.
 - **Perturbed GD (Jin et al., 2017)**: thêm noise có chủ đích khi gradient nhỏ → đảm bảo thoát saddle point trong thời gian đa thức, có chứng minh lý thuyết chặt chẽ.
+
+Tốc độ thoát tỷ lệ với **độ lớn của eigenvalue âm** (negative curvature): saddle point "sắc" (eigenvalue âm lớn) thoát nhanh; saddle point "phẳng" (eigenvalue âm nhỏ) thoát chậm — đây chính là hiện tượng **vanishing gradient** nhìn từ góc độ landscape. Ngược lại, **Du et al. (2017)** chứng minh full-batch GD trong trường hợp xấu có thể cần **thời gian mũ** để thoát saddle — càng nhấn mạnh vai trò của noise trong SGD.
 
 <Note type="result">
 Đây là một lý do then chốt SGD hoạt động tốt hơn full-batch GD trên non-convex loss: noise không phải khuyết điểm cần loại bỏ, mà là cơ chế **tự động thoát saddle point** — thứ mà full-batch GD thiếu hoàn toàn.
@@ -318,6 +326,7 @@ Câu trả lời trung thực: deep learning **hoạt động tốt trong thực
 | Benton et al. (2021) | Loss Surface Simplexes for Mode Connecting Volumes |
 | Jacot et al. (2018) | Neural Tangent Kernel: Convergence and Generalization |
 | Jin et al. (2017) | Escape Saddle Points Efficiently with Perturbed GD |
+| Du et al. (2017) | Gradient Descent Can Take Exponential Time to Escape Saddle Points |
 | Hochreiter & Schmidhuber (1997) | Flat Minima |
 | Smith & Le (2018) | A Bayesian Perspective on Generalization and SGD |
 | Zhu et al. (2019) | The Anisotropic Noise in SGD |

@@ -48,17 +48,23 @@ $$
 
 For networks with millions to billions of parameters, the probability that a random critical point is a local minimum is essentially zero. **Almost all critical points in large networks are saddle points** — the core difference from low-dimensional optimization, where bad local minima are the main concern.
 
+<Note type="warning">
+This is a simplified probabilistic argument — in reality the Hessian's eigenvalues are **not independent**. But the qualitative conclusion (saddle points dominate in high dimensions) holds and is confirmed by Random Matrix Theory.
+</Note>
+
 ### Random Matrix Theory — Wigner Semicircle Law
 
 Why is the "each eigenvalue positive with probability $\frac{1}{2}$" approximation reasonable? Random Matrix Theory tells us that the eigenvalue distribution of a random symmetric matrix (like the Hessian of a randomly initialized network) follows the **Wigner Semicircle Law**:
 
 $$
-\rho(\lambda) = \frac{1}{2\pi\sigma^2}\sqrt{4\sigma^2 - \lambda^2}
+\rho(\lambda) = \frac{1}{2\pi\sigma^2}\sqrt{4\sigma^2 - \lambda^2}, \quad \lambda \in [-2\sigma,\, 2\sigma]
 $$
 
-This distribution is **symmetric around 0** — roughly half the eigenvalues are negative, half positive. A random critical point almost always has both upward- and downward-curving directions → it's a saddle point.
+Eigenvalues concentrate in $[-2\sigma, 2\sigma]$, and the distribution is **symmetric around 0** — roughly half the eigenvalues are negative, half positive. A random critical point almost always has both upward- and downward-curving directions → it's a saddle point.
 
-**Dauphin et al. (2014)** refined this picture: in real networks, the **index** of a critical point (fraction of negative eigenvalues) strongly correlates with the loss at that point. High-loss critical point → many negative eigenvalues (a "steep" saddle). Low-loss critical point → few negative eigenvalues, close to a true local minimum. In other words: the lower the loss, the more the point resembles a good local minimum — and bad saddle points mostly sit in high-loss regions.
+But the spectrum **shifts with loss**: at a high-loss critical point (far from the global min), the distribution is balanced around 0 → index $\approx 0.5$ → a steep saddle. At a low-loss critical point (near the global min), the spectrum shifts toward positive → fewer negative eigenvalues → close to a true local minimum.
+
+**Dauphin et al. (2014)** — the seminal paper on this problem — proved exactly that relationship: the **index** of a critical point (fraction of negative eigenvalues) strongly correlates with the loss at that point. The lower the loss, the more the point resembles a good local minimum — and bad saddle points mostly sit in high-loss regions.
 
 ### Saddle point vs plateau
 
@@ -76,6 +82,8 @@ Both produce small gradients, but the mechanism and the fix differ:
 - **Exact GD (full-batch)**: at a saddle point $\nabla\mathcal{L} = 0$ exactly → zero update → **stuck** indefinitely in theory.
 - **SGD**: the noise $\epsilon_t$ in the gradient projects onto the Hessian's negative-eigenvalue directions → pushes θ off the saddle along the downward-curving direction → **escapes naturally**, with no intervention.
 - **Perturbed GD (Jin et al., 2017)**: adds deliberate noise when the gradient is small → provably escapes saddle points in polynomial time, with rigorous theoretical guarantees.
+
+The escape speed is proportional to the **magnitude of the negative eigenvalue** (negative curvature): a "steep" saddle (large negative eigenvalue) is escaped quickly; a "flat" saddle (small negative eigenvalue) is escaped slowly — this is precisely the **vanishing gradient** phenomenon viewed from the landscape angle. Conversely, **Du et al. (2017)** proved that full-batch GD can, in the worst case, take **exponential time** to escape a saddle — further underscoring the role of noise in SGD.
 
 <Note type="result">
 This is a key reason SGD outperforms full-batch GD on non-convex losses: noise isn't a flaw to be removed, but a mechanism for **automatically escaping saddle points** — something full-batch GD lacks entirely.
@@ -318,6 +326,7 @@ The honest answer: deep learning **works well in practice** because of these phe
 | Benton et al. (2021) | Loss Surface Simplexes for Mode Connecting Volumes |
 | Jacot et al. (2018) | Neural Tangent Kernel: Convergence and Generalization |
 | Jin et al. (2017) | Escape Saddle Points Efficiently with Perturbed GD |
+| Du et al. (2017) | Gradient Descent Can Take Exponential Time to Escape Saddle Points |
 | Hochreiter & Schmidhuber (1997) | Flat Minima |
 | Smith & Le (2018) | A Bayesian Perspective on Generalization and SGD |
 | Zhu et al. (2019) | The Anisotropic Noise in SGD |
