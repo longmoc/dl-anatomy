@@ -11,6 +11,7 @@ tags: [convexity, loss-landscape, saddle-points, local-minima, optimization]
 import Note from '../../components/Note.astro';
 import LossLandscapeViz from '../../components/LossLandscapeViz.astro';
 import LocalMinimaViz from '../../components/LocalMinimaViz.astro';
+import WignerViz from '../../components/WignerViz.astro';
 
 # Loss Landscape & Non-convexity
 
@@ -63,6 +64,8 @@ $$
 Eigenvalue tập trung trong khoảng $[-2\sigma, 2\sigma]$, phân phối **đối xứng quanh 0** — khoảng nửa số eigenvalue âm, nửa dương. Một critical point ngẫu nhiên hầu như luôn có cả hướng cong lên lẫn cong xuống → là saddle point.
 
 Nhưng phổ eigenvalue **dịch chuyển theo loss**: tại critical point loss cao (xa global min), phân phối cân bằng quanh 0 → index $\approx 0.5$ → saddle point dốc. Tại critical point loss thấp (gần global min), phổ dịch về phía dương → ít eigenvalue âm → gần local minimum thật.
+
+<WignerViz />
 
 **Dauphin et al. (2014)** — paper quan trọng nhất về vấn đề này — chứng minh chính xác mối quan hệ đó: **index** của critical point (tỷ lệ eigenvalue âm) tương quan chặt với loss tại điểm đó. Tức là loss càng thấp, điểm đó càng giống local minimum tốt — và saddle points xấu chủ yếu nằm ở vùng loss cao.
 

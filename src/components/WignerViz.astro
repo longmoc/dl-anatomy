@@ -1,0 +1,244 @@
+---
+interface Props {
+  lang?: 'vi' | 'en';
+}
+const { lang = 'vi' } = Astro.props;
+
+const ui = lang === 'en'
+  ? {
+      lossLabel: 'Loss level',
+      high: 'high',
+      low: 'low',
+      caption: 'Eigenvalue spectrum of the Hessian (Wigner Semicircle). Drag the slider: as loss decreases, the spectrum shifts toward positive — the negative fraction (index) drops, so the critical point turns from a saddle into a near local minimum.',
+    }
+  : {
+      lossLabel: 'Mức loss',
+      high: 'cao',
+      low: 'thấp',
+      caption: 'Phổ eigenvalue của Hessian (Wigner Semicircle). Kéo slider: khi loss giảm, phổ dịch về phía dương — tỷ lệ eigenvalue âm (index) giảm, critical point chuyển từ saddle point sang gần local minimum.',
+    };
+---
+
+<div class="wviz" data-lang={lang}>
+  <canvas class="wviz-canvas"></canvas>
+  <div class="wviz-controls">
+    <span class="wviz-lbl">{ui.lossLabel}:</span>
+    <span class="wviz-end">{ui.high}</span>
+    <input type="range" class="wviz-slider" min="0" max="100" value="0" />
+    <span class="wviz-end">{ui.low}</span>
+  </div>
+  <p class="wviz-caption">{ui.caption}</p>
+</div>
+
+<script>
+document.querySelectorAll('.wviz').forEach(root => {
+  const canvas = root.querySelector('.wviz-canvas') as HTMLCanvasElement;
+  const ctx    = canvas.getContext('2d')!;
+  const slider = root.querySelector('.wviz-slider') as HTMLInputElement;
+  const isEn   = (root as HTMLElement).dataset.lang === 'en';
+
+  const cv = (n: string) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+  // Wigner semicircle radius
+  const R = 2;
+  // Fixed λ view range so λ=0 stays put while the spectrum slides
+  const LMIN = -2.6, LMAX = 4.6;
+
+  // density: ρ(λ) = (2/(πR²)) √(R² − (λ−μ)²)   for |λ−μ| ≤ R
+  const rho = (lam: number, mu: number) => {
+    const x = lam - mu;
+    if (Math.abs(x) >= R) return 0;
+    return (2 / (Math.PI * R * R)) * Math.sqrt(R * R - x * x);
+  };
+
+  // fraction of mass with λ < 0  (the "index")
+  function negFraction(mu: number): number {
+    const lo = mu - R, hi = Math.min(0, mu + R);
+    if (hi <= lo) return 0;
+    let s = 0;
+    const N = 400;
+    const dx = (hi - lo) / N;
+    for (let i = 0; i < N; i++) s += rho(lo + (i + 0.5) * dx, mu) * dx;
+    return s;
+  }
+
+  const PL = 16, PR = 16, PT = 16, PB = 40;
+  let W = 0, H = 0;
+  const tx = (lam: number) => PL + (lam - LMIN) / (LMAX - LMIN) * (W - PL - PR);
+  const PEAK = 2 / (Math.PI * R); // max density value
+  const ty = (d: number) => (H - PB) - d / PEAK * (H - PT - PB) * 0.92;
+
+  function draw() {
+    const rect = canvas.getBoundingClientRect();
+    W = rect.width; H = rect.height;
+    if (!W || !H) return;
+    const dpr = window.devicePixelRatio || 1;
+    if (canvas.width !== W * dpr) { canvas.width = W * dpr; canvas.height = H * dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const bg     = cv('--bg');
+    const border = cv('--border');
+    const muted  = cv('--muted');
+    const amber  = cv('--amber');
+    const good   = cv('--accent2');
+    const text   = cv('--text');
+
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    // slider 0 (loss high) → μ=0 (balanced);  slider 100 (loss low) → μ≈1.9 (almost all positive)
+    const t  = slider.valueAsNumber / 100;
+    const mu = t * 1.9;
+    const idx = negFraction(mu);
+
+    // Baseline
+    ctx.strokeStyle = border;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(PL, H - PB);
+    ctx.lineTo(W - PR, H - PB);
+    ctx.stroke();
+
+    // Build the semicircle polyline
+    const lo = mu - R, hi = mu + R;
+    const pts: [number, number][] = [];
+    const STEPS = 160;
+    for (let i = 0; i <= STEPS; i++) {
+      const lam = lo + (hi - lo) * i / STEPS;
+      pts.push([lam, rho(lam, mu)]);
+    }
+
+    // Fill negative part (λ<0) amber, positive part (λ≥0) green
+    const fillRegion = (cond: (lam: number) => boolean, color: string) => {
+      ctx.beginPath();
+      let started = false;
+      for (const [lam, d] of pts) {
+        if (!cond(lam)) continue;
+        const x = tx(lam), y = ty(d);
+        if (!started) { ctx.moveTo(tx(lam), H - PB); ctx.lineTo(x, y); started = true; }
+        else ctx.lineTo(x, y);
+      }
+      if (!started) return;
+      // close down to baseline
+      const lastLam = [...pts].reverse().find(([lam]) => cond(lam))![0];
+      ctx.lineTo(tx(lastLam), H - PB);
+      ctx.closePath();
+      ctx.fillStyle = color + '33';
+      ctx.fill();
+    };
+    fillRegion(lam => lam < 0, amber);
+    fillRegion(lam => lam >= 0, good);
+
+    // Outline curve
+    ctx.beginPath();
+    pts.forEach(([lam, d], i) => {
+      const x = tx(lam), y = ty(d);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.strokeStyle = muted;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // λ = 0 vertical line
+    ctx.strokeStyle = text;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 4]);
+    ctx.globalAlpha = 0.7;
+    ctx.beginPath();
+    ctx.moveTo(tx(0), PT - 2);
+    ctx.lineTo(tx(0), H - PB);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = muted;
+    ctx.font = '10px var(--mono, monospace)';
+    ctx.textAlign = 'center';
+    ctx.fillText('λ = 0', tx(0), PT + 6);
+
+    // Axis label
+    ctx.fillStyle = muted;
+    ctx.font = '10px var(--mono, monospace)';
+    ctx.textAlign = 'center';
+    ctx.fillText(isEn ? 'eigenvalue λ' : 'eigenvalue λ', PL + (W - PL - PR) / 2, H - 4);
+
+    // Region labels (only when meaningful width)
+    ctx.font = '10px var(--mono, monospace)';
+    if (idx > 0.04) {
+      ctx.fillStyle = amber;
+      ctx.textAlign = 'center';
+      const negMid = tx((Math.max(LMIN, lo) + 0) / 2);
+      ctx.fillText(isEn ? 'negative' : 'âm', negMid, H - PB - 6);
+    }
+    ctx.fillStyle = good;
+    ctx.textAlign = 'center';
+    const posMid = tx((0 + Math.min(LMAX, hi)) / 2);
+    ctx.fillText(isEn ? 'positive' : 'dương', posMid, H - PB - 6);
+
+    // Readout box: index + classification
+    const isSaddle = idx > 0.05;
+    const label = isSaddle
+      ? (isEn ? 'saddle point' : 'saddle point')
+      : (isEn ? 'near local minimum' : 'gần local minimum');
+    const labelColor = isSaddle ? amber : good;
+
+    ctx.font = 'bold 12px var(--mono, monospace)';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = muted;
+    ctx.fillText(isEn ? 'index (neg. fraction):' : 'index (tỷ lệ âm):', PL + 4, PT + 18);
+    ctx.fillStyle = labelColor;
+    ctx.fillText(`${(idx * 100).toFixed(0)}%`, PL + 4, PT + 34);
+    ctx.fillStyle = labelColor;
+    ctx.fillText(`→ ${label}`, PL + 56, PT + 34);
+  }
+
+  slider.addEventListener('input', draw);
+  const ro = new ResizeObserver(draw);
+  ro.observe(canvas);
+  draw();
+});
+</script>
+
+<style>
+  .wviz {
+    margin: 1.5rem 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--bg2);
+  }
+  .wviz-canvas {
+    width: 100%;
+    height: 200px;
+    display: block;
+    background: var(--bg);
+  }
+  .wviz-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.6rem 0.9rem;
+    border-top: 1px solid var(--border);
+  }
+  .wviz-lbl {
+    font-family: var(--mono);
+    font-size: 0.77rem;
+    color: var(--muted);
+  }
+  .wviz-end {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    color: var(--muted);
+  }
+  .wviz-slider {
+    flex: 1;
+    min-width: 80px;
+  }
+  .wviz-caption {
+    font-size: 0.78rem;
+    color: var(--muted);
+    text-align: center;
+    padding: 0.1rem 1rem 0.65rem;
+    font-style: italic;
+    line-height: 1.5;
+  }
+</style>

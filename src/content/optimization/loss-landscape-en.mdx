@@ -11,6 +11,7 @@ tags: [convexity, loss-landscape, saddle-points, local-minima, optimization]
 import Note from '../../components/Note.astro';
 import LossLandscapeViz from '../../components/LossLandscapeViz.astro';
 import LocalMinimaViz from '../../components/LocalMinimaViz.astro';
+import WignerViz from '../../components/WignerViz.astro';
 
 # Loss Landscape & Non-convexity
 
@@ -63,6 +64,8 @@ $$
 Eigenvalues concentrate in $[-2\sigma, 2\sigma]$, and the distribution is **symmetric around 0** — roughly half the eigenvalues are negative, half positive. A random critical point almost always has both upward- and downward-curving directions → it's a saddle point.
 
 But the spectrum **shifts with loss**: at a high-loss critical point (far from the global min), the distribution is balanced around 0 → index $\approx 0.5$ → a steep saddle. At a low-loss critical point (near the global min), the spectrum shifts toward positive → fewer negative eigenvalues → close to a true local minimum.
+
+<WignerViz lang="en" />
 
 **Dauphin et al. (2014)** — the seminal paper on this problem — proved exactly that relationship: the **index** of a critical point (fraction of negative eigenvalues) strongly correlates with the loss at that point. The lower the loss, the more the point resembles a good local minimum — and bad saddle points mostly sit in high-loss regions.
 
