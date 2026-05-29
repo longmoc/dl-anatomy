@@ -1,0 +1,355 @@
+---
+interface Props {
+  type: 'spinglass' | 'mode' | 'flatsharp';
+  lang?: 'vi' | 'en';
+}
+const { type, lang = 'vi' } = Astro.props;
+
+const captions: Record<string, Record<string, string>> = {
+  spinglass: {
+    vi: 'Phân bố local minima theo loss value — với model đủ lớn, bad local minima (đỏ) tập trung ở complexity thấp; vùng overparameterized chỉ còn good minima (xanh).',
+    en: 'Distribution of local minima by loss value — in large models, bad local minima (red) cluster at low complexity; in the overparameterized regime only good minima (green) remain.',
+  },
+  mode: {
+    vi: 'Linear interpolation θ_A → θ_B: loss tăng vọt ở giữa (đường đứt). Bézier curve qua điểm trung gian được tối ưu: loss gần như không đổi (đường liền).',
+    en: 'Linear interpolation θ_A → θ_B: loss spikes in the middle (dashed). Bézier curve through an optimized midpoint: loss barely changes (solid).',
+  },
+  flatsharp: {
+    vi: 'Hai minimum có cùng training loss. Cùng perturbation Δε: sharp minimum chịu ΔL lớn → overfit; flat minimum ổn định → generalize tốt hơn.',
+    en: 'Two minima with equal training loss. Same perturbation Δε: sharp minimum has large ΔL → overfits; flat minimum is stable → generalizes better.',
+  },
+};
+---
+
+<div class="lmviz" data-type={type} data-lang={lang}>
+  <canvas class="lmviz-canvas"></canvas>
+  <p class="lmviz-caption">{captions[type][lang]}</p>
+</div>
+
+<script>
+document.querySelectorAll('.lmviz').forEach(root => {
+  const canvas = root.querySelector('.lmviz-canvas') as HTMLCanvasElement;
+  const ctx    = canvas.getContext('2d')!;
+  const type   = (root as HTMLElement).dataset.type as 'spinglass' | 'mode' | 'flatsharp';
+  const isEn   = (root as HTMLElement).dataset.lang === 'en';
+
+  const cv = (n: string) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+  // heights by type
+  const HEIGHT: Record<string, number> = { spinglass: 200, mode: 240, flatsharp: 210 };
+
+  function resize() {
+    const rect = canvas.getBoundingClientRect();
+    const dpr  = window.devicePixelRatio || 1;
+    const h    = HEIGHT[type] ?? 200;
+    canvas.style.height = h + 'px';
+    canvas.width  = rect.width  * dpr;
+    canvas.height = h * dpr;
+    ctx.scale(dpr, dpr);
+  }
+
+  // ── Shared seeded random ───────────────────────────────
+  const rand = (seed: number) => {
+    const x = Math.sin(seed * 127.1) * 43758.5453;
+    return x - Math.floor(x);
+  };
+
+  // ── 1. Spin-glass distribution ─────────────────────────
+  function drawSpinGlass() {
+    const W = canvas.getBoundingClientRect().width;
+    const H = HEIGHT.spinglass;
+    const muted  = cv('--muted');
+    const danger = cv('--danger') || cv('--amber');
+    const accent = cv('--accent');
+    const good   = cv('--accent2');
+    const bg2    = cv('--bg2');
+    const border = cv('--border');
+
+    ctx.fillStyle = cv('--bg');
+    ctx.fillRect(0, 0, W, H);
+
+    const PL=56, PR=20, PT=24, PB=42;
+    const gW=W-PL-PR, gH=H-PT-PB;
+
+    // Axes
+    ctx.strokeStyle = border;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(PL, PT); ctx.lineTo(PL, PT+gH); ctx.lineTo(PL+gW, PT+gH);
+    ctx.stroke();
+
+    // Labels
+    ctx.fillStyle = muted;
+    ctx.font = '10px var(--mono, monospace)';
+    ctx.textAlign = 'center';
+    const xLabel = isEn ? 'model complexity →' : 'độ phức tạp model →';
+    ctx.fillText(xLabel, PL + gW/2, H - 6);
+    ctx.save();
+    ctx.translate(14, PT + gH/2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText(isEn ? 'loss value →' : 'loss →', 0, 0);
+    ctx.restore();
+
+    // Interpolation threshold line
+    const thresh = 0.55;
+    ctx.strokeStyle = border;
+    ctx.setLineDash([3, 5]);
+    ctx.lineWidth = 1;
+    ctx.globalAlpha = 0.6;
+    ctx.beginPath();
+    ctx.moveTo(PL + thresh*gW, PT);
+    ctx.lineTo(PL + thresh*gW, PT+gH);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = muted;
+    ctx.font = '9px var(--mono, monospace)';
+    ctx.textAlign = 'center';
+    ctx.fillText(isEn ? 'interpolation threshold' : 'ngưỡng', PL + thresh*gW, PT - 4);
+
+    // Scatter points
+    for (let i = 0; i < 70; i++) {
+      const r1 = rand(i*3+1), r2 = rand(i*3+2);
+      const c = 0.1 + 0.85 * r1;
+      const baseLoss = c < thresh
+        ? 0.55 + 0.38 * (thresh - c) / thresh + 0.12 * r2
+        : 0.04 + 0.28 * (1 - c) + 0.07 * r2;
+      const loss = Math.max(0.03, Math.min(0.97, baseLoss));
+      const col  = loss > 0.55 ? danger : loss > 0.28 ? accent : good;
+      const cx = PL + c * gW;
+      const cy = PT + (1 - loss) * gH;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 4, 0, Math.PI*2);
+      ctx.fillStyle = col + 'cc';
+      ctx.fill();
+    }
+
+    // Legend
+    const leg = isEn
+      ? [{ c: danger, l: 'Bad local minima (high loss)' }, { c: accent, l: 'Intermediate' }, { c: good, l: 'Good local minima (low loss)' }]
+      : [{ c: danger, l: 'Local minima xấu (loss cao)' }, { c: accent, l: 'Vùng trung gian' }, { c: good, l: 'Local minima tốt (loss thấp)' }];
+    leg.forEach(({ c, l }, i) => {
+      const lx = PL + 10, ly = PT + 14 + i * 18;
+      ctx.beginPath(); ctx.arc(lx, ly, 4.5, 0, Math.PI*2);
+      ctx.fillStyle = c; ctx.fill();
+      ctx.fillStyle = muted;
+      ctx.font = '10px var(--mono, monospace)'; ctx.textAlign = 'left';
+      ctx.fillText(l, lx + 9, ly + 4);
+    });
+  }
+
+  // ── 2. Mode connectivity ───────────────────────────────
+  function drawMode() {
+    const W = canvas.getBoundingClientRect().width;
+    const H = HEIGHT.mode;
+    const muted  = cv('--muted');
+    const accent = cv('--accent');
+    const amber  = cv('--amber');
+    const good   = cv('--accent2');
+    const danger = cv('--danger') || '#c04040';
+
+    ctx.fillStyle = cv('--bg');
+    ctx.fillRect(0, 0, W, H);
+
+    const PL=50, PR=20, PT=24, PB=42;
+    const gW=W-PL-PR, gH=H-PT-PB;
+
+    const toX = (t: number) => PL + t * gW;
+    const toY = (v: number) => PT + (1-v) * gH;
+
+    // Axes
+    ctx.strokeStyle = cv('--border');
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(PL, PT); ctx.lineTo(PL, PT+gH); ctx.lineTo(PL+gW, PT+gH);
+    ctx.stroke();
+
+    ctx.fillStyle = muted;
+    ctx.font = '10px var(--mono, monospace)';
+    ctx.textAlign = 'center';
+    ctx.fillText('t  (0 = θ_A,   1 = θ_B)', PL+gW/2, H-6);
+    ctx.save();
+    ctx.translate(14, PT+gH/2); ctx.rotate(-Math.PI/2);
+    ctx.fillText(isEn ? 'loss' : 'loss', 0, 0);
+    ctx.restore();
+
+    const linearLoss = (t: number) => 0.10 + 0.74 * Math.pow(Math.sin(Math.PI * t), 2);
+    const curvedLoss = (t: number) => 0.10 + 0.04 * Math.sin(Math.PI * t);
+
+    // Fill under curves
+    const drawFill = (fn: (t:number)=>number, col: string) => {
+      ctx.beginPath();
+      ctx.moveTo(toX(0), toY(fn(0)));
+      for (let i=1; i<=200; i++) { const t=i/200; ctx.lineTo(toX(t), toY(fn(t))); }
+      ctx.lineTo(toX(1), toY(0)); ctx.lineTo(toX(0), toY(0));
+      ctx.closePath();
+      ctx.fillStyle = col + '22';
+      ctx.fill();
+    };
+    drawFill(linearLoss, amber);
+    drawFill(curvedLoss, good);
+
+    // Draw curves
+    const drawCurve = (fn: (t:number)=>number, col: string, dash: boolean) => {
+      ctx.strokeStyle = col; ctx.lineWidth = 2.2;
+      ctx.setLineDash(dash ? [5,4] : []);
+      ctx.beginPath();
+      for (let i=0; i<=200; i++) {
+        const t=i/200, x=toX(t), y=toY(fn(t));
+        i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+      }
+      ctx.stroke(); ctx.setLineDash([]);
+    };
+    drawCurve(linearLoss, amber, true);
+    drawCurve(curvedLoss, good, false);
+
+    // Endpoints θ_A, θ_B
+    [0, 1].forEach(t => {
+      ctx.beginPath(); ctx.arc(toX(t), toY(linearLoss(t)), 5.5, 0, Math.PI*2);
+      ctx.fillStyle = accent; ctx.fill();
+      ctx.strokeStyle = cv('--bg'); ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.fillStyle = accent;
+      ctx.font = 'bold 10px var(--mono, monospace)';
+      ctx.textAlign = 'center';
+      ctx.fillText(t===0 ? 'θ_A' : 'θ_B', toX(t), toY(linearLoss(t)) - 9);
+    });
+
+    // Legend
+    const leg = isEn
+      ? [{ col: amber, dash: true,  l: 'Linear path — loss spikes in the middle' },
+         { col: good,  dash: false, l: 'Curved path — loss nearly unchanged' },
+         { col: accent,dash: false, l: 'θ_A and θ_B (two training runs)' }]
+      : [{ col: amber, dash: true,  l: 'Linear path — loss tăng mạnh ở giữa' },
+         { col: good,  dash: false, l: 'Curved path — loss gần như không đổi' },
+         { col: accent,dash: false, l: 'θ_A và θ_B (hai lần train)' }];
+    leg.forEach(({ col, dash, l }, i) => {
+      const lx=PL+10, ly=PT+12+i*18;
+      if (col===accent) {
+        ctx.beginPath(); ctx.arc(lx, ly, 4.5, 0, Math.PI*2);
+        ctx.fillStyle=col; ctx.fill();
+      } else {
+        ctx.strokeStyle=col; ctx.lineWidth=2;
+        ctx.setLineDash(dash ? [4,3] : []);
+        ctx.beginPath(); ctx.moveTo(lx-4, ly); ctx.lineTo(lx+8, ly); ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      ctx.fillStyle=muted; ctx.font='10px var(--mono, monospace)'; ctx.textAlign='left';
+      ctx.fillText(l, lx+14, ly+4);
+    });
+  }
+
+  // ── 3. Flat vs Sharp ───────────────────────────────────
+  function drawFlatSharp() {
+    const W = canvas.getBoundingClientRect().width;
+    const H = HEIGHT.flatsharp;
+    const muted  = cv('--muted');
+    const amber  = cv('--amber');
+    const good   = cv('--accent2');
+    const accent = cv('--accent');
+
+    ctx.fillStyle = cv('--bg');
+    ctx.fillRect(0, 0, W, H);
+
+    const PL=30, PR=30, PT=28, PB=48;
+    const gW=W-PL-PR, gH=H-PT-PB;
+
+    const toX = (x: number) => PL + (x+4)/8 * gW;
+    const toY = (v: number) => PT + (1-v/1.5) * gH;
+
+    // Baseline
+    ctx.strokeStyle = cv('--border'); ctx.lineWidth=1;
+    ctx.beginPath();
+    ctx.moveTo(PL, PT+gH); ctx.lineTo(PL+gW, PT+gH);
+    ctx.stroke();
+
+    const sharpFn = (x: number) => 0.06 + 2.4*(x+2)*(x+2);
+    const flatFn  = (x: number) => 0.06 + 0.20*(x-2)*(x-2);
+
+    const drawCurve = (fn: (x:number)=>number, xMin: number, xMax: number, col: string) => {
+      ctx.strokeStyle=col; ctx.lineWidth=2.5;
+      ctx.beginPath(); let first=true;
+      for (let i=0; i<=300; i++) {
+        const x=xMin+(xMax-xMin)*i/300, y=fn(x);
+        if (y>1.5) { first=true; continue; }
+        const cx=toX(x), cy=toY(y);
+        first ? ctx.moveTo(cx,cy) : ctx.lineTo(cx,cy);
+        first=false;
+      }
+      ctx.stroke();
+    };
+    drawCurve(sharpFn, -3.5, -0.5, amber);
+    drawCurve(flatFn,   0.3,  3.8, good);
+
+    // Balls at minima
+    [-2, 2].forEach(x => {
+      const fn = x < 0 ? sharpFn : flatFn;
+      ctx.beginPath(); ctx.arc(toX(x), toY(fn(x)), 6, 0, Math.PI*2);
+      ctx.fillStyle = accent; ctx.fill();
+      ctx.strokeStyle = cv('--bg'); ctx.lineWidth=1.5; ctx.stroke();
+    });
+
+    // Perturbation arrows and Δ labels
+    const drawPerturb = (x0: number, fn: (x:number)=>number, col: string) => {
+      const dx=0.35;
+      const y0=fn(x0), y1=fn(x0+dx);
+      const cx0=toX(x0), cy0=toY(y0), cx1=toX(x0+dx), cy1=toY(y1);
+      ctx.strokeStyle=col+'aa'; ctx.lineWidth=1.5; ctx.setLineDash([3,3]);
+      ctx.beginPath(); ctx.moveTo(cx0,cy0); ctx.lineTo(cx1,cy1); ctx.stroke();
+      ctx.setLineDash([]);
+      const dl=(y1-y0).toFixed(2);
+      ctx.fillStyle=col; ctx.font='bold 10px var(--mono, monospace)'; ctx.textAlign='center';
+      const lab = isEn ? `Δε=0.35  ΔL=${dl}` : `Δε=0.35  ΔL=${dl}`;
+      ctx.fillText(lab, (cx0+cx1)/2, Math.min(cy0,cy1)-7);
+    };
+    drawPerturb(-2, sharpFn, amber);
+    drawPerturb( 2, flatFn,  good);
+
+    // Labels
+    ctx.font='bold 11px var(--mono, monospace)'; ctx.textAlign='center';
+    ctx.fillStyle=amber; ctx.fillText(isEn ? 'Sharp minimum' : 'Sharp minimum', toX(-2), toY(0)-8);
+    ctx.fillStyle=good;  ctx.fillText(isEn ? 'Flat minimum'  : 'Flat minimum',  toX(2),  toY(0)-8);
+
+    ctx.font='10px var(--mono, monospace)'; ctx.fillStyle=muted; ctx.textAlign='center';
+    const sub = isEn
+      ? 'Same training loss — very different generalization behavior'
+      : 'Cùng training loss — generalization hoàn toàn khác nhau';
+    ctx.fillText(sub, PL+gW/2, H-8);
+  }
+
+  function draw() {
+    resize();
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (type === 'spinglass')  drawSpinGlass();
+    else if (type === 'mode')  drawMode();
+    else if (type === 'flatsharp') drawFlatSharp();
+  }
+
+  const ro = new ResizeObserver(draw);
+  ro.observe(canvas);
+  draw();
+});
+</script>
+
+<style>
+  .lmviz {
+    margin: 1.5rem 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--bg2);
+  }
+  .lmviz-canvas {
+    width: 100%;
+    display: block;
+    background: var(--bg);
+  }
+  .lmviz-caption {
+    font-size: 0.78rem;
+    color: var(--muted);
+    text-align: center;
+    padding: 0.4rem 1rem 0.6rem;
+    font-style: italic;
+    line-height: 1.5;
+    border-top: 1px solid var(--border);
+  }
+</style>
