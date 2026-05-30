@@ -94,7 +94,7 @@ A concept easily confused with a saddle point is a **plateau** — a wide region
 The escape speed is proportional to the **magnitude of the negative eigenvalue** (negative curvature): a "steep" saddle (large negative eigenvalue) is escaped quickly; a "flat" saddle (small negative eigenvalue) is escaped slowly — this is precisely the **vanishing gradient** phenomenon viewed from the landscape angle. Conversely, **Du et al. (2017)** proved that full-batch GD can, in the worst case, take **exponential time** to escape a saddle — further underscoring the role of noise in SGD.
 
 <Note type="result">
-**In short:** The classical fear — GD trapped in a *bad* local minimum — largely vanishes in high dimensions, because high-loss local minima are extremely rare (high-loss points are mostly saddles, per Dauphin). The remaining obstacle is the saddle point, but SGD's noise escapes it automatically. **High dimensionality defuses the big fear; SGD noise handles the rest** — this is the key reason SGD beats full-batch GD on non-convex losses.
+The classical fear — GD trapped in a *bad* local minimum — largely vanishes in high dimensions, because high-loss local minima are extremely rare (high-loss points are mostly saddles, per Dauphin). The remaining obstacle is the saddle point, but SGD's noise escapes it automatically. **High dimensionality defuses the big fear; SGD noise handles the rest** — this is the key reason SGD beats full-batch GD on non-convex losses.
 </Note>
 
 ## All good local minima are equivalent

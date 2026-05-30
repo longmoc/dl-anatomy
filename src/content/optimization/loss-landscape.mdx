@@ -94,7 +94,7 @@ Một khái niệm dễ nhầm với saddle point là **plateau** (vùng phẳng
 Tốc độ thoát tỷ lệ với **độ lớn của eigenvalue âm** (negative curvature): saddle point "sắc" (eigenvalue âm lớn) thoát nhanh; saddle point "phẳng" (eigenvalue âm nhỏ) thoát chậm — đây chính là hiện tượng **vanishing gradient** nhìn từ góc độ landscape. Ngược lại, **Du et al. (2017)** chứng minh full-batch GD trong trường hợp xấu có thể cần **thời gian mũ** để thoát saddle — càng nhấn mạnh vai trò của noise trong SGD.
 
 <Note type="result">
-**Chốt lại:** Nỗi sợ cổ điển — GD kẹt ở một *bad* local minimum — gần như tan biến ở chiều cao, vì local minimum loss cao cực hiếm (các điểm loss cao hầu hết là saddle, theo Dauphin). Chướng ngại còn lại là saddle point, nhưng noise của SGD tự động thoát ra. **Số chiều lớn vô hiệu hóa nỗi sợ lớn; SGD noise xử lý phần còn lại** — đây là lý do then chốt SGD thắng full-batch GD trên non-convex loss.
+Nỗi sợ cổ điển — GD kẹt ở một *bad* local minimum — gần như tan biến ở chiều cao, vì local minimum loss cao cực hiếm (các điểm loss cao hầu hết là saddle, theo Dauphin). Chướng ngại còn lại là saddle point, nhưng noise của SGD tự động thoát ra. **Số chiều lớn vô hiệu hóa nỗi sợ lớn; SGD noise xử lý phần còn lại** — đây là lý do then chốt SGD thắng full-batch GD trên non-convex loss.
 </Note>
 
 ## Local minima tốt đều tương đương nhau
