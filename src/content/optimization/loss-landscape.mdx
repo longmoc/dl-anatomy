@@ -368,7 +368,7 @@ Bốn cơ chế trong bài — số chiều lớn, local minima tương đương
 | Nhiều local minima có loss thấp tương đương | Symmetry + overparameterization | Không cần tìm global minimum |
 | Các minima tốt kết nối với nhau | Loss landscape là manifold liên thông | Gradient descent không bị kẹt trong vùng tốt |
 | Flat minima tốt hơn sharp minima | SGD noise + thể tích trong parameter space | SGD + small batch tự nhiên ưu tiên generalization |
-| Model lớn generalize tốt thay vì overfit | Overparameterization + implicit minimum-norm bias | Double descent — scale là bạn, không phải kẻ thù |
+| Model lớn generalize tốt thay vì overfit | Overparameterization + implicit minimum-norm bias | Double descent — scale tốt cho bạn (và hại cho phần cứng :v ) |
 
 Chính vì những cơ chế này, các paper deep learning hiện nay gần như không bao giờ phân tích tính lồi của loss. Không phải vì nó không quan trọng — mà vì câu hỏi đã thay đổi:
 
