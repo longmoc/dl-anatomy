@@ -33,9 +33,13 @@ Trái: loss lồi — GD luôn tìm được global minimum. Phải: loss không
 
 ## Số chiều lớn → saddle points áp đảo local minima
 
-Một critical point ($\nabla\mathcal{L} = 0$) là **local minimum** chỉ khi tất cả $d$ eigenvalue của Hessian đều dương — tức landscape cong lên theo mọi hướng. Chỉ cần **một** eigenvalue âm, điểm đó trở thành saddle point: cong lên theo vài hướng, cong xuống theo các hướng khác.
+Gradient descent dừng lại ở **critical point** (điểm tới hạn) — nơi gradient bằng 0, $\nabla\mathcal{L} = 0$. Nhưng gradient bằng 0 *không* có nghĩa là đã tới đáy. Bản chất của critical point được quyết định bởi **Hessian** (ma trận đạo hàm bậc hai) — cụ thể là dấu các eigenvalue của nó, vốn cho biết landscape cong lên hay cong xuống theo từng hướng:
 
-Nếu coi mỗi eigenvalue độc lập có xác suất $\frac{1}{2}$ là dương:
+- **Local minimum** — mọi eigenvalue dương → cong lên theo *mọi* hướng (đáy thung lũng)
+- **Local maximum** — mọi eigenvalue âm → cong xuống theo mọi hướng (đỉnh đồi)
+- **Saddle point** (điểm yên ngựa) — có cả eigenvalue dương lẫn âm → cong lên hướng này, cong xuống hướng khác, như yên ngựa hay một đèo núi
+
+Câu hỏi: trong ba loại trên, gradient descent ở mạng lớn thường gặp loại nào? Để là local minimum, cần **tất cả** $d$ eigenvalue đều dương. Nếu coi mỗi eigenvalue độc lập có xác suất $\frac{1}{2}$ là dương:
 
 $$
 P(\text{local minimum}) = \left(\frac{1}{2}\right)^d
@@ -72,7 +76,7 @@ Nhưng phổ eigenvalue **dịch chuyển theo loss**: tại critical point loss
 
 ### Saddle point khác plateau
 
-Cả hai đều làm gradient nhỏ, nhưng cơ chế và cách xử lý khác nhau:
+Một khái niệm dễ nhầm với saddle point là **plateau** (vùng phẳng) — một vùng rộng mà loss gần như không đổi nên gradient $\approx 0$ ở khắp nơi, không phải tại một điểm đặc biệt. Cả hai đều làm gradient nhỏ và khiến gradient descent chậm lại, nhưng cơ chế và cách xử lý khác nhau:
 
 | | Saddle point | Plateau |
 |---|---|---|

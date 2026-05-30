@@ -33,9 +33,13 @@ Left: convex loss — GD always finds the global minimum. Right: non-convex loss
 
 ## High dimensionality → saddle points, not local minima
 
-A critical point ($\nabla\mathcal{L} = 0$) is a **local minimum** only if all $d$ eigenvalues of the Hessian are positive — i.e. the landscape curves upward in every direction. A **single** negative eigenvalue makes it a saddle point: curving up in some directions, down in others.
+Gradient descent stops at a **critical point** — where the gradient is zero, $\nabla\mathcal{L} = 0$. But a zero gradient does *not* mean we've reached the bottom. The nature of a critical point is determined by the **Hessian** (the matrix of second derivatives) — specifically the signs of its eigenvalues, which tell us whether the landscape curves up or down along each direction:
 
-If we treat each eigenvalue as independently positive with probability $\frac{1}{2}$:
+- **Local minimum** — all eigenvalues positive → curves upward in *every* direction (valley floor)
+- **Local maximum** — all eigenvalues negative → curves downward in every direction (hilltop)
+- **Saddle point** — both positive and negative eigenvalues → curves up one way, down another, like a horse's saddle or a mountain pass
+
+The question: of these three types, which does gradient descent encounter most in large networks? To be a local minimum, **all** $d$ eigenvalues must be positive. If we treat each eigenvalue as independently positive with probability $\frac{1}{2}$:
 
 $$
 P(\text{local minimum}) = \left(\frac{1}{2}\right)^d
@@ -72,7 +76,7 @@ But the spectrum **shifts with loss**: at a high-loss critical point (far from t
 
 ### Saddle point vs plateau
 
-Both produce small gradients, but the mechanism and the fix differ:
+A concept easily confused with a saddle point is a **plateau** — a wide region where the loss barely changes, so the gradient is $\approx 0$ everywhere, not at one special point. Both produce small gradients and slow gradient descent down, but the mechanism and the fix differ:
 
 | | Saddle point | Plateau |
 |---|---|---|
