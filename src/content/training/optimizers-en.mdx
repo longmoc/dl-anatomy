@@ -106,7 +106,7 @@ $v_t$ — the second moment — measures "average gradient magnitude per dimensi
 | Learning rate $\eta$ | Needs careful tuning | Less sensitive, typically 1e-3 | Most impactful for SGD |
 | Momentum $\beta$ | 0.9 typical | $\beta_1 = 0.9$ | Controls "inertia" speed |
 | Weight decay | L2 added to loss | AdamW: decoupled | Adam should use AdamW |
-| Batch size | Affects noise level | Less sensitive | SGD: noise $\propto 1/|B|$ |
+| Batch size | Affects noise level | Less sensitive | SGD: noise $\propto 1/\lvertB\rvert$ |
 
 ## Articles in this series
 
