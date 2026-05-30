@@ -14,6 +14,16 @@ import Note from '../../components/Note.astro';
 
 An optimizer is the algorithm that updates parameters $\theta$ after each training step. The central question: **how do we use gradients to move efficiently through the loss landscape?**
 
+## Articles in this series
+
+| Article | Content |
+|---|---|
+| [SGD — Stochastic Gradient Descent](/dl-anatomy/training/sgd-deep-dive-en) | Why SGD works, structured noise, Langevin dynamics, implicit regularization |
+| [Momentum & Nesterov](/dl-anatomy/training/momentum-en) | Why momentum accelerates, Nesterov look-ahead |
+| [Adam & AdamW](/dl-anatomy/training/adam-en) | Adaptive gradient, bias correction, why decouple weight decay |
+| [LR Schedules](/dl-anatomy/training/lr-schedules-en) | Warmup, cosine, WSD — and when to skip the schedule entirely |
+| [Lion, Muon & Schedule-free](/dl-anatomy/training/modern-optimizers-en) | Sign-based updates, orthogonal gradients, eliminating the LR schedule |
+
 ## The core problem
 
 All optimizers solve the same minimization problem:
@@ -28,7 +38,7 @@ Pure gradient descent uses the full dataset each step: $\theta_{t+1} = \theta_t 
 
 | Era | Optimizer | What's new |
 |---|---|---|
-| 1980–2005 | [SGD](/dl-anatomy/training/sgd-deep-dive-en) | Mini-batch, stochastic gradient |
+| 1980–2005 | SGD | Mini-batch, stochastic gradient |
 | 2006–2012 | Momentum, AdaGrad, RMSProp | History accumulation, per-dimension adaptive LR |
 | 2013–2019 | Adam, AdamW | 1st & 2nd moment estimates, decoupled weight decay |
 | 2020–present | Muon, Lion, Schedule-free | LLM-scale training, no LR schedule needed |
@@ -107,16 +117,6 @@ $v_t$ — the second moment — measures "average gradient magnitude per dimensi
 | Momentum $\beta$ | 0.9 typical | $\beta_1 = 0.9$ | Controls "inertia" speed |
 | Weight decay | L2 added to loss | AdamW: decoupled | Adam should use AdamW |
 | Batch size | Affects noise level | Less sensitive | SGD: noise $\propto 1/\lvertB\rvert$ |
-
-## Articles in this series
-
-| Article | Content |
-|---|---|
-| [SGD — Stochastic Gradient Descent](/dl-anatomy/training/sgd-deep-dive-en) | Why SGD works, structured noise, Langevin dynamics, implicit regularization |
-| [Momentum & Nesterov](/dl-anatomy/training/momentum-en) | Why momentum accelerates, Nesterov look-ahead |
-| [Adam & AdamW](/dl-anatomy/training/adam-en) | Adaptive gradient, bias correction, why decouple weight decay |
-| [LR Schedules](/dl-anatomy/training/lr-schedules-en) | Warmup, cosine, WSD — and when to skip the schedule entirely |
-| [Lion, Muon & Schedule-free](/dl-anatomy/training/modern-optimizers-en) | Sign-based updates, orthogonal gradients, eliminating the LR schedule |
 
 <Note type="paper">
 For a deep dive on the Adam vs SGD generalization gap: **Wilson et al. (2017)** — "The Marginal Value of Momentum for Small Learning Rate SGD." Conclusion: well-tuned SGD matches or outperforms Adam on test accuracy across many vision benchmarks.
