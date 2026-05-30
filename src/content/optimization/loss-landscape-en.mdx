@@ -39,7 +39,7 @@ Gradient descent stops at a **critical point** — where the gradient is zero, $
 - **Local maximum** — all eigenvalues negative → curves downward in every direction (hilltop)
 - **Saddle point** — both positive and negative eigenvalues → curves up one way, down another, like a horse's saddle or a mountain pass
 
-The question: of these three types, which does gradient descent encounter most in large networks? To be a local minimum, **all** $d$ eigenvalues must be positive. If we treat each eigenvalue as independently positive with probability $\frac{1}{2}$:
+In classical optimization, the biggest fear is GD getting stuck in a **bad local minimum** — a high-loss basin it can't escape to reach a better solution. The question: in high-dimensional networks, does that actually happen? To be a local minimum, **all** $d$ eigenvalues must be positive. If we treat each eigenvalue as independently positive with probability $\frac{1}{2}$:
 
 $$
 P(\text{local minimum}) = \left(\frac{1}{2}\right)^d
@@ -94,7 +94,7 @@ A concept easily confused with a saddle point is a **plateau** — a wide region
 The escape speed is proportional to the **magnitude of the negative eigenvalue** (negative curvature): a "steep" saddle (large negative eigenvalue) is escaped quickly; a "flat" saddle (small negative eigenvalue) is escaped slowly — this is precisely the **vanishing gradient** phenomenon viewed from the landscape angle. Conversely, **Du et al. (2017)** proved that full-batch GD can, in the worst case, take **exponential time** to escape a saddle — further underscoring the role of noise in SGD.
 
 <Note type="result">
-This is a key reason SGD outperforms full-batch GD on non-convex losses: noise isn't a flaw to be removed, but a mechanism for **automatically escaping saddle points** — something full-batch GD lacks entirely.
+**In short:** The classical fear — GD trapped in a *bad* local minimum — largely vanishes in high dimensions, because high-loss local minima are extremely rare (high-loss points are mostly saddles, per Dauphin). The remaining obstacle is the saddle point, but SGD's noise escapes it automatically. **High dimensionality defuses the big fear; SGD noise handles the rest** — this is the key reason SGD beats full-batch GD on non-convex losses.
 </Note>
 
 ## All good local minima are equivalent

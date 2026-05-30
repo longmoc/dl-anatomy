@@ -39,7 +39,7 @@ Gradient descent dừng lại ở **critical point** (điểm tới hạn) — n
 - **Local maximum** — mọi eigenvalue âm → cong xuống theo mọi hướng (đỉnh đồi)
 - **Saddle point** (điểm yên ngựa) — có cả eigenvalue dương lẫn âm → cong lên hướng này, cong xuống hướng khác, như yên ngựa hay một đèo núi
 
-Câu hỏi: trong ba loại trên, gradient descent ở mạng lớn thường gặp loại nào? Để là local minimum, cần **tất cả** $d$ eigenvalue đều dương. Nếu coi mỗi eigenvalue độc lập có xác suất $\frac{1}{2}$ là dương:
+Trong tối ưu cổ điển, nỗi lo lớn nhất là GD kẹt ở một **bad local minimum** — hố loss cao mà không thoát ra để tới nghiệm tốt hơn. Câu hỏi: ở mạng nhiều chiều, điều đó có thực sự xảy ra? Để là local minimum, cần **tất cả** $d$ eigenvalue đều dương. Nếu coi mỗi eigenvalue độc lập có xác suất $\frac{1}{2}$ là dương:
 
 $$
 P(\text{local minimum}) = \left(\frac{1}{2}\right)^d
@@ -94,7 +94,7 @@ Một khái niệm dễ nhầm với saddle point là **plateau** (vùng phẳng
 Tốc độ thoát tỷ lệ với **độ lớn của eigenvalue âm** (negative curvature): saddle point "sắc" (eigenvalue âm lớn) thoát nhanh; saddle point "phẳng" (eigenvalue âm nhỏ) thoát chậm — đây chính là hiện tượng **vanishing gradient** nhìn từ góc độ landscape. Ngược lại, **Du et al. (2017)** chứng minh full-batch GD trong trường hợp xấu có thể cần **thời gian mũ** để thoát saddle — càng nhấn mạnh vai trò của noise trong SGD.
 
 <Note type="result">
-Đây là một lý do then chốt SGD hoạt động tốt hơn full-batch GD trên non-convex loss: noise không phải khuyết điểm cần loại bỏ, mà là cơ chế **tự động thoát saddle point** — thứ mà full-batch GD thiếu hoàn toàn.
+**Chốt lại:** Nỗi sợ cổ điển — GD kẹt ở một *bad* local minimum — gần như tan biến ở chiều cao, vì local minimum loss cao cực hiếm (các điểm loss cao hầu hết là saddle, theo Dauphin). Chướng ngại còn lại là saddle point, nhưng noise của SGD tự động thoát ra. **Số chiều lớn vô hiệu hóa nỗi sợ lớn; SGD noise xử lý phần còn lại** — đây là lý do then chốt SGD thắng full-batch GD trên non-convex loss.
 </Note>
 
 ## Local minima tốt đều tương đương nhau
