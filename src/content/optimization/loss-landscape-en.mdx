@@ -356,11 +356,11 @@ Three forms of **implicit** regularization appear throughout this article — no
 
 ## The full picture
 
-Four phenomena — high dimensionality, the solution manifold, SGD noise, and overparameterization — resonate together to produce good behavior that convexity theory never predicted:
+Three foundational mechanisms — high dimensionality, SGD noise, and overparameterization — resonate together to produce good behavior that convexity theory never predicted:
 
 | Observation | Mechanism | Consequence |
 |---|---|---|
-| Most critical points are saddles, not local minima | High dimensionality + Wigner law (§saddle) | Bad local minima are extremely rare |
+| Most critical points are saddles, not local minima | High dimensionality + Wigner law | Bad local minima are extremely rare |
 | Many local minima have equivalent low loss | Symmetry + overparameterization | No need to find the global minimum |
 | Good minima are connected | Loss landscape is a connected manifold | Gradient descent doesn't get trapped in good regions |
 | Flat minima generalize better | SGD noise + volume in parameter space | SGD + small batch naturally prefers generalization |
@@ -371,8 +371,8 @@ Because of these mechanisms, today's deep learning papers almost never analyze t
 | Reason | Explanation |
 |---|---|
 | We know it's non-convex | Obvious for any nonlinear network — no need to re-prove it |
-| Tight theoretical guarantees aren't needed | Experiments prove it instead of theory — what works gets used |
 | The question has shifted | No longer "does it converge?" but "where does it converge, and how does it generalize?" |
+| Tight theoretical guarantees aren't needed | Experiments prove it instead of theory — what works gets used |
 | Scale solves the problem | The larger the model, the "tamer" the landscape in practice (see NTK, double descent) |
 
 ## Theory running behind practice
@@ -388,7 +388,7 @@ Some theoretical results are trying to catch up:
 
 ## Summary
 
-In introductory courses we check convexity because it is the **sufficient condition** for optimization to work — and was the only theoretical foundation we had at the time. Deep learning breaks that condition, but compensates with **overparameterization + SGD noise + high dimensionality** — which resonate to produce good behavior that convexity theory never predicted.
+In introductory courses we check convexity because it is the **sufficient condition** for optimization to work — and was the only theoretical foundation we had at the time. Deep learning breaks that condition, yet still works thanks to **overparameterization + SGD noise + high dimensionality** — three ingredients that replace convexity with a different route to a good solution.
 
 <Note type="paper">
 Convexity still matters for understanding **why** gradient descent works in the simple case. But deep learning is an entirely different regime — current theory doesn't fully explain it, and runs 5–10 years behind empirical practice. That's why the defining question of deep learning isn't "does it work?" but "why does it work?"
