@@ -1,0 +1,125 @@
+---
+title: "Convolutional Networks"
+description: "Convolution như inductive bias cho ảnh — channels, stride, pooling, receptive field, và họ CNN từ LeNet đến Inception."
+lang: vi
+category: architectures
+order: 1
+parent: architecture-anatomy
+translation: cnn-en
+tags: [cnn, convolution, pooling, receptive-field, vision]
+---
+
+import Note from '../../components/Note.astro';
+import ConvViz from '../../components/ConvViz.astro';
+import ReceptiveFieldViz from '../../components/ReceptiveFieldViz.astro';
+
+# Convolutional Networks
+
+## Inductive bias cho ảnh
+
+Một fully-connected layer nối mọi pixel với mọi neuron. Với ảnh $224\times224\times3$, chỉ riêng layer đầu nối tới 1000 neuron đã là ~150 triệu tham số — và nó bỏ qua một sự thật hiển nhiên: **pixel gần nhau thì liên quan đến nhau**, còn pixel ở hai góc đối diện thì gần như độc lập. Convolution mã hóa đúng giả định đó qua hai nguyên lý:
+
+- **Locality**: mỗi neuron chỉ nhìn một vùng nhỏ (kernel), ví dụ $3\times3$ — không phải toàn ảnh
+- **Weight sharing**: cùng một bộ kernel trượt khắp ảnh → phát hiện một đặc trưng (cạnh, góc) ở *mọi* vị trí
+
+<Note type="intuition">
+Weight sharing là một dạng regularization mạnh: thay vì học riêng cho từng vị trí, mô hình buộc phải học đặc trưng *dùng được ở mọi nơi*. Đây là lý do CNN cực kỳ hiệu quả về dữ liệu trên ảnh so với MLP — và là một ví dụ kinh điển của "đưa giả định đúng vào kiến trúc".
+</Note>
+
+## Phép convolution
+
+Kernel (còn gọi là filter) là một ma trận nhỏ trượt trên input; tại mỗi vị trí, output là **tổng có trọng số** của vùng nó phủ:
+
+$$
+(I * K)(x, y) = \sum_{i}\sum_{j} I(x+i,\, y+j)\, K(i, j)
+$$
+
+<ConvViz />
+
+### Channels và feature map
+
+Ảnh màu có 3 **kênh** (R, G, B). Một filter conv không chỉ là $3\times3$ mà là $3\times3\times C_{in}$ — nó trải trên *toàn bộ* kênh đầu vào và cộng lại thành **một** feature map. Dùng $K$ filter khác nhau → $K$ feature map → đó là $C_{out} = K$ kênh đầu ra:
+
+$$
+(C_{in},\, H,\, W) \;\xrightarrow{\;K \text{ filters } k\times k\;}\; (K,\, H',\, W')
+$$
+
+Mỗi feature map là "bản đồ" cho biết một đặc trưng cụ thể xuất hiện ở đâu trong ảnh.
+
+### Stride, padding, kích thước output
+
+- **Kernel size** $k$ — vùng nhìn mỗi bước (thường 3 hoặc 5)
+- **Stride** $s$ — bước nhảy khi trượt; $s>1$ làm giảm độ phân giải
+- **Padding** $p$ — thêm viền 0 quanh input để giữ kích thước
+
+Kích thước output theo mỗi chiều:
+
+$$
+H' = \left\lfloor \frac{H - k + 2p}{s} \right\rfloor + 1
+$$
+
+### Tiết kiệm tham số
+
+Một conv layer $3\times3$ với $C_{in}=C_{out}=64$ chỉ có $3\times3\times64\times64 \approx 37\text{K}$ tham số — **độc lập với kích thước ảnh**. Một FC layer tương đương trên feature map $64\times56\times56$ sẽ cần hàng tỷ tham số. Locality + weight sharing cắt giảm tham số theo nhiều bậc độ lớn.
+
+## Pooling và downsampling
+
+Sau vài conv layer, ta thường **pooling** để giảm độ phân giải: chia feature map thành các ô và lấy max (**max pooling**) hoặc trung bình (**average pooling**) mỗi ô. Lợi ích: giảm tính toán, tăng receptive field, và thêm một chút bất biến với dịch chuyển nhỏ.
+
+<Note type="theorem">
+Phân biệt quan trọng: convolution là **translation-equivariant** — dịch input thì feature map dịch theo y hệt. Pooling thêm **translation-invariance** — dịch nhỏ trong một ô pooling không đổi output. CNN kết hợp cả hai: biết đặc trưng *ở đâu* (equivariant) nhưng vẫn nhận ra dù nó xê dịch chút ít (invariant).
+</Note>
+
+## Receptive field
+
+**Receptive field** của một neuron là vùng input mà nó "nhìn thấy". Một conv $3\times3$ chỉ thấy $3\times3$ pixel — rất cục bộ. Nhưng xếp chồng nhiều layer, vùng nhìn lớn dần: với $L$ layer kernel $k$ (stride 1),
+
+$$
+RF = 1 + L\,(k-1)
+$$
+
+<ReceptiveFieldViz />
+
+Đây là chìa khóa: từ các phép toán **hoàn toàn cục bộ**, một stack đủ sâu vẫn nắm được **ngữ cảnh toàn cục** — neuron ở layer cuối nhìn được gần như cả ảnh.
+
+## Phân cấp đặc trưng
+
+Vì receptive field lớn dần theo độ sâu, các đặc trưng cũng trừu tượng dần:
+
+- **Layer đầu**: cạnh, góc, gradient màu (vùng nhìn nhỏ)
+- **Layer giữa**: texture, hoa văn, bộ phận đơn giản (mắt, bánh xe)
+- **Layer cuối**: bộ phận phức tạp → toàn bộ vật thể
+
+Mạng tự học phân cấp này từ dữ liệu — không ai lập trình "đây là cạnh, kia là mắt".
+
+## Mẫu kiến trúc kinh điển
+
+CNN cổ điển lặp lại một khối: **conv → activation → (đôi khi) pool**, xếp chồng nhiều lần, rồi một **FC head** ở cuối để phân loại:
+
+```
+[Conv → ReLU → Pool] × N  →  Flatten  →  FC → Softmax
+```
+
+Càng lên sâu, độ phân giải không gian giảm (pooling) nhưng số kênh tăng — đổi "ở đâu" lấy "là gì".
+
+## Họ CNN trước ResNet
+
+| Năm | Mạng | Đóng góp chính |
+|---|---|---|
+| 1998 | LeNet-5 | CNN đầu tiên thực dụng (nhận dạng chữ số) |
+| 2012 | AlexNet | Sâu + ReLU + GPU + dropout → thắng áp đảo ImageNet, châm ngòi deep learning |
+| 2014 | VGG | Chỉ dùng conv $3\times3$ xếp chồng → đơn giản, sâu (16–19 layer) |
+| 2014 | GoogLeNet / Inception | Inception block đa tỉ lệ (nhiều kernel size song song) + conv $1\times1$ giảm chiều |
+
+<Note type="result">
+Xu hướng rõ rệt: **càng sâu càng tốt** — LeNet vài layer, AlexNet 8, VGG 19. Nhưng khi cố đẩy sâu hơn nữa, training error lại *tăng* thay vì giảm. Nghịch lý này là động lực cho ResNet — xem [ResNet & Modern CNN](/dl-anatomy/architectures/resnet).
+</Note>
+
+## Papers tham khảo
+
+| Paper | |
+|---|---|
+| LeCun et al. (1998) | Gradient-Based Learning Applied to Document Recognition (LeNet) |
+| Krizhevsky et al. (2012) | ImageNet Classification with Deep CNNs (AlexNet) |
+| Simonyan & Zisserman (2014) | Very Deep Convolutional Networks (VGG) |
+| Szegedy et al. (2014) | Going Deeper with Convolutions (GoogLeNet/Inception) |

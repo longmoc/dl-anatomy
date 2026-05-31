@@ -1,0 +1,125 @@
+---
+title: "Convolutional Networks"
+description: "Convolution as an inductive bias for images — channels, stride, pooling, receptive field, and the CNN family from LeNet to Inception."
+lang: en
+category: architectures
+order: 1
+parent: architecture-anatomy
+translation: cnn
+tags: [cnn, convolution, pooling, receptive-field, vision]
+---
+
+import Note from '../../components/Note.astro';
+import ConvViz from '../../components/ConvViz.astro';
+import ReceptiveFieldViz from '../../components/ReceptiveFieldViz.astro';
+
+# Convolutional Networks
+
+## An inductive bias for images
+
+A fully-connected layer wires every pixel to every neuron. For a $224\times224\times3$ image, just the first layer into 1000 neurons is ~150 million parameters — and it ignores an obvious fact: **nearby pixels are related**, while pixels in opposite corners are nearly independent. Convolution bakes in exactly that assumption through two principles:
+
+- **Locality**: each neuron looks at only a small region (the kernel), e.g. $3\times3$ — not the whole image
+- **Weight sharing**: the same kernel slides across the image → it detects one feature (edge, corner) at *every* position
+
+<Note type="intuition">
+Weight sharing is a strong form of regularization: instead of learning per-position, the model is forced to learn features that are *useful everywhere*. This is why CNNs are far more data-efficient than MLPs on images — a textbook case of "putting the right assumption into the architecture."
+</Note>
+
+## The convolution operation
+
+A kernel (or filter) is a small matrix that slides over the input; at each position the output is a **weighted sum** of the patch it covers:
+
+$$
+(I * K)(x, y) = \sum_{i}\sum_{j} I(x+i,\, y+j)\, K(i, j)
+$$
+
+<ConvViz lang="en" />
+
+### Channels and feature maps
+
+A color image has 3 **channels** (R, G, B). A conv filter isn't just $3\times3$ but $3\times3\times C_{in}$ — it spans *all* input channels and sums them into **one** feature map. Using $K$ different filters → $K$ feature maps → that's $C_{out} = K$ output channels:
+
+$$
+(C_{in},\, H,\, W) \;\xrightarrow{\;K \text{ filters } k\times k\;}\; (K,\, H',\, W')
+$$
+
+Each feature map is a "map" of where one specific feature appears in the image.
+
+### Stride, padding, output size
+
+- **Kernel size** $k$ — the field of view per step (typically 3 or 5)
+- **Stride** $s$ — the step when sliding; $s>1$ downsamples
+- **Padding** $p$ — a border of zeros around the input to preserve size
+
+Output size per dimension:
+
+$$
+H' = \left\lfloor \frac{H - k + 2p}{s} \right\rfloor + 1
+$$
+
+### Parameter savings
+
+A $3\times3$ conv layer with $C_{in}=C_{out}=64$ has only $3\times3\times64\times64 \approx 37\text{K}$ parameters — **independent of image size**. An equivalent FC layer on a $64\times56\times56$ feature map would need billions. Locality + weight sharing cut parameters by orders of magnitude.
+
+## Pooling and downsampling
+
+After a few conv layers we usually **pool** to reduce resolution: split the feature map into cells and take the max (**max pooling**) or average (**average pooling**) of each. Benefits: less computation, larger receptive field, and a bit of invariance to small shifts.
+
+<Note type="theorem">
+A key distinction: convolution is **translation-equivariant** — shift the input and the feature map shifts identically. Pooling adds **translation-invariance** — a small shift within a pooling cell doesn't change the output. CNNs combine both: they know *where* a feature is (equivariant) yet still recognize it when it moves a little (invariant).
+</Note>
+
+## Receptive field
+
+A neuron's **receptive field** is the input region it "sees". A single $3\times3$ conv sees only $3\times3$ pixels — very local. But stacking layers grows that field: with $L$ layers of kernel $k$ (stride 1),
+
+$$
+RF = 1 + L\,(k-1)
+$$
+
+<ReceptiveFieldViz lang="en" />
+
+This is the key: from **purely local** operations, a deep enough stack still captures **global context** — a neuron in the final layer sees almost the whole image.
+
+## Feature hierarchy
+
+Because the receptive field grows with depth, features grow more abstract too:
+
+- **Early layers**: edges, corners, color gradients (small field of view)
+- **Middle layers**: textures, patterns, simple parts (eyes, wheels)
+- **Late layers**: complex parts → whole objects
+
+The network learns this hierarchy from data — nobody programs "this is an edge, that is an eye."
+
+## The classic architecture pattern
+
+A classic CNN repeats a block — **conv → activation → (sometimes) pool** — stacked several times, then a **FC head** at the end for classification:
+
+```
+[Conv → ReLU → Pool] × N  →  Flatten  →  FC → Softmax
+```
+
+Deeper in, spatial resolution shrinks (pooling) while the number of channels grows — trading "where" for "what".
+
+## The CNN family before ResNet
+
+| Year | Network | Key contribution |
+|---|---|---|
+| 1998 | LeNet-5 | First practical CNN (digit recognition) |
+| 2012 | AlexNet | Deep + ReLU + GPU + dropout → dominated ImageNet, ignited deep learning |
+| 2014 | VGG | Only stacked $3\times3$ convs → simple, deep (16–19 layers) |
+| 2014 | GoogLeNet / Inception | Multi-scale Inception block (parallel kernel sizes) + $1\times1$ convs for dimension reduction |
+
+<Note type="result">
+A clear trend: **deeper is better** — LeNet a few layers, AlexNet 8, VGG 19. But pushing deeper still, training error started to *rise* instead of fall. That paradox motivated ResNet — see [ResNet & Modern CNN](/dl-anatomy/architectures/resnet-en).
+</Note>
+
+## References
+
+| Paper | |
+|---|---|
+| LeCun et al. (1998) | Gradient-Based Learning Applied to Document Recognition (LeNet) |
+| Krizhevsky et al. (2012) | ImageNet Classification with Deep CNNs (AlexNet) |
+| Simonyan & Zisserman (2014) | Very Deep Convolutional Networks (VGG) |
+| Szegedy et al. (2014) | Going Deeper with Convolutions (GoogLeNet/Inception) |

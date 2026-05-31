@@ -3,7 +3,7 @@ title: "Transformer & Attention"
 description: "Scaled dot-product attention, self-attention, positional encoding and multi-head — the core mechanism of the architecture that dominates modern deep learning."
 lang: en
 category: architectures
-order: 4
+order: 5
 parent: architecture-anatomy
 translation: transformer
 tags: [transformer, attention, positional-encoding, multi-head]
@@ -53,7 +53,7 @@ Instead of one attention, use $h$ parallel "heads", each learning a different ki
 
 ## The Transformer block
 
-A block stacks: **multi-head attention → FFN** (a 2-layer network applied per token), each wrapped in a **residual connection** (see [CNN & ResNet](/dl-anatomy/architectures/cnn-resnet-en)) + **normalization**. Stack $N$ blocks → a Transformer.
+A block stacks: **multi-head attention → FFN** (a 2-layer network applied per token), each wrapped in a **residual connection** (see [ResNet & Modern CNN](/dl-anatomy/architectures/resnet-en)) + **normalization**. Stack $N$ blocks → a Transformer.
 
 Why it beats RNNs: (1) **parallelizable** over the whole sequence during training, (2) the path between any two tokens is just 1 step → long-range dependencies are easy to capture, (3) it **scales** smoothly with data and compute.
 

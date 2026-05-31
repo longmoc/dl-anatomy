@@ -1,0 +1,161 @@
+---
+interface Props {
+  lang?: 'vi' | 'en';
+}
+const { lang = 'vi' } = Astro.props;
+
+const ui = lang === 'en'
+  ? {
+      layers: 'Layers', kernel: 'Kernel',
+      caption: 'One neuron in a deep layer "sees" a growing region of the input. Stacking L conv layers with kernel k (stride 1) gives a receptive field of 1 + L·(k−1). This is how deep stacks capture global context from purely local operations.',
+    }
+  : {
+      layers: 'Số layer', kernel: 'Kernel',
+      caption: 'Một neuron ở layer sâu "nhìn thấy" một vùng input lớn dần. Xếp L conv layer kernel k (stride 1) cho receptive field = 1 + L·(k−1). Đây là cách stack sâu nắm được ngữ cảnh toàn cục từ các phép toán hoàn toàn cục bộ.',
+    };
+---
+
+<div class="rfv" data-lang={lang}>
+  <canvas class="rfv-canvas"></canvas>
+  <div class="rfv-controls">
+    <span class="rfv-lbl">{ui.layers}</span>
+    <input type="range" class="rfv-layers" min="1" max="6" value="3" />
+    <span class="rfv-lval">3</span>
+    <span class="rfv-lbl">{ui.kernel}</span>
+    <input type="range" class="rfv-kernel" min="3" max="7" step="2" value="3" />
+    <span class="rfv-kval">3×3</span>
+  </div>
+  <p class="rfv-caption">{ui.caption}</p>
+</div>
+
+<script>
+document.querySelectorAll('.rfv').forEach(root => {
+  const canvas = root.querySelector('.rfv-canvas') as HTMLCanvasElement;
+  const ctx    = canvas.getContext('2d')!;
+  const isEn   = (root as HTMLElement).dataset.lang === 'en';
+  const lSlider = root.querySelector('.rfv-layers') as HTMLInputElement;
+  const kSlider = root.querySelector('.rfv-kernel') as HTMLInputElement;
+  const lval = root.querySelector('.rfv-lval') as HTMLElement;
+  const kval = root.querySelector('.rfv-kval') as HTMLElement;
+  const cv = (n: string) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+  // 1D illustration: input row at bottom, layers stacking up; the receptive field
+  // of the single top neuron is highlighted on the input.
+  let W = 0, H = 0;
+
+  function draw() {
+    const rect = canvas.getBoundingClientRect();
+    W = rect.width; H = rect.height;
+    if (!W || !H) return;
+    const dpr = window.devicePixelRatio || 1;
+    if (canvas.width !== W * dpr) { canvas.width = W * dpr; canvas.height = H * dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const bg = cv('--bg'), muted = cv('--muted'), accent = cv('--accent'), accent2 = cv('--accent2'), border = cv('--border'), text = cv('--text');
+
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    const L = lSlider.valueAsNumber;
+    const k = kSlider.valueAsNumber;
+    const rf = 1 + L * (k - 1);
+
+    const N = 25; // input width in cells
+    const PL = 16, PR = 16, PT = 22, PB = 26;
+    const cell = Math.min((W - PL - PR) / N, 16);
+    const gridW = cell * N;
+    const x0 = (W - gridW) / 2;
+    const rowH = (H - PT - PB) / (L + 1);
+    const dotR = Math.min(cell * 0.32, rowH * 0.26, 5);
+
+    // center index
+    const center = Math.floor(N / 2);
+
+    // receptive field span at the input for the top neuron
+    const half = Math.floor(rf / 2);
+    const rfLo = Math.max(0, center - half);
+    const rfHi = Math.min(N - 1, center + half);
+
+    // draw layers from input (bottom, layer 0) to top (layer L)
+    const rowY = (layer: number) => PT + (L - layer) * rowH + rowH / 2;
+
+    // edges: connect top neuron down through its receptive cones (approximate)
+    // For visual: at each layer, the "active" span shrinks toward center going up.
+    const spanAt = (layer: number) => {
+      // active half-width at this layer feeding the single top neuron
+      const hw = Math.floor((1 + (L - layer) * (k - 1)) / 2);
+      return [Math.max(0, center - hw), Math.min(N - 1, center + hw)];
+    };
+
+    // draw connection band
+    ctx.fillStyle = accent2 + '22';
+    ctx.beginPath();
+    const topY = rowY(L);
+    const [bLo, bHi] = spanAt(0);
+    ctx.moveTo(x0 + center*cell + cell/2, topY);
+    ctx.lineTo(x0 + bLo*cell + cell/2, rowY(0));
+    ctx.lineTo(x0 + bHi*cell + cell/2 + cell*0, rowY(0));
+    ctx.closePath();
+    ctx.fill();
+
+    // dots per layer
+    for (let layer = 0; layer <= L; layer++) {
+      const y = rowY(layer);
+      const [lo, hi] = spanAt(layer);
+      for (let i = 0; i < N; i++) {
+        const cx = x0 + i*cell + cell/2;
+        const inRF = i >= lo && i <= hi;
+        const isInput = layer === 0;
+        const isTop = layer === L && i === center;
+        ctx.beginPath();
+        ctx.arc(cx, y, isTop ? dotR + 2 : dotR, 0, 2*Math.PI);
+        if (isTop) { ctx.fillStyle = accent; }
+        else if (isInput && inRF) { ctx.fillStyle = accent2; }
+        else if (inRF) { ctx.fillStyle = accent2 + 'aa'; }
+        else { ctx.fillStyle = border; }
+        ctx.fill();
+      }
+      // layer label
+      ctx.fillStyle = muted;
+      ctx.font = '9px var(--mono, monospace)';
+      ctx.textAlign = 'left';
+      const lab = layer === 0 ? (isEn ? 'input' : 'input') : `L${layer}`;
+      ctx.fillText(lab, 2, y + 3);
+    }
+
+    // RF bracket on input
+    const by = rowY(0) + rowH * 0.42;
+    ctx.strokeStyle = accent2;
+    ctx.lineWidth = 2;
+    const bx0 = x0 + rfLo*cell + cell*0.1, bx1 = x0 + rfHi*cell + cell*0.9;
+    ctx.beginPath();
+    ctx.moveTo(bx0, by - 4); ctx.lineTo(bx0, by); ctx.lineTo(bx1, by); ctx.lineTo(bx1, by - 4);
+    ctx.stroke();
+
+    // RF readout
+    ctx.fillStyle = text;
+    ctx.font = 'bold 11px var(--mono, monospace)';
+    ctx.textAlign = 'center';
+    ctx.fillText(
+      isEn ? `receptive field = ${rf} (= 1 + ${L}·${k-1})` : `receptive field = ${rf} (= 1 + ${L}·${k-1})`,
+      W / 2, H - 8
+    );
+  }
+
+  lSlider.addEventListener('input', () => { lval.textContent = lSlider.value; draw(); });
+  kSlider.addEventListener('input', () => { kval.textContent = `${kSlider.value}×${kSlider.value}`; draw(); });
+  const ro = new ResizeObserver(draw);
+  ro.observe(canvas);
+  draw();
+});
+</script>
+
+<style>
+  .rfv { margin: 1.75rem 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--bg2); }
+  .rfv-canvas { width: 100%; height: 220px; display: block; background: var(--bg); }
+  .rfv-controls { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; padding: 0.55rem 0.9rem; border-top: 1px solid var(--border); }
+  .rfv-lbl { font-family: var(--mono); font-size: 0.75rem; color: var(--muted); }
+  .rfv-layers, .rfv-kernel { flex: 1; min-width: 70px; max-width: 130px; }
+  .rfv-lval, .rfv-kval { font-family: var(--mono); font-size: 0.75rem; color: var(--accent); min-width: 28px; }
+  .rfv-caption { font-size: 0.78rem; color: var(--muted); text-align: center; padding: 0.1rem 1rem 0.65rem; font-style: italic; line-height: 1.5; }
+</style>

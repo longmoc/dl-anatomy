@@ -3,7 +3,7 @@ title: "Transformer & Attention"
 description: "Scaled dot-product attention, self-attention, positional encoding và multi-head — cơ chế cốt lõi của kiến trúc thống trị deep learning hiện đại."
 lang: vi
 category: architectures
-order: 4
+order: 5
 parent: architecture-anatomy
 translation: transformer-en
 tags: [transformer, attention, positional-encoding, multi-head]
@@ -53,7 +53,7 @@ Thay vì một attention, dùng $h$ "đầu" song song, mỗi đầu học một
 
 ## Transformer block
 
-Một block xếp chồng: **multi-head attention → FFN** (mạng 2 lớp áp cho từng token), mỗi phần bọc trong **residual connection** (xem [CNN & ResNet](/dl-anatomy/architectures/cnn-resnet)) + **normalization**. Xếp $N$ block → Transformer.
+Một block xếp chồng: **multi-head attention → FFN** (mạng 2 lớp áp cho từng token), mỗi phần bọc trong **residual connection** (xem [ResNet & Modern CNN](/dl-anatomy/architectures/resnet)) + **normalization**. Xếp $N$ block → Transformer.
 
 Tại sao thắng RNN: (1) **song song hóa** toàn chuỗi khi train, (2) đường đi giữa hai token bất kỳ chỉ dài 1 bước → bắt phụ thuộc xa dễ, (3) **scale** mượt theo data và compute.
 
