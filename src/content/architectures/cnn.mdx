@@ -111,6 +111,8 @@ Càng lên sâu, độ phân giải không gian giảm (pooling) nhưng số kê
 | 2014 | VGG | Chỉ dùng conv $3\times3$ xếp chồng → đơn giản, sâu (16–19 layer) |
 | 2014 | GoogLeNet / Inception | Inception block đa tỉ lệ (nhiều kernel size song song) + conv $1\times1$ giảm chiều |
 
+Inception để lại hai ý tưởng còn ảnh hưởng đến nay. **Multi-scale**: thay vì chọn một kernel size, một Inception block chạy song song nhiều kernel ($1\times1$, $3\times3$, $5\times5$) rồi ghép kết quả — để mạng tự chọn tỉ lệ phù hợp. **Conv $1\times1$**: một kernel $1\times1$ không nhìn không gian, chỉ trộn các kênh tại từng pixel — dùng để *giảm số kênh* trước các conv đắt đỏ, cắt tính toán mà vẫn giữ độ biểu đạt. Chính ý tưởng $1\times1$ này được ResNet mượn lại cho **bottleneck block**.
+
 <Note type="result">
 Xu hướng rõ rệt: **càng sâu càng tốt** — LeNet vài layer, AlexNet 8, VGG 19. Nhưng khi cố đẩy sâu hơn nữa, training error lại *tăng* thay vì giảm. Nghịch lý này là động lực cho ResNet — xem [ResNet & Modern CNN](/dl-anatomy/architectures/resnet).
 </Note>

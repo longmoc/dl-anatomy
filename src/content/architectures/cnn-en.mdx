@@ -111,6 +111,8 @@ Deeper in, spatial resolution shrinks (pooling) while the number of channels gro
 | 2014 | VGG | Only stacked $3\times3$ convs → simple, deep (16–19 layers) |
 | 2014 | GoogLeNet / Inception | Multi-scale Inception block (parallel kernel sizes) + $1\times1$ convs for dimension reduction |
 
+Inception left two ideas that still matter today. **Multi-scale**: instead of picking one kernel size, an Inception block runs several kernels in parallel ($1\times1$, $3\times3$, $5\times5$) and concatenates the results — letting the network choose the right scale. **The $1\times1$ conv**: a $1\times1$ kernel doesn't look at space, it only mixes channels at each pixel — used to *reduce the channel count* before expensive convs, cutting computation while keeping expressiveness. It's exactly this $1\times1$ idea that ResNet reuses for its **bottleneck block**.
+
 <Note type="result">
 A clear trend: **deeper is better** — LeNet a few layers, AlexNet 8, VGG 19. But pushing deeper still, training error started to *rise* instead of fall. That paradox motivated ResNet — see [ResNet & Modern CNN](/dl-anatomy/architectures/resnet-en).
 </Note>
