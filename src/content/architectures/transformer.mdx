@@ -1,0 +1,93 @@
+---
+title: "Transformer & Attention"
+description: "Scaled dot-product attention, positional encoding, các biến thể encoder/decoder, ViT và MoE — kiến trúc thống trị deep learning hiện đại."
+lang: vi
+category: architectures
+order: 3
+parent: architecture-anatomy
+translation: transformer-en
+tags: [transformer, attention, positional-encoding, vit, moe]
+---
+
+import Note from '../../components/Note.astro';
+import AttentionViz from '../../components/AttentionViz.astro';
+
+# Transformer & Attention
+
+Năm 2017, *"Attention Is All You Need"* bỏ hoàn toàn recurrence: không RNN, không convolution — chỉ còn **attention**. Đây là kiến trúc nền của gần như mọi LLM hiện nay.
+
+## Scaled dot-product attention
+
+Ý tưởng: mỗi token tạo ba vector — **query** $q$ (tôi đang tìm gì), **key** $k$ (tôi chứa gì), **value** $v$ (tôi mang thông tin gì). Token $i$ tổng hợp value của các token khác, có trọng số theo độ khớp giữa query của nó và key của chúng:
+
+$$
+\text{Attention}(Q, K, V) = \text{softmax}\!\left(\frac{QK^\top}{\sqrt{d_k}}\right) V
+$$
+
+- $QK^\top$ — điểm khớp giữa mọi cặp token
+- chia $\sqrt{d_k}$ — chuẩn hóa: khi $d_k$ lớn, dot product có phương sai lớn → softmax bão hòa (gradient gần 0); chia $\sqrt{d_k}$ giữ phương sai ổn định
+- softmax — biến điểm khớp thành trọng số tổng bằng 1
+
+<Note type="intuition">
+Attention là một dạng "tra cứu mềm" (soft dictionary lookup): query so với mọi key, lấy value theo trọng số khớp. Khác hashtable cứng (chỉ một key trúng), ở đây mọi key đóng góp một phần.
+</Note>
+
+<AttentionViz />
+
+## Self-attention permutation-equivariant
+
+Trong **self-attention**, $Q, K, V$ đều sinh từ cùng một chuỗi → mỗi token nhìn mọi token (kể cả chính nó). Hệ quả quan trọng: attention **bất biến theo hoán vị** — đảo thứ tự token thì output cũng chỉ đảo theo, attention không "biết" vị trí. Tốt cho set, nhưng văn bản thì thứ tự là tất cả.
+
+## Positional encoding — bơm thông tin vị trí
+
+Vì attention không có khái niệm thứ tự, ta phải thêm vị trí vào input:
+
+- **Sinusoidal PE (2017)**: cộng vào embedding các sóng sin/cos nhiều tần số — vị trí tuyệt đối, cố định, không cần học
+- **Learned PE**: học một vector cho mỗi vị trí (BERT, GPT-2)
+- **RoPE (2021)**: *xoay* vector q/k theo góc tỉ lệ với vị trí → mã hóa vị trí **tương đối**, extrapolate tốt hơn cho chuỗi dài; dùng trong LLaMA, hầu hết LLM mới
+- **ALiBi (2021)**: cộng bias tuyến tính theo khoảng cách vào điểm attention
+
+## Multi-head attention
+
+Thay vì một attention, dùng $h$ "đầu" song song, mỗi đầu học một kiểu quan hệ khác (cú pháp, đồng tham chiếu, …), rồi ghép lại. Giống nhiều kernel trong CNN — nhiều bộ lọc quan hệ chạy đồng thời.
+
+## Transformer block
+
+Một block xếp chồng: **multi-head attention → FFN** (mạng 2 lớp áp cho từng token), mỗi phần bọc trong **residual connection** (xem [CNN & ResNet](/dl-anatomy/architectures/cnn-resnet)) + **normalization**. Xếp $N$ block → Transformer.
+
+Tại sao thắng RNN: (1) **song song hóa** toàn chuỗi khi train, (2) đường đi giữa hai token bất kỳ chỉ dài 1 bước → bắt phụ thuộc xa dễ, (3) **scale** mượt theo data và compute.
+
+## Các biến thể
+
+| Biến thể | Ví dụ | Dùng cho |
+|---|---|---|
+| Encoder-only | BERT | Hiểu/biểu diễn (classification, embedding) |
+| Decoder-only | GPT, LLaMA | Sinh văn bản tự hồi quy |
+| Encoder-decoder | T5, BART | Seq2seq (dịch, tóm tắt) |
+| Vision Transformer | ViT | Ảnh chia thành patch → token |
+| Efficient Transformer | Longformer, FlashAttention | Giảm chi phí $O(n^2)$ |
+
+## MoE — scale tham số mà không scale compute
+
+Attention $O(n^2)$ đắt, nhưng phần lớn tham số LLM nằm ở FFN. **Mixture of Experts** thay một FFN bằng nhiều "expert" FFN + một **router**: mỗi token chỉ đi qua top-$k$ expert (thường $k=2$).
+
+$$
+y = \sum_{e \in \text{top-}k} g_e(x)\, \text{FFN}_e(x)
+$$
+
+→ tổng tham số tăng gấp nhiều lần (kiến thức nhiều hơn) nhưng **compute mỗi token gần như không đổi** (sparse activation). Switch Transformer, Mixtral dùng cách này. Thách thức: **load balancing** — tránh router dồn hết vào vài expert.
+
+<Note type="result">
+Transformer = GNN trên đồ thị đầy đủ (mọi token nối nhau, trọng số cạnh = attention). Nó bỏ inductive bias về thứ tự/locality, đổi lại đòi hỏi data + compute lớn — và chính sự "ít giả định" đó khiến nó tổng quát hóa được sang văn bản, ảnh, âm thanh, protein…
+</Note>
+
+## Papers tham khảo
+
+| Paper | |
+|---|---|
+| Vaswani et al. (2017) | Attention Is All You Need |
+| Devlin et al. (2018) | BERT |
+| Dosovitskiy et al. (2020) | An Image is Worth 16×16 Words (ViT) |
+| Su et al. (2021) | RoFormer: Rotary Position Embedding (RoPE) |
+| Fedus et al. (2021) | Switch Transformers |
+| Jiang et al. (2024) | Mixtral of Experts |

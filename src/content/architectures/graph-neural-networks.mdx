@@ -1,0 +1,79 @@
+---
+title: "Graph Neural Networks"
+description: "Message passing trên đồ thị — GCN, GraphSAGE, GAT, Graph Transformer — và mối liên hệ với Transformer."
+lang: vi
+category: architectures
+order: 4
+parent: architecture-anatomy
+translation: graph-neural-networks-en
+tags: [gnn, gcn, gat, message-passing, graph]
+---
+
+import Note from '../../components/Note.astro';
+
+# Graph Neural Networks
+
+Nhiều dữ liệu không phải lưới (ảnh) hay chuỗi (văn bản) mà là **đồ thị**: mạng xã hội, phân tử, knowledge graph, hệ thống gợi ý. Inductive bias cần thiết: bất biến theo hoán vị node, và khai thác **quan hệ qua cạnh**.
+
+## Message passing — nguyên lý chung
+
+Gần như mọi GNN đều theo khuôn **message passing**: mỗi node cập nhật biểu diễn của nó bằng cách tổng hợp thông tin từ các node hàng xóm, lặp qua nhiều vòng:
+
+$$
+h_v^{(k+1)} = \text{UPDATE}\Big(h_v^{(k)},\; \text{AGGREGATE}\big(\{ h_u^{(k)} : u \in \mathcal{N}(v) \}\big)\Big)
+$$
+
+Sau $k$ vòng, mỗi node "thấy" được thông tin từ các node cách nó $k$ bước. Hàm AGGREGATE phải **bất biến theo hoán vị** (sum, mean, max) vì hàng xóm không có thứ tự.
+
+<Note type="intuition">
+So sánh với các kiến trúc khác: CNN tổng hợp từ pixel lân cận trên lưới, RNN từ bước trước trên chuỗi, GNN từ node kề trên đồ thị. Cùng một ý tưởng "thu thập từ hàng xóm rồi cập nhật" — chỉ khác *hàng xóm là gì*.
+</Note>
+
+## Các biến thể chính
+
+**GCN (Kipf & Welling, 2017)** — aggregate = trung bình có chuẩn hóa theo bậc node:
+
+$$
+h_v^{(k+1)} = \sigma\!\Big( \sum_{u \in \mathcal{N}(v) \cup \{v\}} \frac{1}{\sqrt{d_u d_v}}\, W h_u^{(k)} \Big)
+$$
+
+Đơn giản, hiệu quả, nhưng trọng số mỗi hàng xóm cố định theo cấu trúc đồ thị.
+
+**GraphSAGE (Hamilton et al., 2017)** — thay vì dùng *toàn bộ* hàng xóm (không scale với đồ thị tỉ node), **lấy mẫu** một tập con cố định và aggregate. Cho phép inductive learning trên đồ thị lớn/động.
+
+**GAT (Veličković et al., 2018)** — thêm **attention trên cạnh**: học trọng số $\alpha_{vu}$ cho từng hàng xóm thay vì cố định theo bậc:
+
+$$
+h_v^{(k+1)} = \sigma\!\Big( \sum_{u \in \mathcal{N}(v)} \alpha_{vu}\, W h_u^{(k)} \Big)
+$$
+
+→ node tự quyết hàng xóm nào quan trọng, giống self-attention nhưng giới hạn trong các cạnh có thật.
+
+## Liên hệ với Transformer
+
+Đặt cạnh GAT, Transformer trở nên rất quen: cả hai đều là **attention-weighted aggregation từ hàng xóm**. Khác biệt duy nhất là *đồ thị*:
+
+| | GAT | Transformer |
+|---|---|---|
+| Đồ thị | Cạnh có thật của dữ liệu | Đồ thị **đầy đủ** (mọi token nối nhau) |
+| Hàng xóm | $\mathcal{N}(v)$ theo cạnh | Tất cả token |
+| Vị trí | Cấu trúc đồ thị là vị trí | Cần positional encoding |
+
+<Note type="result">
+Transformer = GNN trên đồ thị đầy đủ. **Graph Transformer** đi ngược lại: áp attention kiểu Transformer lên đồ thị thật, dùng structural/positional encoding (Laplacian eigenvectors, random walk) để bơm thông tin topology — kết hợp sức mạnh attention với inductive bias của đồ thị.
+</Note>
+
+## Thách thức đặc thù
+
+- **Over-smoothing**: chồng quá nhiều vòng message passing → biểu diễn các node hội tụ về giống nhau, mất khả năng phân biệt
+- **Scalability**: đồ thị tỉ node (mạng xã hội) cần sampling (GraphSAGE) hoặc phân cụm
+- **Geometric GNN**: với dữ liệu có cấu trúc hình học (phân tử 3D), cần thêm bất biến theo phép quay/tịnh tiến (equivariance) — quan trọng cho AlphaFold, mô phỏng vật lý
+
+## Papers tham khảo
+
+| Paper | |
+|---|---|
+| Kipf & Welling (2017) | Semi-Supervised Classification with GCN |
+| Hamilton et al. (2017) | Inductive Representation Learning on Large Graphs (GraphSAGE) |
+| Veličković et al. (2018) | Graph Attention Networks (GAT) |
+| Gilmer et al. (2017) | Neural Message Passing for Quantum Chemistry |

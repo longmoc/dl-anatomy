@@ -1,0 +1,79 @@
+---
+title: "Graph Neural Networks"
+description: "Message passing over graphs — GCN, GraphSAGE, GAT, Graph Transformer — and the connection to Transformers."
+lang: en
+category: architectures
+order: 4
+parent: architecture-anatomy
+translation: graph-neural-networks
+tags: [gnn, gcn, gat, message-passing, graph]
+---
+
+import Note from '../../components/Note.astro';
+
+# Graph Neural Networks
+
+Much data is neither a grid (images) nor a sequence (text) but a **graph**: social networks, molecules, knowledge graphs, recommendation systems. The needed inductive bias: permutation invariance over nodes, and exploiting **relations via edges**.
+
+## Message passing — the common principle
+
+Almost every GNN follows the **message passing** template: each node updates its representation by aggregating information from its neighbors, iterated over several rounds:
+
+$$
+h_v^{(k+1)} = \text{UPDATE}\Big(h_v^{(k)},\; \text{AGGREGATE}\big(\{ h_u^{(k)} : u \in \mathcal{N}(v) \}\big)\Big)
+$$
+
+After $k$ rounds, each node "sees" information from nodes up to $k$ hops away. The AGGREGATE function must be **permutation-invariant** (sum, mean, max) since neighbors have no order.
+
+<Note type="intuition">
+Compared to other architectures: a CNN aggregates from nearby pixels on a grid, an RNN from the previous step on a sequence, a GNN from adjacent nodes on a graph. The same "gather from neighbors and update" idea — only *what counts as a neighbor* differs.
+</Note>
+
+## Main variants
+
+**GCN (Kipf & Welling, 2017)** — aggregate = degree-normalized average:
+
+$$
+h_v^{(k+1)} = \sigma\!\Big( \sum_{u \in \mathcal{N}(v) \cup \{v\}} \frac{1}{\sqrt{d_u d_v}}\, W h_u^{(k)} \Big)
+$$
+
+Simple, effective, but each neighbor's weight is fixed by the graph structure.
+
+**GraphSAGE (Hamilton et al., 2017)** — instead of using *all* neighbors (which doesn't scale to billion-node graphs), it **samples** a fixed-size subset and aggregates. This enables inductive learning on large/dynamic graphs.
+
+**GAT (Veličković et al., 2018)** — adds **attention over edges**: it learns a weight $\alpha_{vu}$ for each neighbor instead of fixing it by degree:
+
+$$
+h_v^{(k+1)} = \sigma\!\Big( \sum_{u \in \mathcal{N}(v)} \alpha_{vu}\, W h_u^{(k)} \Big)
+$$
+
+→ a node decides which neighbors matter, just like self-attention but restricted to real edges.
+
+## The connection to Transformers
+
+Next to GAT, the Transformer looks very familiar: both are **attention-weighted aggregation from neighbors**. The only difference is the *graph*:
+
+| | GAT | Transformer |
+|---|---|---|
+| Graph | The data's real edges | The **complete** graph (every token connected) |
+| Neighbors | $\mathcal{N}(v)$ by edges | All tokens |
+| Position | Graph structure is position | Needs positional encoding |
+
+<Note type="result">
+A Transformer is a GNN on a complete graph. **Graph Transformers** go the other way: they apply Transformer-style attention to real graphs, using structural/positional encodings (Laplacian eigenvectors, random walks) to inject topology — combining attention's power with the graph's inductive bias.
+</Note>
+
+## Specific challenges
+
+- **Over-smoothing**: stacking too many message-passing rounds → node representations converge to be identical, losing discriminative power
+- **Scalability**: billion-node graphs (social networks) require sampling (GraphSAGE) or clustering
+- **Geometric GNNs**: for geometrically structured data (3D molecules), you also need invariance to rotation/translation (equivariance) — crucial for AlphaFold and physical simulation
+
+## References
+
+| Paper | |
+|---|---|
+| Kipf & Welling (2017) | Semi-Supervised Classification with GCN |
+| Hamilton et al. (2017) | Inductive Representation Learning on Large Graphs (GraphSAGE) |
+| Veličković et al. (2018) | Graph Attention Networks (GAT) |
+| Gilmer et al. (2017) | Neural Message Passing for Quantum Chemistry |

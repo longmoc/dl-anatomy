@@ -1,0 +1,185 @@
+---
+interface Props {
+  lang?: 'vi' | 'en';
+}
+const { lang = 'vi' } = Astro.props;
+
+const ui = lang === 'en'
+  ? {
+      caption: 'Self-attention weights for a toy sentence. Each row is a query token; cell brightness = softmax(QKᵀ/√d) weight it puts on each key token. Hover or tap a row to see where that token "looks". Weights in each row sum to 1.',
+      hint: 'Hover a row →',
+    }
+  : {
+      caption: 'Trọng số self-attention cho một câu ví dụ. Mỗi hàng là một query token; độ sáng ô = trọng số softmax(QKᵀ/√d) mà nó đặt lên từng key token. Di chuột (hoặc chạm) vào một hàng để xem token đó "nhìn" vào đâu. Tổng mỗi hàng = 1.',
+      hint: 'Di chuột vào hàng →',
+    };
+---
+
+<div class="atviz" data-lang={lang}>
+  <canvas class="atviz-canvas"></canvas>
+  <p class="atviz-caption">{ui.caption}</p>
+</div>
+
+<script>
+document.querySelectorAll('.atviz').forEach(root => {
+  const canvas = root.querySelector('.atviz-canvas') as HTMLCanvasElement;
+  const ctx    = canvas.getContext('2d')!;
+  const isEn   = (root as HTMLElement).dataset.lang === 'en';
+
+  const cv = (n: string) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+  // Toy sentence + a hand-crafted attention pattern that tells a story:
+  // "The cat sat because it was tired" — "it" attends to "cat", "tired" attends to "cat"/"it".
+  const tokens = isEn
+    ? ['The', 'cat', 'sat', 'because', 'it', 'was', 'tired']
+    : ['Con', 'mèo', 'ngồi', 'vì', 'nó', 'thấy', 'mệt'];
+
+  const n = tokens.length;
+
+  // Raw "compatibility" scores → softmax per row. Diagonal-ish + a few semantic links.
+  function rawScores(i: number): number[] {
+    const s = new Array(n).fill(0);
+    for (let j = 0; j <= i; j++) s[j] = 0.3;          // causal-ish mild attention to past
+    s[i] = 1.2;                                        // self
+    if (i >= 1) s[Math.max(0, i - 1)] += 0.6;          // previous token
+    // semantic links (indices: 1=cat/mèo, 4=it/nó, 6=tired/mệt)
+    if (i === 4) s[1] += 2.2;                           // "it" → "cat"
+    if (i === 6) { s[1] += 1.4; s[4] += 1.6; }          // "tired" → "cat","it"
+    if (i === 2) s[1] += 1.0;                           // "sat" → "cat"
+    // mask future (causal)
+    for (let j = i + 1; j < n; j++) s[j] = -Infinity;
+    return s;
+  }
+  function softmax(s: number[]): number[] {
+    const m = Math.max(...s.filter(v => isFinite(v)));
+    const ex = s.map(v => isFinite(v) ? Math.exp(v - m) : 0);
+    const sum = ex.reduce((a, b) => a + b, 0);
+    return ex.map(v => v / sum);
+  }
+  const attn = tokens.map((_, i) => softmax(rawScores(i)));
+
+  let hoverRow = 4; // default highlight "it"/"nó"
+
+  const PAD = 8;
+  let W = 0, H = 0, gridX = 0, gridY = 0, cell = 0, labelL = 0, labelT = 0;
+
+  function layout() {
+    const rect = canvas.getBoundingClientRect();
+    W = rect.width; H = rect.height;
+    labelL = Math.min(78, W * 0.20);  // left label column (query tokens)
+    labelT = 20;                       // top label row (key tokens)
+    const availW = W - labelL - PAD;
+    const availH = H - labelT - PAD - 4;
+    cell = Math.min(availW / n, availH / n);
+    gridX = labelL;
+    gridY = labelT;
+  }
+
+  function draw() {
+    const rect = canvas.getBoundingClientRect();
+    W = rect.width; H = rect.height;
+    if (!W || !H) return;
+    const dpr = window.devicePixelRatio || 1;
+    if (canvas.width !== W * dpr) { canvas.width = W * dpr; canvas.height = H * dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    layout();
+
+    const bg     = cv('--bg');
+    const muted  = cv('--muted');
+    const text   = cv('--text');
+    const accent = cv('--accent');
+
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    // parse accent into rgb for alpha fills
+    const rgb = hexToRgb(accent) ?? { r: 120, g: 110, b: 230 };
+
+    // Top key-token labels
+    ctx.font = '10px var(--mono, monospace)';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (let j = 0; j < n; j++) {
+      ctx.fillStyle = muted;
+      ctx.save();
+      ctx.translate(gridX + j * cell + cell / 2, labelT - 10);
+      ctx.fillText(tokens[j], 0, 0);
+      ctx.restore();
+    }
+
+    // Rows
+    for (let i = 0; i < n; i++) {
+      const isHover = i === hoverRow;
+      // left query label
+      ctx.font = `${isHover ? 'bold ' : ''}11px var(--mono, monospace)`;
+      ctx.fillStyle = isHover ? accent : text;
+      ctx.textAlign = 'right';
+      ctx.fillText(tokens[i], gridX - 8, gridY + i * cell + cell / 2);
+
+      for (let j = 0; j < n; j++) {
+        const w = attn[i][j];
+        const x = gridX + j * cell, y = gridY + i * cell;
+        // cell fill: alpha by weight; dim rows that aren't hovered
+        const a = w * (isHover ? 1 : 0.4);
+        ctx.fillStyle = `rgba(${rgb.r},${rgb.g},${rgb.b},${a})`;
+        ctx.fillRect(x + 1, y + 1, cell - 2, cell - 2);
+        // border
+        ctx.strokeStyle = cv('--border');
+        ctx.lineWidth = 1;
+        ctx.globalAlpha = isHover ? 1 : 0.5;
+        ctx.strokeRect(x + 0.5, y + 0.5, cell - 1, cell - 1);
+        ctx.globalAlpha = 1;
+        // weight number on hovered row if cell big enough
+        if (isHover && cell > 22 && w > 0.04) {
+          ctx.fillStyle = w > 0.5 ? bg : text;
+          ctx.font = '9px var(--mono, monospace)';
+          ctx.textAlign = 'center';
+          ctx.fillText(w.toFixed(2), x + cell / 2, y + cell / 2);
+        }
+      }
+    }
+  }
+
+  function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
+    const m = hex.replace('#', '').match(/^([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
+    if (!m) return null;
+    return { r: parseInt(m[1], 16), g: parseInt(m[2], 16), b: parseInt(m[3], 16) };
+  }
+
+  function pickRow(clientY: number) {
+    const rect = canvas.getBoundingClientRect();
+    const y = clientY - rect.top - gridY;
+    const i = Math.floor(y / cell);
+    if (i >= 0 && i < n) { hoverRow = i; draw(); }
+  }
+
+  canvas.addEventListener('mousemove', e => pickRow(e.clientY));
+  canvas.addEventListener('click', e => pickRow(e.clientY));
+
+  const ro = new ResizeObserver(draw);
+  ro.observe(canvas);
+  draw();
+});
+</script>
+
+<style>
+  .atviz {
+    margin: 1.75rem 0;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--bg2);
+  }
+  .atviz-canvas {
+    width: 100%;
+    height: 240px;
+    display: block;
+    background: var(--bg);
+    cursor: pointer;
+  }
+  .atviz-caption {
+    font-size: 0.78rem; color: var(--muted); text-align: center;
+    padding: 0.4rem 1rem 0.6rem; font-style: italic; line-height: 1.5;
+    border-top: 1px solid var(--border);
+  }
+</style>

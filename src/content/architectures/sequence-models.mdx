@@ -1,0 +1,80 @@
+---
+title: "Sequence Models: RNN → SSM"
+description: "Từ RNN và bài toán vanishing gradient, qua LSTM/GRU và Seq2Seq, đến State Space Models tuyến tính như Mamba."
+lang: vi
+category: architectures
+order: 2
+parent: architecture-anatomy
+translation: sequence-models-en
+tags: [rnn, lstm, seq2seq, ssm, mamba, sequence]
+---
+
+import Note from '../../components/Note.astro';
+
+# Sequence Models: RNN → SSM
+
+Dữ liệu chuỗi (văn bản, âm thanh, time-series) có **thứ tự** — và inductive bias tự nhiên là xử lý tuần tự, mang theo một "trạng thái" tóm tắt quá khứ.
+
+## RNN — recurrence và giới hạn của nó
+
+Recurrent Neural Network duy trì hidden state $h_t$, cập nhật mỗi bước từ input $x_t$ và state cũ:
+
+$$
+h_t = \tanh(W_h h_{t-1} + W_x x_t + b)
+$$
+
+Cùng một bộ trọng số dùng lại ở mọi bước (weight sharing theo thời gian). Vấn đề: lan gradient qua $T$ bước nghĩa là nhân $T$ lần với cùng ma trận → eigenvalue $< 1$ thì **vanishing**, $> 1$ thì **exploding**. RNN thuần gần như không học được phụ thuộc xa hơn vài chục bước.
+
+## LSTM/GRU — gating để giữ ký ức
+
+**LSTM (Hochreiter & Schmidhuber, 1997)** thêm một **cell state** $c_t$ chảy gần như tuyến tính qua thời gian, điều khiển bởi các **gate** (cổng) học được:
+
+- *Forget gate* — giữ lại bao nhiêu ký ức cũ
+- *Input gate* — ghi bao nhiêu thông tin mới
+- *Output gate* — lộ ra bao nhiêu cho bước sau
+
+$$
+c_t = f_t \odot c_{t-1} + i_t \odot \tilde{c}_t
+$$
+
+Đường $c_t$ giống ý tưởng residual: cho gradient một lối đi ít suy giảm → giữ được phụ thuộc dài hơn nhiều. **GRU** là phiên bản gọn hơn (gộp gate, không tách cell state).
+
+<Note type="intuition">
+Gate trong LSTM và residual connection trong ResNet chia sẻ cùng một insight: muốn gradient sống sót qua nhiều bước, hãy tạo một con đường mà thông tin đi qua gần như **cộng** thay vì **nhân** liên tục.
+</Note>
+
+## Seq2Seq — và mầm mống của attention
+
+**Seq2Seq (Sutskever et al., 2014)** dùng một RNN *encoder* nén cả câu nguồn thành một vector cố định, rồi RNN *decoder* sinh câu đích từ vector đó. Điểm yếu chí mạng: **bottleneck** — nhồi cả câu dài vào một vector duy nhất làm mất thông tin.
+
+Giải pháp: cho decoder "nhìn lại" toàn bộ hidden state của encoder và tự chọn phần liên quan ở mỗi bước — đây chính là **attention** đầu tiên (Bahdanau, 2015), tiền đề trực tiếp dẫn tới Transformer (xem [Transformer & Attention](/dl-anatomy/architectures/transformer)).
+
+## Vấn đề chung: tuần tự thì chậm
+
+Mọi RNN đều phải tính **tuần tự** — bước $t$ cần $h_{t-1}$ — nên không song song hóa được trên độ dài chuỗi. Transformer thắng một phần nhờ song song hóa hoàn toàn, nhưng phải trả giá $O(n^2)$ cho attention.
+
+## State Space Models — recurrence tuyến tính trở lại
+
+**SSM** mượn ý tưởng từ lý thuyết điều khiển: một hệ tuyến tính với trạng thái ẩn liên tục, rời rạc hóa thành:
+
+$$
+h_t = A h_{t-1} + B x_t, \qquad y_t = C h_t
+$$
+
+Vì cập nhật **tuyến tính**, SSM có thể tính theo dạng tích chập song song khi train ($O(n)$ thay vì $O(n^2)$) *và* chạy như RNN khi inference (state cố định, không cần KV-cache lớn dần).
+
+**Mamba (Gu & Dao, 2023)** làm cho $A, B, C$ **phụ thuộc input** (selective) — mô hình tự quyết giữ hay quên thông tin theo nội dung, lấp khoảng cách chất lượng với attention trong khi vẫn tuyến tính theo độ dài.
+
+<Note type="result">
+Bức tranh lớn: RNN (tuần tự, vanishing) → LSTM (gating, giữ ký ức) → Transformer (song song, $O(n^2)$) → SSM/Mamba (tuyến tính $O(n)$, selective). Câu hỏi mở của 2024+: liệu SSM có thay thế attention cho chuỗi rất dài không?
+</Note>
+
+## Papers tham khảo
+
+| Paper | |
+|---|---|
+| Hochreiter & Schmidhuber (1997) | Long Short-Term Memory |
+| Cho et al. (2014) | GRU — Learning Phrase Representations |
+| Sutskever et al. (2014) | Sequence to Sequence Learning with Neural Networks |
+| Bahdanau et al. (2015) | Neural Machine Translation by Jointly Learning to Align and Translate |
+| Gu & Dao (2023) | Mamba: Linear-Time Sequence Modeling with Selective State Spaces |

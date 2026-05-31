@@ -1,0 +1,80 @@
+---
+title: "Sequence Models: RNN → SSM"
+description: "From RNNs and the vanishing gradient problem, through LSTM/GRU and Seq2Seq, to linear-time State Space Models like Mamba."
+lang: en
+category: architectures
+order: 2
+parent: architecture-anatomy
+translation: sequence-models
+tags: [rnn, lstm, seq2seq, ssm, mamba, sequence]
+---
+
+import Note from '../../components/Note.astro';
+
+# Sequence Models: RNN → SSM
+
+Sequential data (text, audio, time-series) has **order** — and the natural inductive bias is to process it step by step, carrying a "state" that summarizes the past.
+
+## RNN — recurrence and its limit
+
+A Recurrent Neural Network maintains a hidden state $h_t$, updated each step from input $x_t$ and the previous state:
+
+$$
+h_t = \tanh(W_h h_{t-1} + W_x x_t + b)
+$$
+
+The same weights are reused at every step (weight sharing across time). The problem: propagating the gradient through $T$ steps means multiplying by the same matrix $T$ times → eigenvalues $< 1$ cause **vanishing**, $> 1$ cause **exploding**. A vanilla RNN can barely learn dependencies beyond a few dozen steps.
+
+## LSTM/GRU — gating to preserve memory
+
+**LSTM (Hochreiter & Schmidhuber, 1997)** adds a **cell state** $c_t$ that flows almost linearly through time, controlled by learned **gates**:
+
+- *Forget gate* — how much old memory to keep
+- *Input gate* — how much new information to write
+- *Output gate* — how much to expose to the next step
+
+$$
+c_t = f_t \odot c_{t-1} + i_t \odot \tilde{c}_t
+$$
+
+The $c_t$ pathway echoes the residual idea: give the gradient a low-decay route → much longer dependencies survive. **GRU** is a leaner variant (merged gates, no separate cell state).
+
+<Note type="intuition">
+LSTM gates and ResNet residual connections share the same insight: for a gradient to survive many steps, create a path where information mostly **adds** rather than repeatedly **multiplies**.
+</Note>
+
+## Seq2Seq — and the seed of attention
+
+**Seq2Seq (Sutskever et al., 2014)** uses an RNN *encoder* to compress the whole source sentence into a fixed vector, then an RNN *decoder* generates the target from it. The fatal weakness: the **bottleneck** — cramming a long sentence into a single vector loses information.
+
+The fix: let the decoder "look back" at all of the encoder's hidden states and pick the relevant parts at each step — this was the first **attention** (Bahdanau, 2015), the direct precursor to the Transformer (see [Transformer & Attention](/dl-anatomy/architectures/transformer-en)).
+
+## The shared problem: sequential is slow
+
+Every RNN must compute **sequentially** — step $t$ needs $h_{t-1}$ — so it can't be parallelized over sequence length. The Transformer won partly by being fully parallelizable, at the cost of $O(n^2)$ attention.
+
+## State Space Models — linear recurrence returns
+
+**SSMs** borrow from control theory: a linear system with a continuous hidden state, discretized into:
+
+$$
+h_t = A h_{t-1} + B x_t, \qquad y_t = C h_t
+$$
+
+Because the update is **linear**, an SSM can be computed as a parallel convolution during training ($O(n)$ instead of $O(n^2)$) *and* run like an RNN at inference (fixed state, no ever-growing KV cache).
+
+**Mamba (Gu & Dao, 2023)** makes $A, B, C$ **input-dependent** (selective) — the model decides what to keep or forget based on content, closing the quality gap with attention while staying linear in sequence length.
+
+<Note type="result">
+The big picture: RNN (sequential, vanishing) → LSTM (gating, memory) → Transformer (parallel, $O(n^2)$) → SSM/Mamba (linear $O(n)$, selective). The open question of 2024+: will SSMs replace attention for very long sequences?
+</Note>
+
+## References
+
+| Paper | |
+|---|---|
+| Hochreiter & Schmidhuber (1997) | Long Short-Term Memory |
+| Cho et al. (2014) | GRU — Learning Phrase Representations |
+| Sutskever et al. (2014) | Sequence to Sequence Learning with Neural Networks |
+| Bahdanau et al. (2015) | Neural Machine Translation by Jointly Learning to Align and Translate |
+| Gu & Dao (2023) | Mamba: Linear-Time Sequence Modeling with Selective State Spaces |

@@ -1,0 +1,78 @@
+---
+title: "CNN & ResNet"
+description: "Convolution as an inductive bias for images, the depth problem, and how residual connections unlocked 1000+ layer networks."
+lang: en
+category: architectures
+order: 1
+parent: architecture-anatomy
+translation: cnn-resnet
+tags: [cnn, resnet, convolution, residual, vision]
+---
+
+import Note from '../../components/Note.astro';
+import ResidualGradientViz from '../../components/ResidualGradientViz.astro';
+
+# CNN & ResNet
+
+## Convolution — an inductive bias for images
+
+A fully-connected layer wires every pixel to every neuron — for a $224\times224$ image that's billions of parameters, and it ignores an obvious fact: **nearby pixels are related**. Convolution bakes in exactly that assumption through two principles:
+
+- **Locality**: each neuron looks at only a small region (the receptive field) — e.g. a $3\times3$ kernel
+- **Weight sharing**: the same kernel slides across the whole image → it detects one feature (edge, corner) at *every* position
+
+$$
+(I * K)(x, y) = \sum_{i}\sum_{j} I(x+i,\, y+j)\, K(i, j)
+$$
+
+These two principles give **translation invariance** (a shifted object is still recognized) and a huge parameter reduction. Stacking conv layers grows the receptive field — features progress from edges → textures → parts → objects.
+
+<Note type="intuition">
+Weight sharing is a strong form of regularization: instead of learning per-position, the model is forced to learn features that are *useful everywhere*. This is why CNNs are far more data-efficient than MLPs on images.
+</Note>
+
+**AlexNet (2012)** was the moment deep learning truly took off: a deep CNN dominated ImageNet, igniting a decade of vision research.
+
+## The depth problem
+
+Intuition says: deeper = more powerful. But in practice, stacking too many layers makes **training error go up** — not overfitting (both train and test get worse), but **degradation**: deep nets are harder to optimize.
+
+The core cause is the **vanishing gradient**: as the gradient flows backward through each layer it's multiplied by some factor; if that factor is $< 1$, the gradient decays exponentially toward the early layers — which then barely receive any learning signal.
+
+## ResNet — a highway for gradients
+
+**He et al. (2015)** solved it with a small but profound change: instead of learning the mapping $H(x)$ directly, a layer learns the **residual** $F(x) = H(x) - x$, then adds back the input:
+
+$$
+y = F(x) + x
+$$
+
+The derivative during backprop:
+
+$$
+\frac{\partial y}{\partial x} = \frac{\partial F}{\partial x} + 1
+$$
+
+The $+1$ term is the key: however small $\frac{\partial F}{\partial x}$ becomes, the gradient still has a "highway" straight through the identity, undiminished. This let ResNet train networks of **over 1000 layers**.
+
+<ResidualGradientViz lang="en" />
+
+<Note type="result">
+Skip connections also make it **easy to learn the identity**: if a layer isn't needed, it just drives $F(x) \to 0$ and you immediately get $y = x$. A deep net is never worse than its shallower counterpart — degradation disappears.
+</Note>
+
+## After ResNet
+
+Residual connections became a standard component of nearly every deep architecture since — including the Transformer. A few notable CNN branches:
+
+- **Efficient CNNs** (MobileNet, EfficientNet): depthwise-separable convolutions, fewer FLOPs for mobile devices
+- **Modern CNNs** (ConvNeXt): borrow design ideas from Transformers, showing CNNs remain competitive on vision
+
+## References
+
+| Paper | |
+|---|---|
+| LeCun et al. (1998) | Gradient-Based Learning Applied to Document Recognition (LeNet) |
+| Krizhevsky et al. (2012) | ImageNet Classification with Deep CNNs (AlexNet) |
+| He et al. (2015) | Deep Residual Learning for Image Recognition (ResNet) |
+| Liu et al. (2022) | A ConvNet for the 2020s (ConvNeXt) |

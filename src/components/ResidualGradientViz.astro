@@ -1,0 +1,194 @@
+---
+interface Props {
+  lang?: 'vi' | 'en';
+}
+const { lang = 'vi' } = Astro.props;
+
+const ui = lang === 'en'
+  ? {
+      depthLabel: 'Depth (layers)',
+      plain: 'Plain deep net',
+      residual: 'Residual net (ResNet)',
+      caption: 'Gradient magnitude reaching each layer during backprop. In a plain deep net the gradient decays exponentially toward early layers (vanishing). The residual connection y = F(x) + x gives gradients a highway, keeping them stable however deep the network.',
+    }
+  : {
+      depthLabel: 'Độ sâu (số layer)',
+      plain: 'Plain deep net',
+      residual: 'Residual net (ResNet)',
+      caption: 'Độ lớn gradient về tới từng layer khi backprop. Trong plain deep net, gradient suy giảm theo hàm mũ về phía các layer đầu (vanishing). Residual connection y = F(x) + x tạo "đường cao tốc" cho gradient, giữ nó ổn định dù mạng sâu bao nhiêu.',
+    };
+---
+
+<div class="rgviz" data-lang={lang}>
+  <canvas class="rgviz-canvas"></canvas>
+  <div class="rgviz-controls">
+    <span class="rgviz-lbl">{ui.depthLabel}</span>
+    <input type="range" class="rgviz-depth" min="10" max="100" value="50" step="2" />
+    <span class="rgviz-depthval">50</span>
+  </div>
+  <div class="rgviz-legend">
+    <span class="rgviz-item"><span class="rgviz-line rgviz-plain"></span>{ui.plain}</span>
+    <span class="rgviz-item"><span class="rgviz-line rgviz-res"></span>{ui.residual}</span>
+  </div>
+  <p class="rgviz-caption">{ui.caption}</p>
+</div>
+
+<script>
+document.querySelectorAll('.rgviz').forEach(root => {
+  const canvas = root.querySelector('.rgviz-canvas') as HTMLCanvasElement;
+  const ctx    = canvas.getContext('2d')!;
+  const slider = root.querySelector('.rgviz-depth') as HTMLInputElement;
+  const dval   = root.querySelector('.rgviz-depthval') as HTMLElement;
+  const isEn   = (root as HTMLElement).dataset.lang === 'en';
+
+  const cv = (n: string) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+  // Per-layer Jacobian gain. Plain net: each layer multiplies gradient by ~0.82 → exp decay.
+  // Residual net: y = x + F(x) → dy/dx = I + dF/dx ≈ gain ~1.0 (slight noise), gradient preserved.
+  const PLAIN_GAIN = 0.82;
+
+  // gradient magnitude at layer k counting from output (k=0) back to input (k=L)
+  const plainGrad = (k: number) => Math.pow(PLAIN_GAIN, k);
+  const resGrad   = (k: number) => Math.pow(0.997, k); // near-flat highway
+
+  const PL = 44, PR = 14, PT = 16, PB = 34;
+  let W = 0, H = 0;
+
+  function draw() {
+    const rect = canvas.getBoundingClientRect();
+    W = rect.width; H = rect.height;
+    if (!W || !H) return;
+    const dpr = window.devicePixelRatio || 1;
+    if (canvas.width !== W * dpr) { canvas.width = W * dpr; canvas.height = H * dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const bg     = cv('--bg');
+    const border = cv('--border');
+    const muted  = cv('--muted');
+    const amber  = cv('--amber');
+    const accent = cv('--accent2');
+
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    const L = slider.valueAsNumber;
+    const tx = (k: number) => PL + (k / L) * (W - PL - PR);
+    // log scale for gradient magnitude: 1 → 10^-8
+    const LOG_MIN = -8;
+    const ty = (g: number) => {
+      const lg = Math.max(Math.log10(Math.max(g, 1e-9)), LOG_MIN);
+      return PT + (1 - (lg - LOG_MIN) / (0 - LOG_MIN)) * (H - PT - PB);
+    };
+
+    // Horizontal grid lines at 10^0, 10^-2, ... 10^-8
+    ctx.strokeStyle = border;
+    ctx.lineWidth = 1;
+    ctx.font = '9px var(--mono, monospace)';
+    ctx.textAlign = 'right';
+    for (let e = 0; e >= LOG_MIN; e -= 2) {
+      const y = ty(Math.pow(10, e));
+      ctx.setLineDash([3, 5]);
+      ctx.globalAlpha = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(PL, y); ctx.lineTo(W - PR, y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = muted;
+      ctx.fillText(e === 0 ? '1' : `10${sup(e)}`, PL - 5, y + 3);
+    }
+
+    // Axes
+    ctx.strokeStyle = border;
+    ctx.beginPath();
+    ctx.moveTo(PL, PT); ctx.lineTo(PL, H - PB); ctx.lineTo(W - PR, H - PB);
+    ctx.stroke();
+
+    // X ticks: input (layer L) on left? We go output(0)→input(L) left→right.
+    ctx.fillStyle = muted;
+    ctx.textAlign = 'center';
+    ctx.fillText(isEn ? 'output' : 'output', tx(0), H - PB + 14);
+    ctx.fillText(isEn ? 'input' : 'input', tx(L), H - PB + 14);
+    ctx.fillText(`${L} ${isEn ? 'layers' : 'layer'}`, PL + (W - PL - PR) / 2, H - PB + 26);
+
+    // y-axis label
+    ctx.save();
+    ctx.translate(11, PT + (H - PT - PB) / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText(isEn ? 'gradient magnitude' : 'độ lớn gradient', 0, 0);
+    ctx.restore();
+
+    // Curves
+    const drawCurve = (fn: (k: number) => number, color: string) => {
+      ctx.beginPath();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2.5;
+      for (let k = 0; k <= L; k++) {
+        const x = tx(k), y = ty(fn(k));
+        k === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+      // end dot at input side
+      ctx.beginPath();
+      ctx.arc(tx(L), ty(fn(L)), 4, 0, 2 * Math.PI);
+      ctx.fillStyle = color; ctx.fill();
+      ctx.strokeStyle = bg; ctx.lineWidth = 1.5; ctx.stroke();
+    };
+    drawCurve(plainGrad, amber);
+    drawCurve(resGrad, accent);
+  }
+
+  function sup(e: number): string {
+    // unicode superscript for negative exponents e.g. -2 → ⁻²
+    const map: Record<string, string> = { '-': '⁻', '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹' };
+    return String(e).split('').map(c => map[c] ?? c).join('');
+  }
+
+  slider.addEventListener('input', () => { dval.textContent = slider.value; draw(); });
+  const ro = new ResizeObserver(draw);
+  ro.observe(canvas);
+  draw();
+});
+</script>
+
+<style>
+  .rgviz {
+    margin: 1.75rem 0;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--bg2);
+  }
+  .rgviz-canvas {
+    width: 100%;
+    height: 220px;
+    display: block;
+    background: var(--bg);
+  }
+  .rgviz-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.55rem 0.9rem 0.2rem;
+  }
+  .rgviz-lbl { font-family: var(--mono); font-size: 0.77rem; color: var(--muted); }
+  .rgviz-depth { flex: 1; min-width: 90px; max-width: 240px; }
+  .rgviz-depthval { font-family: var(--mono); font-size: 0.77rem; color: var(--accent); min-width: 26px; }
+  .rgviz-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.1rem;
+    padding: 0.2rem 0.9rem 0.4rem;
+  }
+  .rgviz-item {
+    display: flex; align-items: center; gap: 0.4rem;
+    font-family: var(--mono); font-size: 0.75rem; color: var(--muted);
+  }
+  .rgviz-line { width: 20px; height: 3px; border-radius: 2px; flex-shrink: 0; }
+  .rgviz-plain { background: var(--amber); }
+  .rgviz-res   { background: var(--accent2); }
+  .rgviz-caption {
+    font-size: 0.78rem; color: var(--muted); text-align: center;
+    padding: 0.1rem 1rem 0.65rem; font-style: italic; line-height: 1.5;
+  }
+</style>

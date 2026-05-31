@@ -1,0 +1,66 @@
+---
+title: "Architecture Anatomy"
+description: "Bản đồ các họ kiến trúc deep learning — từ CNN, RNN, Transformer đến GNN, qua lăng kính inductive bias."
+lang: vi
+category: architectures
+order: 0
+translation: architecture-anatomy-en
+tags: [architecture, cnn, transformer, gnn, overview]
+---
+
+import Note from '../../components/Note.astro';
+
+# Architecture Anatomy
+
+**Architecture** là thiết kế cấu trúc của mạng — các layer nối với nhau như thế nào, thông tin chảy ra sao. Nó khác với *optimizer* (cách huấn luyện) và *activation* (hàm phi tuyến từng neuron). Câu hỏi cốt lõi của mọi kiến trúc:
+
+> Thiết kế này mã hóa **inductive bias** gì — tức giả định nào về cấu trúc dữ liệu được "nướng" sẵn vào mô hình?
+
+CNN giả định *locality* (lân cận trong ảnh quan trọng). RNN giả định *thứ tự* (tín hiệu tuần tự). GNN giả định *quan hệ* (đồ thị). Transformer gần như *không giả định gì* về cấu trúc — chỉ học quan hệ từ data, đổi lại cần nhiều data và compute hơn.
+
+## Series bài viết
+
+| Bài | Nội dung |
+|---|---|
+| [CNN & ResNet](/dl-anatomy/architectures/cnn-resnet) | Convolution, locality, residual connection và bài toán độ sâu |
+| [Sequence Models: RNN → SSM](/dl-anatomy/architectures/sequence-models) | RNN, LSTM/GRU, Seq2Seq, và State Space Models (Mamba) |
+| [Transformer & Attention](/dl-anatomy/architectures/transformer) | Self-attention, positional encoding, ViT, MoE |
+| [Graph Neural Networks](/dl-anatomy/architectures/graph-neural-networks) | Message passing, GCN, GAT, Graph Transformer |
+
+## Một mạch nối: message passing
+
+Nhiều kiến trúc tưởng rời rạc thực ra là **message passing trên các cấu trúc dữ liệu khác nhau** — mỗi đơn vị thu thập thông tin từ "hàng xóm" rồi cập nhật:
+
+| Kiến trúc | Cấu trúc | "Hàng xóm" |
+|---|---|---|
+| CNN | Lưới (ảnh) | Pixel lân cận trong kernel |
+| RNN | Chuỗi | Trạng thái bước trước |
+| GNN | Đồ thị bất kỳ | Node nối bằng cạnh |
+| Transformer | Đồ thị đầy đủ | *Mọi* token (qua attention) |
+
+<Note type="intuition">
+Transformer có thể xem là **GNN trên một đồ thị đầy đủ** — mỗi token nối với mọi token khác, và trọng số cạnh chính là attention. Đây là lý do nó linh hoạt nhất nhưng cũng tốn nhất ($O(n^2)$).
+</Note>
+
+## Trục tiến hóa
+
+Dòng chính của kiến trúc hiện đại đi theo hướng *bớt giả định thiết kế tay, tăng quy mô và để data tự học*:
+
+| Era | Kiến trúc | Bước nhảy |
+|---|---|---|
+| ~2012 | CNN (AlexNet) | Deep learning thực sự cất cánh trên ImageNet |
+| 2015 | ResNet | Residual connection → train được mạng 1000+ layer |
+| 2017 | Transformer | Self-attention, bỏ recurrence, song song hóa |
+| 2020+ | ViT, MoE, SSM (Mamba) | Scale tham số, beyond attention |
+
+## Những thành phần thuộc nơi khác
+
+Một số "khối xây dựng" thường gặp trong kiến trúc đã được bàn ở category khác — chúng là *kỹ thuật*, không phải *thiết kế mô hình*:
+
+- **Activation** (ReLU, GELU, …) → xem category [Activations](/dl-anatomy/activations)
+- **Optimizer & LR schedule** → xem series [Optimizer Anatomy](/dl-anatomy/training/optimizers) trong Training
+- **Normalization** (BatchNorm/LayerNorm/RMSNorm) → sẽ bàn riêng (là thành phần, không phải kiến trúc)
+
+<Note type="paper">
+Series này tập trung vào *thiết kế mô hình*. Các họ Representation Learning (autoencoder, VAE, contrastive), Generative Models (GAN, diffusion) và Multimodal (CLIP, VLM) sẽ là các đợt tiếp theo.
+</Note>

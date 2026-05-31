@@ -1,0 +1,78 @@
+---
+title: "CNN & ResNet"
+description: "Convolution như một inductive bias cho ảnh, bài toán độ sâu, và residual connection mở khóa mạng 1000+ layer."
+lang: vi
+category: architectures
+order: 1
+parent: architecture-anatomy
+translation: cnn-resnet-en
+tags: [cnn, resnet, convolution, residual, vision]
+---
+
+import Note from '../../components/Note.astro';
+import ResidualGradientViz from '../../components/ResidualGradientViz.astro';
+
+# CNN & ResNet
+
+## Convolution — inductive bias cho ảnh
+
+Một fully-connected layer nối mọi pixel với mọi neuron — với ảnh $224\times224$ là hàng tỷ tham số, và bỏ qua một sự thật hiển nhiên: **pixel gần nhau thì liên quan đến nhau**. Convolution mã hóa đúng giả định đó qua hai nguyên lý:
+
+- **Locality**: mỗi neuron chỉ nhìn một vùng nhỏ (receptive field) — ví dụ kernel $3\times3$
+- **Weight sharing**: cùng một bộ kernel trượt khắp ảnh → phát hiện một đặc trưng (cạnh, góc) ở *mọi* vị trí
+
+$$
+(I * K)(x, y) = \sum_{i}\sum_{j} I(x+i,\, y+j)\, K(i, j)
+$$
+
+Hai nguyên lý này cho **translation invariance** (vật thể dịch chuyển vẫn nhận ra) và giảm tham số khổng lồ. Xếp chồng nhiều conv layer → receptive field lớn dần → đặc trưng từ cạnh → texture → bộ phận → vật thể.
+
+<Note type="intuition">
+Weight sharing là một dạng regularization mạnh: thay vì học riêng cho từng vị trí, mô hình buộc phải học đặc trưng *dùng được ở mọi nơi*. Đây là lý do CNN cực kỳ hiệu quả về dữ liệu trên ảnh so với MLP.
+</Note>
+
+**AlexNet (2012)** là khoảnh khắc deep learning thực sự cất cánh: một CNN sâu thắng áp đảo ImageNet, châm ngòi cho cả thập kỷ vision.
+
+## Bài toán độ sâu
+
+Trực giác nói: mạng sâu hơn = mạnh hơn. Nhưng thực tế, khi xếp quá nhiều layer, **training error lại tăng** — không phải overfit (vì cả train lẫn test đều tệ), mà là **degradation**: mạng sâu khó tối ưu hơn.
+
+Nguyên nhân cốt lõi là **vanishing gradient**: gradient lan ngược qua mỗi layer bị nhân với một thừa số; nếu thừa số đó $< 1$, gradient suy giảm theo hàm mũ về phía các layer đầu — chúng gần như không nhận được tín hiệu học.
+
+## ResNet — đường cao tốc cho gradient
+
+**He et al. (2015)** giải bằng một thay đổi nhỏ mà sâu sắc: thay vì học trực tiếp ánh xạ $H(x)$, layer học **phần dư** (residual) $F(x) = H(x) - x$, rồi cộng lại đầu vào:
+
+$$
+y = F(x) + x
+$$
+
+Đạo hàm khi backprop:
+
+$$
+\frac{\partial y}{\partial x} = \frac{\partial F}{\partial x} + 1
+$$
+
+Số hạng $+1$ là chìa khóa: dù $\frac{\partial F}{\partial x}$ nhỏ đến đâu, gradient vẫn có một "đường cao tốc" đi thẳng qua identity, không bị suy giảm. Nhờ đó ResNet train được mạng **hơn 1000 layer**.
+
+<ResidualGradientViz />
+
+<Note type="result">
+Skip connection còn giúp mô hình **dễ học identity**: nếu một layer không cần thiết, nó chỉ việc đẩy $F(x) \to 0$ là có ngay $y = x$. Mạng sâu không bao giờ tệ hơn mạng nông tương ứng — degradation biến mất.
+</Note>
+
+## Sau ResNet
+
+Residual connection trở thành thành phần chuẩn của gần như mọi kiến trúc sâu sau này — kể cả Transformer. Một vài nhánh CNN đáng chú ý:
+
+- **Efficient CNN** (MobileNet, EfficientNet): depthwise-separable convolution, giảm FLOPs cho thiết bị di động
+- **Modern CNN** (ConvNeXt): mượn ý tưởng thiết kế từ Transformer, chứng minh CNN vẫn cạnh tranh được trên vision
+
+## Papers tham khảo
+
+| Paper | |
+|---|---|
+| LeCun et al. (1998) | Gradient-Based Learning Applied to Document Recognition (LeNet) |
+| Krizhevsky et al. (2012) | ImageNet Classification with Deep CNNs (AlexNet) |
+| He et al. (2015) | Deep Residual Learning for Image Recognition (ResNet) |
+| Liu et al. (2022) | A ConvNet for the 2020s (ConvNeXt) |

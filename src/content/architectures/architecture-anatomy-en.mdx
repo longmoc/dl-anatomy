@@ -1,0 +1,66 @@
+---
+title: "Architecture Anatomy"
+description: "A map of deep learning architecture families — from CNNs, RNNs, and Transformers to GNNs, through the lens of inductive bias."
+lang: en
+category: architectures
+order: 0
+translation: architecture-anatomy
+tags: [architecture, cnn, transformer, gnn, overview]
+---
+
+import Note from '../../components/Note.astro';
+
+# Architecture Anatomy
+
+An **architecture** is the structural design of a network — how layers connect, how information flows. It's distinct from the *optimizer* (how you train) and the *activation* (the per-neuron nonlinearity). The central question of any architecture:
+
+> What **inductive bias** does this design encode — which assumptions about data structure are baked into the model?
+
+CNNs assume *locality* (nearby pixels matter). RNNs assume *order* (sequential signals). GNNs assume *relations* (a graph). Transformers assume *almost nothing* about structure — they learn relations from data, at the cost of needing more data and compute.
+
+## Articles in this series
+
+| Article | Content |
+|---|---|
+| [CNN & ResNet](/dl-anatomy/architectures/cnn-resnet-en) | Convolution, locality, residual connections, and the depth problem |
+| [Sequence Models: RNN → SSM](/dl-anatomy/architectures/sequence-models-en) | RNN, LSTM/GRU, Seq2Seq, and State Space Models (Mamba) |
+| [Transformer & Attention](/dl-anatomy/architectures/transformer-en) | Self-attention, positional encoding, ViT, MoE |
+| [Graph Neural Networks](/dl-anatomy/architectures/graph-neural-networks-en) | Message passing, GCN, GAT, Graph Transformer |
+
+## One unifying thread: message passing
+
+Many seemingly distinct architectures are really **message passing over different data structures** — each unit gathers information from its "neighbors" and updates:
+
+| Architecture | Structure | "Neighbors" |
+|---|---|---|
+| CNN | Grid (image) | Nearby pixels in the kernel |
+| RNN | Sequence | The previous step's state |
+| GNN | Arbitrary graph | Nodes joined by edges |
+| Transformer | Complete graph | *Every* token (via attention) |
+
+<Note type="intuition">
+A Transformer can be seen as a **GNN on a complete graph** — every token connects to every other token, and the edge weights are the attention scores. This is why it's the most flexible but also the most expensive ($O(n^2)$).
+</Note>
+
+## The evolution axis
+
+The mainstream of modern architectures trends toward *fewer hand-designed assumptions, more scale, and letting data do the learning*:
+
+| Era | Architecture | Leap |
+|---|---|---|
+| ~2012 | CNN (AlexNet) | Deep learning truly takes off on ImageNet |
+| 2015 | ResNet | Residual connections → trainable 1000+ layer nets |
+| 2017 | Transformer | Self-attention, no recurrence, parallelizable |
+| 2020+ | ViT, MoE, SSM (Mamba) | Scaling parameters, beyond attention |
+
+## Building blocks that live elsewhere
+
+Some common building blocks are covered in other categories — they're *techniques*, not *model designs*:
+
+- **Activations** (ReLU, GELU, …) → see the [Activations](/dl-anatomy/activations) category
+- **Optimizers & LR schedules** → see the [Optimizer Anatomy](/dl-anatomy/training/optimizers-en) series in Training
+- **Normalization** (BatchNorm/LayerNorm/RMSNorm) → covered separately (a component, not an architecture)
+
+<Note type="paper">
+This series focuses on *model design*. The Representation Learning (autoencoders, VAE, contrastive), Generative Models (GAN, diffusion), and Multimodal (CLIP, VLM) families are planned for later rounds.
+</Note>
