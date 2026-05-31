@@ -1,0 +1,83 @@
+---
+title: "Transformer Variants & MoE"
+description: "Encoder-only, decoder-only, ViT, efficient transformers — and Mixture of Experts to scale parameters without scaling compute."
+lang: en
+category: architectures
+order: 5
+parent: architecture-anatomy
+translation: transformer-variants
+tags: [transformer, bert, gpt, vit, moe, scaling]
+---
+
+import Note from '../../components/Note.astro';
+
+# Transformer Variants & MoE
+
+The [Transformer & Attention](/dl-anatomy/architectures/transformer-en) article covered the *mechanism*. From the same transformer block, the community built a whole family by changing *how* attention is used and *how* it's scaled.
+
+## Three ways to use attention
+
+The core difference between families is **which tokens may attend to which** (the attention mask):
+
+| Variant | Mask | Example | Used for |
+|---|---|---|---|
+| Encoder-only | Bidirectional (sees both sides) | BERT, RoBERTa | Understanding/representation: classification, embeddings, retrieval |
+| Decoder-only | Causal (sees only the past) | GPT, LLaMA | Autoregressive text generation |
+| Encoder-decoder | Bidirectional encoder + causal decoder + cross-attention | T5, BART | Seq2seq: translation, summarization |
+
+<Note type="intuition">
+The same attention block, just a different **mask**, yields three different "personalities". Decoder-only came to dominate the LLM era because a single objective — *predict the next token* — is both simple and scales extremely well, and every task (translation, summarization, QA) can be rewritten as text generation.
+</Note>
+
+## Vision Transformer (ViT)
+
+**ViT (Dosovitskiy et al., 2020)** applies the transformer to images: cut the image into $16\times16$ **patches**, flatten each into a vector → treat it as a "token". Then it's a standard transformer.
+
+The striking part: ViT has almost **none of the CNN's inductive bias** (locality, translation invariance). On small data it loses to CNNs, but on very large data (JFT-300M) it wins — exactly the "fewer assumptions + more data" spirit of the Transformer.
+
+## Efficient Transformers — attacking $O(n^2)$
+
+Attention costs $O(n^2)$ in sequence length. Several directions reduce it:
+
+- **Sparse/local attention** (Longformer, BigBird): each token attends only to a local window + a few global tokens
+- **Linear attention** (Performer): approximate the softmax to get $O(n)$
+- **FlashAttention**: doesn't change the asymptotic complexity but optimizes GPU memory I/O → much faster in practice, the de facto standard today
+
+## MoE — scaling parameters without scaling compute
+
+Most of an LLM's parameters live in the **FFN** (the 2-layer network in each block), not in attention. **Mixture of Experts** exploits this: replace one FFN with $N$ parallel "expert" FFNs + a small **router**; each token passes through only the top-$k$ experts (often $k=1$ or $2$):
+
+$$
+y = \sum_{e \in \text{top-}k} g_e(x)\, \text{FFN}_e(x)
+$$
+
+where $g_e(x)$ is the router weight (softmax over router scores, keeping only top-$k$).
+
+<Note type="result">
+The key — **decoupling parameter count from compute cost**: total parameters grow $N\times$ (more stored knowledge) but per-token compute stays roughly constant since only $k$ experts are active (sparse activation). Mixtral 8×7B has ~47B parameters but uses only ~13B per token.
+</Note>
+
+### The challenge: load balancing
+
+Left unchecked, the router tends to **funnel most tokens to a few favorite experts** — the rest "die", wasting parameters. Fixes: an **auxiliary load-balancing loss** encouraging even routing, or a per-expert capacity limit (capacity factor).
+
+| Model | Total params | Active / token |
+|---|---|---|
+| Switch Transformer | up to ~1.6T | a small fraction |
+| Mixtral 8×7B | ~47B | ~13B (top-2 of 8 experts) |
+
+## The picture
+
+One transformer block → change the **mask** for encoder/decoder/enc-dec → change the **input** (patches) for ViT → optimize **attention** for efficient transformers → multiply the **FFN** for MoE. It's all the same attention core.
+
+## References
+
+| Paper | |
+|---|---|
+| Devlin et al. (2018) | BERT |
+| Radford et al. (2019) | Language Models are Unsupervised Multitask Learners (GPT-2) |
+| Raffel et al. (2020) | Exploring the Limits of Transfer Learning (T5) |
+| Dosovitskiy et al. (2020) | An Image is Worth 16×16 Words (ViT) |
+| Dao et al. (2022) | FlashAttention |
+| Fedus et al. (2021) | Switch Transformers |
+| Jiang et al. (2024) | Mixtral of Experts |

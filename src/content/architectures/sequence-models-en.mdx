@@ -1,17 +1,17 @@
 ---
-title: "Sequence Models: RNN → SSM"
-description: "From RNNs and the vanishing gradient problem, through LSTM/GRU and Seq2Seq, to linear-time State Space Models like Mamba."
+title: "Sequence Models: RNN → Seq2Seq"
+description: "RNNs and the vanishing gradient problem, LSTM/GRU gating, and Seq2Seq — where attention was born."
 lang: en
 category: architectures
 order: 2
 parent: architecture-anatomy
 translation: sequence-models
-tags: [rnn, lstm, seq2seq, ssm, mamba, sequence]
+tags: [rnn, lstm, gru, seq2seq, sequence]
 ---
 
 import Note from '../../components/Note.astro';
 
-# Sequence Models: RNN → SSM
+# Sequence Models: RNN → Seq2Seq
 
 Sequential data (text, audio, time-series) has **order** — and the natural inductive bias is to process it step by step, carrying a "state" that summarizes the past.
 
@@ -51,22 +51,13 @@ The fix: let the decoder "look back" at all of the encoder's hidden states and p
 
 ## The shared problem: sequential is slow
 
-Every RNN must compute **sequentially** — step $t$ needs $h_{t-1}$ — so it can't be parallelized over sequence length. The Transformer won partly by being fully parallelizable, at the cost of $O(n^2)$ attention.
+Every RNN must compute **sequentially** — step $t$ needs $h_{t-1}$ — so it can't be parallelized over sequence length. This is the core limitation, and two ways to solve it spawned the next two architecture families:
 
-## State Space Models — linear recurrence returns
-
-**SSMs** borrow from control theory: a linear system with a continuous hidden state, discretized into:
-
-$$
-h_t = A h_{t-1} + B x_t, \qquad y_t = C h_t
-$$
-
-Because the update is **linear**, an SSM can be computed as a parallel convolution during training ($O(n)$ instead of $O(n^2)$) *and* run like an RNN at inference (fixed state, no ever-growing KV cache).
-
-**Mamba (Gu & Dao, 2023)** makes $A, B, C$ **input-dependent** (selective) — the model decides what to keep or forget based on content, closing the quality gap with attention while staying linear in sequence length.
+- **Drop recurrence, parallelize fully** → [Transformer & Attention](/dl-anatomy/architectures/transformer-en) (at the cost of $O(n^2)$ attention)
+- **Keep recurrence but make it linear** → [State Space Models](/dl-anatomy/architectures/state-space-models-en) (Mamba, $O(n)$)
 
 <Note type="result">
-The big picture: RNN (sequential, vanishing) → LSTM (gating, memory) → Transformer (parallel, $O(n^2)$) → SSM/Mamba (linear $O(n)$, selective). The open question of 2024+: will SSMs replace attention for very long sequences?
+The evolution here: RNN (sequential, vanishing) → LSTM/GRU (gating, memory) → Seq2Seq (encoder-decoder, bottleneck → seed of attention). Seq2Seq's bottleneck leads straight to attention, and "sequential is slow" leads to both the Transformer and SSMs — the next two articles.
 </Note>
 
 ## References
@@ -77,4 +68,3 @@ The big picture: RNN (sequential, vanishing) → LSTM (gating, memory) → Trans
 | Cho et al. (2014) | GRU — Learning Phrase Representations |
 | Sutskever et al. (2014) | Sequence to Sequence Learning with Neural Networks |
 | Bahdanau et al. (2015) | Neural Machine Translation by Jointly Learning to Align and Translate |
-| Gu & Dao (2023) | Mamba: Linear-Time Sequence Modeling with Selective State Spaces |

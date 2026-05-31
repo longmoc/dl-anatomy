@@ -1,0 +1,82 @@
+---
+title: "State Space Models (Mamba)"
+description: "Recurrence tuyến tính trở lại — SSM tính O(n) thay cho attention O(n²), và Mamba với selective state."
+lang: vi
+category: architectures
+order: 3
+parent: architecture-anatomy
+translation: state-space-models-en
+tags: [ssm, mamba, sequence, linear-attention]
+---
+
+import Note from '../../components/Note.astro';
+
+# State Space Models (Mamba)
+
+Bài [Sequence Models](/dl-anatomy/architectures/sequence-models) kết thúc ở một thế lưỡng nan: RNN giữ được state nhỏ gọn nhưng **tuần tự** (không song song hóa); Transformer song song hóa hoàn toàn nhưng tốn $O(n^2)$ và bộ nhớ KV-cache lớn dần. **State Space Models** là nỗ lực lấy điểm tốt của cả hai.
+
+## Ý tưởng: hệ tuyến tính từ lý thuyết điều khiển
+
+SSM mượn mô hình kinh điển trong control theory — một hệ với trạng thái ẩn liên tục, khi rời rạc hóa cho công thức:
+
+$$
+h_t = A h_{t-1} + B x_t, \qquad y_t = C h_t
+$$
+
+Trông y hệt RNN, nhưng có một khác biệt then chốt: cập nhật **tuyến tính** (không có $\tanh$ hay phi tuyến chen vào giữa các bước).
+
+## Tại sao tuyến tính lại quan trọng
+
+Vì recurrence tuyến tính, ta có thể *unroll* nó thành một phép **tích chập** (convolution) với một kernel tính sẵn:
+
+$$
+y = x * \bar{K}, \qquad \bar{K} = (C B,\; C A B,\; C A^2 B,\; \dots)
+$$
+
+Hệ quả là SSM có **hai chế độ tương đương**:
+
+| Chế độ | Dùng khi | Chi phí |
+|---|---|---|
+| Convolution (song song) | Training | $O(n)$, song song toàn chuỗi |
+| Recurrence (tuần tự) | Inference | State cố định, không KV-cache lớn dần |
+
+Đây là điều Transformer không có: train thì song song như Transformer, mà infer thì gọn như RNN.
+
+<Note type="intuition">
+Attention nhớ *mọi* token trong quá khứ (KV-cache lớn theo độ dài). SSM nén quá khứ vào một state cố định kích thước — giống RNN. Đánh đổi: state cố định có thể bỏ sót chi tiết xa, nên thiết kế $A$ (cách state "quên") là mấu chốt.
+</Note>
+
+## Mamba — selective state
+
+SSM cổ điển có $A, B, C$ **cố định** — đối xử mọi token như nhau, không lọc được thông tin theo nội dung (điểm yếu so với attention). **Mamba (Gu & Dao, 2023)** làm cho $B, C$ (và bước rời rạc hóa) **phụ thuộc input**:
+
+$$
+B = B(x_t), \quad C = C(x_t)
+$$
+
+→ mô hình tự quyết *giữ hay quên* thông tin theo từng token — gọi là **selective scan**. Đây là mảnh ghép giúp Mamba lấp khoảng cách chất lượng với attention, trong khi vẫn $O(n)$ theo độ dài.
+
+Cái giá: cập nhật phụ thuộc input phá vỡ dạng convolution cố định, nên Mamba dùng một **parallel scan** viết tay tối ưu cho GPU để vẫn song song hóa được khi train.
+
+## Bức tranh lớn
+
+$$
+\text{RNN} \;\to\; \text{LSTM/GRU} \;\to\; \text{Transformer} \;\to\; \text{SSM/Mamba}
+$$
+
+- RNN: tuần tự, vanishing
+- LSTM/GRU: gating giữ ký ức, vẫn tuần tự
+- Transformer: song song, long-range tốt, nhưng $O(n^2)$
+- SSM/Mamba: tuyến tính $O(n)$, selective, infer gọn
+
+<Note type="result">
+Câu hỏi mở 2024+: SSM có thay được attention cho chuỗi **rất dài** (genomics, audio, context triệu token)? Thực tế nhiều model lai (hybrid) xen kẽ layer attention và layer SSM — lấy long-range chính xác của attention ở vài layer, và chi phí tuyến tính của SSM ở phần còn lại.
+</Note>
+
+## Papers tham khảo
+
+| Paper | |
+|---|---|
+| Gu et al. (2021) | Efficiently Modeling Long Sequences with Structured State Spaces (S4) |
+| Gu & Dao (2023) | Mamba: Linear-Time Sequence Modeling with Selective State Spaces |
+| Dao & Gu (2024) | Transformers are SSMs (Mamba-2, mối liên hệ duality) |

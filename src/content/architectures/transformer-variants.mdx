@@ -1,0 +1,83 @@
+---
+title: "Transformer Variants & MoE"
+description: "Encoder-only, decoder-only, ViT, efficient transformer — và Mixture of Experts để scale tham số mà không scale compute."
+lang: vi
+category: architectures
+order: 5
+parent: architecture-anatomy
+translation: transformer-variants-en
+tags: [transformer, bert, gpt, vit, moe, scaling]
+---
+
+import Note from '../../components/Note.astro';
+
+# Transformer Variants & MoE
+
+Bài [Transformer & Attention](/dl-anatomy/architectures/transformer) mô tả *cơ chế*. Từ cùng một transformer block, cộng đồng tạo ra cả một họ kiến trúc bằng cách thay đổi *cách dùng* attention và *cách scale*.
+
+## Ba kiểu dùng attention
+
+Khác biệt cốt lõi giữa các họ là **token nào được nhìn token nào** (attention mask):
+
+| Biến thể | Mask | Ví dụ | Dùng cho |
+|---|---|---|---|
+| Encoder-only | Bidirectional (nhìn cả hai phía) | BERT, RoBERTa | Hiểu/biểu diễn: classification, embedding, retrieval |
+| Decoder-only | Causal (chỉ nhìn quá khứ) | GPT, LLaMA | Sinh văn bản tự hồi quy |
+| Encoder-decoder | Encoder bidirectional + decoder causal + cross-attention | T5, BART | Seq2seq: dịch, tóm tắt |
+
+<Note type="intuition">
+Cùng một block attention, chỉ đổi **mask**, ra ba "tính cách" khác nhau. Decoder-only thắng thế trong kỷ nguyên LLM vì một mục tiêu duy nhất — *dự đoán token kế tiếp* — vừa đơn giản vừa scale cực tốt, và mọi task (dịch, tóm tắt, hỏi đáp) đều có thể viết lại thành sinh văn bản.
+</Note>
+
+## Vision Transformer (ViT)
+
+**ViT (Dosovitskiy et al., 2020)** áp transformer lên ảnh: cắt ảnh thành các **patch** $16\times16$, trải phẳng mỗi patch thành một vector → coi như một "token". Sau đó là transformer chuẩn.
+
+Điểm đáng chú ý: ViT gần như **không có inductive bias của CNN** (locality, translation invariance). Với data nhỏ nó thua CNN, nhưng với data cực lớn (JFT-300M) nó vượt — đúng tinh thần "ít giả định + nhiều data" của Transformer.
+
+## Efficient Transformer — đánh vào $O(n^2)$
+
+Attention tốn $O(n^2)$ theo độ dài chuỗi. Nhiều hướng giảm chi phí:
+
+- **Sparse/local attention** (Longformer, BigBird): mỗi token chỉ attend một cửa sổ cục bộ + vài token toàn cục
+- **Linear attention** (Performer): xấp xỉ softmax để đưa về $O(n)$
+- **FlashAttention**: không đổi độ phức tạp toán học nhưng tối ưu I/O bộ nhớ GPU → nhanh hơn nhiều trong thực tế, là chuẩn de facto hiện nay
+
+## MoE — scale tham số mà không scale compute
+
+Phần lớn tham số của một LLM nằm ở **FFN** (mạng 2 lớp trong mỗi block), không phải ở attention. **Mixture of Experts** khai thác điều này: thay một FFN bằng $N$ "expert" FFN song song + một **router** nhỏ, mỗi token chỉ đi qua top-$k$ expert (thường $k=1$ hoặc $2$):
+
+$$
+y = \sum_{e \in \text{top-}k} g_e(x)\, \text{FFN}_e(x)
+$$
+
+trong đó $g_e(x)$ là trọng số router (softmax trên điểm router, chỉ giữ top-$k$).
+
+<Note type="result">
+Mấu chốt — **tách rời số tham số khỏi chi phí tính toán**: tổng tham số tăng $N$ lần (chứa nhiều kiến thức hơn) nhưng compute mỗi token gần như không đổi vì chỉ $k$ expert active (sparse activation). Mixtral 8×7B có ~47B tham số nhưng mỗi token chỉ dùng ~13B.
+</Note>
+
+### Thách thức: load balancing
+
+Nếu để router tự do, nó dễ **dồn hầu hết token vào vài expert** ưa thích — các expert còn lại "chết", lãng phí tham số. Giải pháp: thêm **auxiliary load-balancing loss** khuyến khích router phân bố đều, hoặc giới hạn dung lượng mỗi expert (capacity factor).
+
+| Model | Tổng tham số | Active / token |
+|---|---|---|
+| Switch Transformer | tới ~1.6T | một phần nhỏ |
+| Mixtral 8×7B | ~47B | ~13B (top-2 / 8 expert) |
+
+## Bức tranh
+
+Một transformer block → đổi **mask** ra encoder/decoder/enc-dec → đổi **input** (patch) ra ViT → tối ưu **attention** ra efficient transformer → nhân **FFN** ra MoE. Tất cả vẫn là cùng một lõi attention.
+
+## Papers tham khảo
+
+| Paper | |
+|---|---|
+| Devlin et al. (2018) | BERT |
+| Radford et al. (2019) | Language Models are Unsupervised Multitask Learners (GPT-2) |
+| Raffel et al. (2020) | Exploring the Limits of Transfer Learning (T5) |
+| Dosovitskiy et al. (2020) | An Image is Worth 16×16 Words (ViT) |
+| Dao et al. (2022) | FlashAttention |
+| Fedus et al. (2021) | Switch Transformers |
+| Jiang et al. (2024) | Mixtral of Experts |

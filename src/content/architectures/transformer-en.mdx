@@ -1,12 +1,12 @@
 ---
 title: "Transformer & Attention"
-description: "Scaled dot-product attention, positional encoding, encoder/decoder variants, ViT and MoE — the architecture that dominates modern deep learning."
+description: "Scaled dot-product attention, self-attention, positional encoding and multi-head — the core mechanism of the architecture that dominates modern deep learning."
 lang: en
 category: architectures
-order: 3
+order: 4
 parent: architecture-anatomy
 translation: transformer
-tags: [transformer, attention, positional-encoding, vit, moe]
+tags: [transformer, attention, positional-encoding, multi-head]
 ---
 
 import Note from '../../components/Note.astro';
@@ -57,37 +57,17 @@ A block stacks: **multi-head attention → FFN** (a 2-layer network applied per 
 
 Why it beats RNNs: (1) **parallelizable** over the whole sequence during training, (2) the path between any two tokens is just 1 step → long-range dependencies are easy to capture, (3) it **scales** smoothly with data and compute.
 
-## Variants
-
-| Variant | Example | Used for |
-|---|---|---|
-| Encoder-only | BERT | Understanding/representation (classification, embeddings) |
-| Decoder-only | GPT, LLaMA | Autoregressive text generation |
-| Encoder-decoder | T5, BART | Seq2seq (translation, summarization) |
-| Vision Transformer | ViT | Images split into patches → tokens |
-| Efficient Transformer | Longformer, FlashAttention | Reducing the $O(n^2)$ cost |
-
-## MoE — scaling parameters without scaling compute
-
-Attention is $O(n^2)$ expensive, but most LLM parameters live in the FFN. **Mixture of Experts** replaces one FFN with many "expert" FFNs + a **router**: each token passes through only the top-$k$ experts (often $k=2$).
-
-$$
-y = \sum_{e \in \text{top-}k} g_e(x)\, \text{FFN}_e(x)
-$$
-
-→ total parameters multiply (more knowledge) but **per-token compute stays roughly constant** (sparse activation). Switch Transformer and Mixtral use this. The challenge: **load balancing** — preventing the router from collapsing onto a few experts.
-
 <Note type="result">
 A Transformer is a GNN on a complete graph (every token connected, edge weights = attention). It drops the inductive biases of order/locality, requiring large data + compute in return — and that very "assumption-free" nature is what lets it generalize to text, images, audio, proteins, and more.
 </Note>
+
+From this same block come many variants (encoder-only, decoder-only, ViT) and ways to scale parameters (MoE) — see the next article: [Transformer Variants & MoE](/dl-anatomy/architectures/transformer-variants-en).
 
 ## References
 
 | Paper | |
 |---|---|
 | Vaswani et al. (2017) | Attention Is All You Need |
-| Devlin et al. (2018) | BERT |
-| Dosovitskiy et al. (2020) | An Image is Worth 16×16 Words (ViT) |
 | Su et al. (2021) | RoFormer: Rotary Position Embedding (RoPE) |
-| Fedus et al. (2021) | Switch Transformers |
-| Jiang et al. (2024) | Mixtral of Experts |
+| Press et al. (2021) | ALiBi: Train Short, Test Long |
+| Bahdanau et al. (2015) | Neural Machine Translation by Jointly Learning to Align and Translate |

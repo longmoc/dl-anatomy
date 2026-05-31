@@ -1,12 +1,12 @@
 ---
 title: "Transformer & Attention"
-description: "Scaled dot-product attention, positional encoding, các biến thể encoder/decoder, ViT và MoE — kiến trúc thống trị deep learning hiện đại."
+description: "Scaled dot-product attention, self-attention, positional encoding và multi-head — cơ chế cốt lõi của kiến trúc thống trị deep learning hiện đại."
 lang: vi
 category: architectures
-order: 3
+order: 4
 parent: architecture-anatomy
 translation: transformer-en
-tags: [transformer, attention, positional-encoding, vit, moe]
+tags: [transformer, attention, positional-encoding, multi-head]
 ---
 
 import Note from '../../components/Note.astro';
@@ -57,37 +57,17 @@ Một block xếp chồng: **multi-head attention → FFN** (mạng 2 lớp áp 
 
 Tại sao thắng RNN: (1) **song song hóa** toàn chuỗi khi train, (2) đường đi giữa hai token bất kỳ chỉ dài 1 bước → bắt phụ thuộc xa dễ, (3) **scale** mượt theo data và compute.
 
-## Các biến thể
-
-| Biến thể | Ví dụ | Dùng cho |
-|---|---|---|
-| Encoder-only | BERT | Hiểu/biểu diễn (classification, embedding) |
-| Decoder-only | GPT, LLaMA | Sinh văn bản tự hồi quy |
-| Encoder-decoder | T5, BART | Seq2seq (dịch, tóm tắt) |
-| Vision Transformer | ViT | Ảnh chia thành patch → token |
-| Efficient Transformer | Longformer, FlashAttention | Giảm chi phí $O(n^2)$ |
-
-## MoE — scale tham số mà không scale compute
-
-Attention $O(n^2)$ đắt, nhưng phần lớn tham số LLM nằm ở FFN. **Mixture of Experts** thay một FFN bằng nhiều "expert" FFN + một **router**: mỗi token chỉ đi qua top-$k$ expert (thường $k=2$).
-
-$$
-y = \sum_{e \in \text{top-}k} g_e(x)\, \text{FFN}_e(x)
-$$
-
-→ tổng tham số tăng gấp nhiều lần (kiến thức nhiều hơn) nhưng **compute mỗi token gần như không đổi** (sparse activation). Switch Transformer, Mixtral dùng cách này. Thách thức: **load balancing** — tránh router dồn hết vào vài expert.
-
 <Note type="result">
 Transformer = GNN trên đồ thị đầy đủ (mọi token nối nhau, trọng số cạnh = attention). Nó bỏ inductive bias về thứ tự/locality, đổi lại đòi hỏi data + compute lớn — và chính sự "ít giả định" đó khiến nó tổng quát hóa được sang văn bản, ảnh, âm thanh, protein…
 </Note>
+
+Từ cùng một block này, người ta tạo ra nhiều biến thể (encoder-only, decoder-only, ViT) và cách scale tham số (MoE) — xem bài tiếp theo: [Transformer Variants & MoE](/dl-anatomy/architectures/transformer-variants).
 
 ## Papers tham khảo
 
 | Paper | |
 |---|---|
 | Vaswani et al. (2017) | Attention Is All You Need |
-| Devlin et al. (2018) | BERT |
-| Dosovitskiy et al. (2020) | An Image is Worth 16×16 Words (ViT) |
 | Su et al. (2021) | RoFormer: Rotary Position Embedding (RoPE) |
-| Fedus et al. (2021) | Switch Transformers |
-| Jiang et al. (2024) | Mixtral of Experts |
+| Press et al. (2021) | ALiBi: Train Short, Test Long |
+| Bahdanau et al. (2015) | Neural Machine Translation by Jointly Learning to Align and Translate |
