@@ -17,10 +17,11 @@ import ReceptiveFieldViz from '../../components/ReceptiveFieldViz.astro';
 
 ## Inductive bias cho ảnh
 
-Một fully-connected layer nối mọi pixel với mọi neuron. Với ảnh $224\times224\times3$, chỉ riêng layer đầu nối tới 1000 neuron đã là ~150 triệu tham số — và nó bỏ qua một sự thật hiển nhiên: **pixel gần nhau thường tương quan mạnh hơn** so với pixel ở rất xa. Các quan hệ xa vẫn tồn tại (bánh trước và bánh sau, hai mắt của một khuôn mặt), nhưng thường được xây dần qua nhiều tầng sâu hơn. Convolution mã hóa giả định locality này qua hai nguyên lý:
+Một fully-connected layer nối mọi pixel với mọi neuron. Với ảnh $224\times224\times3$, chỉ riêng layer đầu nối tới 1000 neuron đã là ~150 triệu tham số — và nó bỏ qua một sự thật hiển nhiên: **pixel gần nhau thường tương quan mạnh hơn** so với pixel ở rất xa. Các quan hệ xa vẫn tồn tại (bánh trước và bánh sau, hai mắt của một khuôn mặt), nhưng thường được xây dần qua nhiều tầng sâu hơn. Convolution mã hóa giả định này qua ba nguyên lý:
 
 - **Locality**: mỗi neuron chỉ nhìn một vùng nhỏ (kernel), ví dụ $3\times3$ — không phải toàn ảnh
 - **Weight sharing**: cùng một bộ kernel trượt khắp ảnh → phát hiện một đặc trưng (cạnh, góc) ở *mọi* vị trí
+- **Translation equivariance**: nếu một pattern dịch sang vị trí khác trong input, response tương ứng trên feature map cũng dịch theo
 
 <Note type="intuition">
 Weight sharing là một dạng regularization mạnh: thay vì học riêng cho từng vị trí, mô hình buộc phải học đặc trưng *dùng được ở mọi nơi*. Đây là lý do CNN cực kỳ hiệu quả về dữ liệu trên ảnh so với MLP — và là một ví dụ kinh điển của "đưa giả định đúng vào kiến trúc".
@@ -44,10 +45,14 @@ $$
 
 ### Channels và feature map
 
-Ảnh màu có 3 **kênh** (R, G, B). Một filter conv không chỉ là $3\times3$ mà là $3\times3\times C_{in}$ — nó trải trên *toàn bộ* kênh đầu vào và cộng lại thành **một** feature map. Dùng $K$ filter khác nhau → $K$ feature map → đó là $C_{out} = K$ kênh đầu ra:
+Ảnh màu có 3 **kênh** (R, G, B). Một filter conv không chỉ là $3\times3$ mà là $C_{in}\times3\times3$ — nó trải trên *toàn bộ* kênh đầu vào và cộng lại thành **một** feature map. Dùng $C_{out}$ filter khác nhau → $C_{out}$ feature map đầu ra. Tóm lại các shape (đúng như weight của `Conv2d` trong PyTorch — $(C_{out}, C_{in}, k, k)$):
 
 $$
-(C_{in},\, H,\, W) \;\xrightarrow{\;K \text{ filters } k\times k\;}\; (K,\, H',\, W')
+\begin{aligned}
+\text{input } X &\in \mathbb{R}^{C_{in} \times H \times W} \\[2pt]
+\text{filter bank } W &\in \mathbb{R}^{C_{out} \times C_{in} \times k \times k} \\[2pt]
+\text{output } Y &\in \mathbb{R}^{C_{out} \times H' \times W'}
+\end{aligned}
 $$
 
 Mỗi feature map là "bản đồ" cho biết một đặc trưng cụ thể xuất hiện ở đâu trong ảnh.
@@ -80,7 +85,9 @@ $$
 3 \times 3 \times 64 \times 64 = 36{,}864
 $$
 
-trọng số (cộng $64$ bias nếu layer dùng bias) — **độc lập với kích thước ảnh**. Một FC layer tương đương trên feature map $64\times56\times56$ sẽ cần hàng tỷ tham số. Locality + weight sharing cắt giảm tham số theo nhiều bậc độ lớn.
+trọng số (cộng $64$ bias nếu layer dùng bias) — **độc lập với kích thước ảnh**. Trong nhiều CNN hiện đại, nếu conv được theo sau bởi BatchNorm thì bias thường được bỏ, vì BatchNorm đã có tham số dịch chuyển riêng.
+
+Nếu thay convolution bằng một fully-connected mapping trên toàn feature map, số tham số tăng cực nhanh vì mỗi vị trí phải có trọng số riêng — và quan trọng hơn, FC mất cả locality lẫn weight sharing.
 
 ## Pooling và downsampling
 
@@ -89,20 +96,27 @@ Sau vài conv layer, ta thường **pooling** để giảm độ phân giải: c
 Trong các CNN hiện đại, downsampling **không nhất thiết** dùng pooling — nhiều kiến trúc (ResNet, ConvNeXt) dùng **convolution với stride > 1** để vừa giảm độ phân giải vừa *học* cách downsample. Mẫu "conv → relu → pool" là điển hình của CNN cổ điển, không bắt buộc với mọi CNN.
 
 <Note type="theorem">
-Phân biệt quan trọng: convolution là **translation-equivariant** — dịch input thì feature map dịch theo y hệt. Pooling thêm **translation-invariance** — dịch nhỏ trong một ô pooling không đổi output. CNN kết hợp cả hai: biết đặc trưng *ở đâu* (equivariant) nhưng vẫn nhận ra dù nó xê dịch chút ít (invariant).
+Phân biệt quan trọng:
+
+- **Convolution** về cơ bản là **translation-equivariant**: dịch input thì feature map dịch tương ứng (bỏ qua hiệu ứng biên/padding).
+- **Pooling** thêm một mức **local / approximate invariance**: dịch nhỏ *trong* một ô pooling có thể không đổi output — nhưng dịch vượt ô hoặc lệch grid thì output vẫn đổi.
+
+CNN kết hợp cả hai: feature map vẫn giữ thông tin vị trí tương đối, nhưng prediction cuối bớt nhạy với các dịch chuyển nhỏ.
 </Note>
 
 ## Receptive field
 
-**Receptive field** của một neuron là vùng input mà nó "nhìn thấy". Một conv $3\times3$ chỉ thấy $3\times3$ pixel — rất cục bộ. Nhưng xếp chồng nhiều layer, vùng nhìn lớn dần: với $L$ layer kernel $k$ (stride 1),
+**Receptive field** của một neuron là vùng input mà nó "nhìn thấy". Một conv $3\times3$ chỉ thấy $3\times3$ pixel — rất cục bộ. Nhưng xếp chồng nhiều layer, vùng nhìn lớn dần. Với $L$ layer convolution kernel $k$, **stride 1, dilation 1, không downsampling**:
 
 $$
 RF = 1 + L\,(k-1)
 $$
 
+Đây là trường hợp đơn giản; khi có stride, pooling hoặc dilation, receptive field tăng theo cách khác (nhanh hơn).
+
 <ReceptiveFieldViz />
 
-Đây là chìa khóa: từ các phép toán **hoàn toàn cục bộ**, một stack đủ sâu vẫn nắm được **ngữ cảnh toàn cục** — neuron ở layer cuối nhìn được gần như cả ảnh.
+Đây là chìa khóa: từ các phép toán **hoàn toàn cục bộ**, một stack đủ sâu có thể mở rộng vùng nhìn tới gần toàn ảnh — *về mặt lý thuyết*.
 
 > Công thức trên là *theoretical* receptive field. Thực tế không phải mọi pixel trong vùng đó ảnh hưởng như nhau — vùng gần trung tâm tác động mạnh hơn nhiều. Phần ảnh hưởng thực sự này gọi là *effective receptive field*, thường nhỏ hơn theoretical RF.
 
@@ -114,11 +128,17 @@ Vì receptive field lớn dần theo độ sâu, các đặc trưng cũng trừu
 - **Layer giữa**: texture, hoa văn, bộ phận đơn giản (mắt, bánh xe)
 - **Layer cuối**: bộ phận phức tạp → toàn bộ vật thể
 
-Mạng tự học phân cấp này từ dữ liệu — không ai lập trình "đây là cạnh, kia là mắt".
+Kiến trúc CNN bias mô hình theo hướng học phân cấp từ cục bộ đến toàn cục (nhờ locality, weight sharing, downsampling và depth), nhưng các đặc trưng cụ thể vẫn được học từ dữ liệu — không ai lập trình "đây là cạnh, kia là mắt".
 
 ## Mẫu kiến trúc kinh điển
 
-CNN cổ điển lặp lại một khối: **conv → activation → (đôi khi) pool**, xếp chồng nhiều lần, rồi một **FC head** ở cuối để phân loại:
+Một CNN block thường đảm nhận ba vai trò:
+
+1. **Convolution** — trích xuất pattern cục bộ
+2. **Activation** — thêm phi tuyến để học quan hệ phức tạp
+3. **Downsampling** — giảm resolution, tăng vùng nhìn, giảm compute
+
+Không phải block nào cũng đủ ba phần, nhưng đây là motif lặp lại của CNN cổ điển: xếp chồng nhiều lần, rồi một **FC head** ở cuối để phân loại:
 
 ```
 [Conv → ReLU → Pool] × N  →  Flatten  →  FC → Softmax
@@ -128,12 +148,12 @@ Càng lên sâu, độ phân giải không gian giảm (pooling) nhưng số kê
 
 ## Họ CNN trước ResNet
 
-| Năm | Mạng | Đóng góp chính |
+| Năm | Mạng | Ý nghĩa kiến trúc |
 |---|---|---|
-| 1998 | LeNet-5 | CNN đầu tiên thực dụng (nhận dạng chữ số) |
-| 2012 | AlexNet | Sâu + ReLU + GPU + dropout → thắng áp đảo ImageNet, châm ngòi deep learning |
-| 2014 | VGG | Chỉ dùng conv $3\times3$ xếp chồng → đơn giản, sâu (16–19 layer) |
-| 2014 | GoogLeNet / Inception | Inception block đa tỉ lệ (nhiều kernel size song song) + conv $1\times1$ giảm chiều |
+| 1998 | LeNet-5 | Chứng minh conv + pooling + FC là pipeline thực dụng cho nhận dạng ảnh |
+| 2012 | AlexNet | Scale CNN bằng GPU, ReLU, dropout; mở màn deep learning trên ImageNet |
+| 2014 | VGG | Chuẩn hóa pattern stack nhiều conv $3\times3$ nhỏ thay vì kernel lớn |
+| 2014 | GoogLeNet / Inception | Multi-scale branch + $1\times1$ bottleneck để tăng độ rộng mà vẫn kiểm soát compute |
 
 Inception để lại hai ý tưởng còn ảnh hưởng đến nay. **Multi-scale**: thay vì chọn một kernel size, một Inception block chạy song song nhiều kernel ($1\times1$, $3\times3$, $5\times5$) rồi ghép kết quả — để mạng tự chọn tỉ lệ phù hợp. **Conv $1\times1$** (đã giới thiệu ở trên): dùng để *giảm số kênh* trước các conv đắt đỏ — chính ý tưởng được ResNet mượn cho **bottleneck block**.
 

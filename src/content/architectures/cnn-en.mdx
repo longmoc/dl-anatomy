@@ -17,10 +17,11 @@ import ReceptiveFieldViz from '../../components/ReceptiveFieldViz.astro';
 
 ## An inductive bias for images
 
-A fully-connected layer wires every pixel to every neuron. For a $224\times224\times3$ image, just the first layer into 1000 neurons is ~150 million parameters — and it ignores an obvious fact: **nearby pixels are more strongly correlated** than far-apart ones. Long-range relations do exist (the front and rear wheels, the two eyes of a face), but they're typically built up gradually through deeper layers. Convolution bakes in this locality assumption through two principles:
+A fully-connected layer wires every pixel to every neuron. For a $224\times224\times3$ image, just the first layer into 1000 neurons is ~150 million parameters — and it ignores an obvious fact: **nearby pixels are more strongly correlated** than far-apart ones. Long-range relations do exist (the front and rear wheels, the two eyes of a face), but they're typically built up gradually through deeper layers. Convolution bakes in this assumption through three principles:
 
 - **Locality**: each neuron looks at only a small region (the kernel), e.g. $3\times3$ — not the whole image
 - **Weight sharing**: the same kernel slides across the image → it detects one feature (edge, corner) at *every* position
+- **Translation equivariance**: if a pattern moves to a different position in the input, its response on the feature map moves the same way
 
 <Note type="intuition">
 Weight sharing is a strong form of regularization: instead of learning per-position, the model is forced to learn features that are *useful everywhere*. This is why CNNs are far more data-efficient than MLPs on images — a textbook case of "putting the right assumption into the architecture."
@@ -44,10 +45,14 @@ $$
 
 ### Channels and feature maps
 
-A color image has 3 **channels** (R, G, B). A conv filter isn't just $3\times3$ but $3\times3\times C_{in}$ — it spans *all* input channels and sums them into **one** feature map. Using $K$ different filters → $K$ feature maps → that's $C_{out} = K$ output channels:
+A color image has 3 **channels** (R, G, B). A conv filter isn't just $3\times3$ but $C_{in}\times3\times3$ — it spans *all* input channels and sums them into **one** feature map. Using $C_{out}$ different filters → $C_{out}$ output feature maps. The shapes (exactly the weight shape of PyTorch's `Conv2d`, $(C_{out}, C_{in}, k, k)$):
 
 $$
-(C_{in},\, H,\, W) \;\xrightarrow{\;K \text{ filters } k\times k\;}\; (K,\, H',\, W')
+\begin{aligned}
+\text{input } X &\in \mathbb{R}^{C_{in} \times H \times W} \\[2pt]
+\text{filter bank } W &\in \mathbb{R}^{C_{out} \times C_{in} \times k \times k} \\[2pt]
+\text{output } Y &\in \mathbb{R}^{C_{out} \times H' \times W'}
+\end{aligned}
 $$
 
 Each feature map is a "map" of where one specific feature appears in the image.
@@ -80,7 +85,9 @@ $$
 3 \times 3 \times 64 \times 64 = 36{,}864
 $$
 
-weights (plus $64$ biases if the layer uses bias) — **independent of image size**. An equivalent FC layer on a $64\times56\times56$ feature map would need billions. Locality + weight sharing cut parameters by orders of magnitude.
+weights (plus $64$ biases if the layer uses bias) — **independent of image size**. In many modern CNNs, when a conv is followed by BatchNorm the bias is dropped, since BatchNorm already has its own shift parameter.
+
+If you replaced the convolution with a fully-connected mapping over the whole feature map, the parameter count would explode because every position needs its own weights — and, more importantly, an FC layer loses both locality and weight sharing.
 
 ## Pooling and downsampling
 
@@ -89,20 +96,27 @@ After a few conv layers we usually **pool** to reduce resolution: split the feat
 In modern CNNs, downsampling **doesn't have to** use pooling — many architectures (ResNet, ConvNeXt) use a **strided convolution** ($s>1$) to both reduce resolution and *learn* how to downsample. The "conv → relu → pool" pattern is typical of classic CNNs, not mandatory for every CNN.
 
 <Note type="theorem">
-A key distinction: convolution is **translation-equivariant** — shift the input and the feature map shifts identically. Pooling adds **translation-invariance** — a small shift within a pooling cell doesn't change the output. CNNs combine both: they know *where* a feature is (equivariant) yet still recognize it when it moves a little (invariant).
+A key distinction:
+
+- **Convolution** is fundamentally **translation-equivariant**: shift the input and the feature map shifts accordingly (ignoring border/padding effects).
+- **Pooling** adds a degree of **local / approximate invariance**: a small shift *within* a pooling cell may not change the output — but a shift past the cell, or off the grid, still does.
+
+CNNs combine both: the feature map keeps relative position information, while the final prediction becomes less sensitive to small shifts.
 </Note>
 
 ## Receptive field
 
-A neuron's **receptive field** is the input region it "sees". A single $3\times3$ conv sees only $3\times3$ pixels — very local. But stacking layers grows that field: with $L$ layers of kernel $k$ (stride 1),
+A neuron's **receptive field** is the input region it "sees". A single $3\times3$ conv sees only $3\times3$ pixels — very local. But stacking layers grows that field. With $L$ convolution layers of kernel $k$, **stride 1, dilation 1, no downsampling**:
 
 $$
 RF = 1 + L\,(k-1)
 $$
 
+This is the simple case; with stride, pooling, or dilation the receptive field grows differently (faster).
+
 <ReceptiveFieldViz lang="en" />
 
-This is the key: from **purely local** operations, a deep enough stack still captures **global context** — a neuron in the final layer sees almost the whole image.
+This is the key: from **purely local** operations, a deep enough stack can grow its field of view to nearly the whole image — *in theory*.
 
 > The formula above is the *theoretical* receptive field. In practice not every pixel in that region contributes equally — those near the center have far more influence. This actual influence is the *effective receptive field*, usually smaller than the theoretical one.
 
@@ -114,11 +128,17 @@ Because the receptive field grows with depth, features grow more abstract too:
 - **Middle layers**: textures, patterns, simple parts (eyes, wheels)
 - **Late layers**: complex parts → whole objects
 
-The network learns this hierarchy from data — nobody programs "this is an edge, that is an eye."
+The CNN architecture biases the model toward learning a local-to-global hierarchy (via locality, weight sharing, downsampling, and depth), but the specific features are still learned from data — nobody programs "this is an edge, that is an eye."
 
 ## The classic architecture pattern
 
-A classic CNN repeats a block — **conv → activation → (sometimes) pool** — stacked several times, then a **FC head** at the end for classification:
+A CNN block typically plays three roles:
+
+1. **Convolution** — extract local patterns
+2. **Activation** — add nonlinearity to learn complex relations
+3. **Downsampling** — reduce resolution, grow the field of view, cut compute
+
+Not every block has all three, but it's the recurring motif of classic CNNs: stacked several times, then a **FC head** at the end for classification:
 
 ```
 [Conv → ReLU → Pool] × N  →  Flatten  →  FC → Softmax
@@ -128,12 +148,12 @@ Deeper in, spatial resolution shrinks (pooling) while the number of channels gro
 
 ## The CNN family before ResNet
 
-| Year | Network | Key contribution |
+| Year | Network | Architectural significance |
 |---|---|---|
-| 1998 | LeNet-5 | First practical CNN (digit recognition) |
-| 2012 | AlexNet | Deep + ReLU + GPU + dropout → dominated ImageNet, ignited deep learning |
-| 2014 | VGG | Only stacked $3\times3$ convs → simple, deep (16–19 layers) |
-| 2014 | GoogLeNet / Inception | Multi-scale Inception block (parallel kernel sizes) + $1\times1$ convs for dimension reduction |
+| 1998 | LeNet-5 | Showed conv + pooling + FC is a practical pipeline for image recognition |
+| 2012 | AlexNet | Scaled CNNs with GPUs, ReLU, dropout; opened the deep learning era on ImageNet |
+| 2014 | VGG | Standardized the pattern of stacking many small $3\times3$ convs instead of large kernels |
+| 2014 | GoogLeNet / Inception | Multi-scale branches + $1\times1$ bottleneck to add width while controlling compute |
 
 Inception left two ideas that still matter today. **Multi-scale**: instead of picking one kernel size, an Inception block runs several kernels in parallel ($1\times1$, $3\times3$, $5\times5$) and concatenates the results — letting the network choose the right scale. **The $1\times1$ conv** (introduced above): used to *reduce the channel count* before expensive convs — exactly the idea ResNet reuses for its **bottleneck block**.
 
