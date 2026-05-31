@@ -11,6 +11,7 @@ tags: [resnet, residual, bottleneck, densenet, convnext]
 
 import Note from '../../components/Note.astro';
 import ResidualGradientViz from '../../components/ResidualGradientViz.astro';
+import ResidualBlockDiagram from '../../components/ResidualBlockDiagram.astro';
 
 # ResNet & Modern CNN
 
@@ -37,6 +38,8 @@ $$
 $$
 
 The $+1$ term is the key: however small $\frac{\partial F}{\partial x}$ becomes, the gradient still has a "highway" straight through the identity branch, undiminished. This let ResNet train networks of **over 1000 layers**.
+
+<ResidualBlockDiagram lang="en" />
 
 <ResidualGradientViz lang="en" />
 

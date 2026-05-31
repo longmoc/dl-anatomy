@@ -1,0 +1,93 @@
+---
+interface Props {
+  lang?: 'vi' | 'en';
+}
+const { lang = 'vi' } = Astro.props;
+
+const L = lang === 'en'
+  ? { w1: 'weight layer', w2: 'weight layer', relu: 'ReLU', skip: 'identity  x', cap: 'A residual block (He et al., 2015). The skip connection carries x unchanged to the addition, so the layers only need to learn the residual F(x) — and the gradient gets a direct path back.' }
+  : { w1: 'weight layer', w2: 'weight layer', relu: 'ReLU', skip: 'identity  x', cap: 'Một residual block (He et al., 2015). Nhánh skip mang x nguyên vẹn tới phép cộng, nên các layer chỉ cần học phần dư F(x) — và gradient có đường về thẳng.' };
+---
+
+<figure class="rbd">
+  <svg viewBox="0 0 280 330" role="img" aria-label="Residual block diagram" class="rbd-svg">
+    <defs>
+      <marker id="rbd-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" class="rbd-head" />
+      </marker>
+    </defs>
+
+    <!-- x input -->
+    <text x="100" y="20" class="rbd-var">x</text>
+    <!-- split dot -->
+    <circle cx="100" cy="32" r="3" class="rbd-dot" />
+
+    <!-- main path: split → w1 -->
+    <line x1="100" y1="35" x2="100" y2="52" class="rbd-line" marker-end="url(#rbd-arrow)" />
+    <rect x="40" y="54" width="120" height="34" rx="6" class="rbd-box" />
+    <text x="100" y="75" class="rbd-label">{L.w1}</text>
+
+    <line x1="100" y1="88" x2="100" y2="104" class="rbd-line" marker-end="url(#rbd-arrow)" />
+    <rect x="40" y="106" width="120" height="30" rx="6" class="rbd-box rbd-act" />
+    <text x="100" y="125" class="rbd-label">{L.relu}</text>
+
+    <line x1="100" y1="136" x2="100" y2="152" class="rbd-line" marker-end="url(#rbd-arrow)" />
+    <rect x="40" y="154" width="120" height="34" rx="6" class="rbd-box" />
+    <text x="100" y="175" class="rbd-label">{L.w2}</text>
+
+    <!-- w2 → plus -->
+    <line x1="100" y1="188" x2="100" y2="220" class="rbd-line" marker-end="url(#rbd-arrow)" />
+
+    <!-- skip connection: split → right → down → plus -->
+    <path d="M100,32 C210,32 230,32 230,90 L230,228 C230,232 228,234 214,234"
+          class="rbd-skip" fill="none" marker-end="url(#rbd-arrow)" />
+    <text x="238" y="135" class="rbd-skip-label" transform="rotate(90 238 135)">{L.skip}</text>
+
+    <!-- plus (addition) -->
+    <circle cx="100" cy="234" r="13" class="rbd-plus" />
+    <line x1="100" y1="227" x2="100" y2="241" class="rbd-plus-sign" />
+    <line x1="93" y1="234" x2="107" y2="234" class="rbd-plus-sign" />
+
+    <!-- plus → relu -->
+    <line x1="100" y1="247" x2="100" y2="263" class="rbd-line" marker-end="url(#rbd-arrow)" />
+    <rect x="40" y="265" width="120" height="30" rx="6" class="rbd-box rbd-act" />
+    <text x="100" y="284" class="rbd-label">{L.relu}</text>
+
+    <!-- output -->
+    <line x1="100" y1="295" x2="100" y2="312" class="rbd-line" marker-end="url(#rbd-arrow)" />
+    <text x="100" y="326" class="rbd-var">y = F(x) + x</text>
+  </svg>
+  <figcaption class="rbd-cap">{L.cap}</figcaption>
+</figure>
+
+<style>
+  .rbd {
+    margin: 1.75rem 0;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg2);
+    padding: 1rem 0 0.2rem;
+  }
+  .rbd-svg {
+    display: block;
+    width: 100%;
+    max-width: 300px;
+    height: auto;
+    margin: 0 auto;
+  }
+  .rbd-box { fill: var(--bg); stroke: var(--accent); stroke-width: 1.5; }
+  .rbd-act { stroke: var(--accent2); }
+  .rbd-label { fill: var(--text); font-family: var(--mono); font-size: 11px; text-anchor: middle; }
+  .rbd-var { fill: var(--muted); font-family: var(--mono); font-size: 12px; font-weight: 600; text-anchor: middle; }
+  .rbd-line { stroke: var(--accent); stroke-width: 1.5; }
+  .rbd-head { fill: var(--accent); }
+  .rbd-dot { fill: var(--accent); }
+  .rbd-skip { stroke: var(--accent2); stroke-width: 1.5; stroke-dasharray: 4 3; }
+  .rbd-skip-label { fill: var(--accent2); font-family: var(--mono); font-size: 10px; text-anchor: middle; }
+  .rbd-plus { fill: var(--bg); stroke: var(--amber); stroke-width: 2; }
+  .rbd-plus-sign { stroke: var(--amber); stroke-width: 2; }
+  .rbd-cap {
+    font-size: 0.78rem; color: var(--muted); text-align: center;
+    padding: 0.5rem 1rem 0.6rem; font-style: italic; line-height: 1.5;
+  }
+</style>

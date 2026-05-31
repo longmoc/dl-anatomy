@@ -11,6 +11,7 @@ tags: [resnet, residual, bottleneck, densenet, convnext]
 
 import Note from '../../components/Note.astro';
 import ResidualGradientViz from '../../components/ResidualGradientViz.astro';
+import ResidualBlockDiagram from '../../components/ResidualBlockDiagram.astro';
 
 # ResNet & Modern CNN
 
@@ -37,6 +38,8 @@ $$
 $$
 
 Số hạng $+1$ là chìa khóa: dù $\frac{\partial F}{\partial x}$ nhỏ đến đâu, gradient vẫn có một "đường cao tốc" đi thẳng qua nhánh identity, không bị suy giảm. Nhờ đó ResNet train được mạng **hơn 1000 layer**.
+
+<ResidualBlockDiagram />
 
 <ResidualGradientViz />
 
