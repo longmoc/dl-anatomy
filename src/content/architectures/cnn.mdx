@@ -17,7 +17,7 @@ import ReceptiveFieldViz from '../../components/ReceptiveFieldViz.astro';
 
 ## Inductive bias cho ảnh
 
-Một fully-connected layer nối mọi pixel với mọi neuron. Với ảnh $224\times224\times3$, chỉ riêng layer đầu nối tới 1000 neuron đã là ~150 triệu tham số — và nó bỏ qua một sự thật hiển nhiên: **pixel gần nhau thì liên quan đến nhau**, còn pixel ở hai góc đối diện thì gần như độc lập. Convolution mã hóa đúng giả định đó qua hai nguyên lý:
+Một fully-connected layer nối mọi pixel với mọi neuron. Với ảnh $224\times224\times3$, chỉ riêng layer đầu nối tới 1000 neuron đã là ~150 triệu tham số — và nó bỏ qua một sự thật hiển nhiên: **pixel gần nhau thường tương quan mạnh hơn** so với pixel ở rất xa. Các quan hệ xa vẫn tồn tại (bánh trước và bánh sau, hai mắt của một khuôn mặt), nhưng thường được xây dần qua nhiều tầng sâu hơn. Convolution mã hóa giả định locality này qua hai nguyên lý:
 
 - **Locality**: mỗi neuron chỉ nhìn một vùng nhỏ (kernel), ví dụ $3\times3$ — không phải toàn ảnh
 - **Weight sharing**: cùng một bộ kernel trượt khắp ảnh → phát hiện một đặc trưng (cạnh, góc) ở *mọi* vị trí
@@ -34,6 +34,8 @@ $$
 (I * K)(x, y) = \sum_{i}\sum_{j} I(x+i,\, y+j)\, K(i, j)
 $$
 
+> Nói chặt chẽ hơn, "convolution" trong các thư viện DL thường là **cross-correlation**: kernel không bị lật như định nghĩa convolution toán học. Trong neural network điều này hầu như không gây vấn đề vì kernel được học từ dữ liệu.
+
 <ConvViz />
 
 ### Channels và feature map
@@ -46,6 +48,14 @@ $$
 
 Mỗi feature map là "bản đồ" cho biết một đặc trưng cụ thể xuất hiện ở đâu trong ảnh.
 
+### Convolution 1×1
+
+Một kernel $1\times1$ không trộn thông tin theo không gian (chỉ phủ một pixel), nhưng **trộn thông tin giữa các kênh**: với mỗi vị trí, nó học một phép chiếu từ $C_{in}$ sang $C_{out}$. Vai trò thường gặp: tăng/giảm số kênh, trộn feature giữa các kênh, và làm **bottleneck** (trong Inception, ResNet, MobileNet).
+
+<Note type="intuition">
+Nếu conv $3\times3$ hỏi *"vùng lân cận nói gì?"*, thì conv $1\times1$ hỏi *"các kênh tại cùng một vị trí nên được trộn thế nào?"*
+</Note>
+
 ### Stride, padding, kích thước output
 
 - **Kernel size** $k$ — vùng nhìn mỗi bước (thường 3 hoặc 5)
@@ -55,16 +65,24 @@ Mỗi feature map là "bản đồ" cho biết một đặc trưng cụ thể xu
 Kích thước output theo mỗi chiều:
 
 $$
-H' = \left\lfloor \frac{H - k + 2p}{s} \right\rfloor + 1
+H' = \left\lfloor \frac{H + 2p - k}{s} \right\rfloor + 1, \quad W' = \left\lfloor \frac{W + 2p - k}{s} \right\rfloor + 1
 $$
 
 ### Tiết kiệm tham số
 
-Một conv layer $3\times3$ với $C_{in}=C_{out}=64$ chỉ có $3\times3\times64\times64 \approx 37\text{K}$ tham số — **độc lập với kích thước ảnh**. Một FC layer tương đương trên feature map $64\times56\times56$ sẽ cần hàng tỷ tham số. Locality + weight sharing cắt giảm tham số theo nhiều bậc độ lớn.
+Một conv layer $3\times3$ với $C_{in}=C_{out}=64$ có
+
+$$
+3 \times 3 \times 64 \times 64 = 36{,}864
+$$
+
+trọng số (cộng $64$ bias nếu layer dùng bias) — **độc lập với kích thước ảnh**. Một FC layer tương đương trên feature map $64\times56\times56$ sẽ cần hàng tỷ tham số. Locality + weight sharing cắt giảm tham số theo nhiều bậc độ lớn.
 
 ## Pooling và downsampling
 
 Sau vài conv layer, ta thường **pooling** để giảm độ phân giải: chia feature map thành các ô và lấy max (**max pooling**) hoặc trung bình (**average pooling**) mỗi ô. Lợi ích: giảm tính toán, tăng receptive field, và thêm một chút bất biến với dịch chuyển nhỏ.
+
+Trong các CNN hiện đại, downsampling **không nhất thiết** dùng pooling — nhiều kiến trúc (ResNet, ConvNeXt) dùng **convolution với stride > 1** để vừa giảm độ phân giải vừa *học* cách downsample. Mẫu "conv → relu → pool" là điển hình của CNN cổ điển, không bắt buộc với mọi CNN.
 
 <Note type="theorem">
 Phân biệt quan trọng: convolution là **translation-equivariant** — dịch input thì feature map dịch theo y hệt. Pooling thêm **translation-invariance** — dịch nhỏ trong một ô pooling không đổi output. CNN kết hợp cả hai: biết đặc trưng *ở đâu* (equivariant) nhưng vẫn nhận ra dù nó xê dịch chút ít (invariant).
@@ -81,6 +99,8 @@ $$
 <ReceptiveFieldViz />
 
 Đây là chìa khóa: từ các phép toán **hoàn toàn cục bộ**, một stack đủ sâu vẫn nắm được **ngữ cảnh toàn cục** — neuron ở layer cuối nhìn được gần như cả ảnh.
+
+> Công thức trên là *theoretical* receptive field. Thực tế không phải mọi pixel trong vùng đó ảnh hưởng như nhau — vùng gần trung tâm tác động mạnh hơn nhiều. Phần ảnh hưởng thực sự này gọi là *effective receptive field*, thường nhỏ hơn theoretical RF.
 
 ## Phân cấp đặc trưng
 
@@ -111,10 +131,21 @@ Càng lên sâu, độ phân giải không gian giảm (pooling) nhưng số kê
 | 2014 | VGG | Chỉ dùng conv $3\times3$ xếp chồng → đơn giản, sâu (16–19 layer) |
 | 2014 | GoogLeNet / Inception | Inception block đa tỉ lệ (nhiều kernel size song song) + conv $1\times1$ giảm chiều |
 
-Inception để lại hai ý tưởng còn ảnh hưởng đến nay. **Multi-scale**: thay vì chọn một kernel size, một Inception block chạy song song nhiều kernel ($1\times1$, $3\times3$, $5\times5$) rồi ghép kết quả — để mạng tự chọn tỉ lệ phù hợp. **Conv $1\times1$**: một kernel $1\times1$ không nhìn không gian, chỉ trộn các kênh tại từng pixel — dùng để *giảm số kênh* trước các conv đắt đỏ, cắt tính toán mà vẫn giữ độ biểu đạt. Chính ý tưởng $1\times1$ này được ResNet mượn lại cho **bottleneck block**.
+Inception để lại hai ý tưởng còn ảnh hưởng đến nay. **Multi-scale**: thay vì chọn một kernel size, một Inception block chạy song song nhiều kernel ($1\times1$, $3\times3$, $5\times5$) rồi ghép kết quả — để mạng tự chọn tỉ lệ phù hợp. **Conv $1\times1$** (đã giới thiệu ở trên): dùng để *giảm số kênh* trước các conv đắt đỏ — chính ý tưởng được ResNet mượn cho **bottleneck block**.
+
+## Giới hạn của CNN
+
+CNN rất mạnh khi dữ liệu có cấu trúc không gian cục bộ như ảnh. Nhưng chính locality bias cũng là giới hạn:
+
+- **Khó train khi quá sâu**: xu hướng trước 2015 là tăng độ sâu (LeNet vài layer → AlexNet 8 → VGG 16–19) để học đặc trưng trừu tượng hơn. Nhưng sâu hơn *không tự động* tốt hơn — quá sâu thì training error lại tăng do **degradation**.
+- **Quan hệ xa cần nhiều layer** mới kết nối được (receptive field chỉ lớn dần từ từ).
+- **Kernel vuông cố định** kém linh hoạt với cấu trúc dài hoặc ngữ cảnh toàn cục.
+- **Pooling/downsampling** có thể làm mất chi tiết không gian.
+
+Những giới hạn này là động lực cho các thiết kế sau: **ResNet** (residual connection để train mạng rất sâu), rồi FPN / dilated conv (multi-scale), và cuối cùng **attention / Vision Transformer** (quan hệ toàn cục trực tiếp).
 
 <Note type="result">
-Xu hướng rõ rệt: **càng sâu càng tốt** — LeNet vài layer, AlexNet 8, VGG 19. Nhưng khi cố đẩy sâu hơn nữa, training error lại *tăng* thay vì giảm. Nghịch lý này là động lực cho ResNet — xem [ResNet & Modern CNN](/dl-anatomy/architectures/resnet).
+Bước kế tiếp — giải bài toán độ sâu — xem [ResNet & Modern CNN](/dl-anatomy/architectures/resnet).
 </Note>
 
 ## Papers tham khảo

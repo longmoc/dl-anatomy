@@ -17,7 +17,7 @@ import ReceptiveFieldViz from '../../components/ReceptiveFieldViz.astro';
 
 ## An inductive bias for images
 
-A fully-connected layer wires every pixel to every neuron. For a $224\times224\times3$ image, just the first layer into 1000 neurons is ~150 million parameters — and it ignores an obvious fact: **nearby pixels are related**, while pixels in opposite corners are nearly independent. Convolution bakes in exactly that assumption through two principles:
+A fully-connected layer wires every pixel to every neuron. For a $224\times224\times3$ image, just the first layer into 1000 neurons is ~150 million parameters — and it ignores an obvious fact: **nearby pixels are more strongly correlated** than far-apart ones. Long-range relations do exist (the front and rear wheels, the two eyes of a face), but they're typically built up gradually through deeper layers. Convolution bakes in this locality assumption through two principles:
 
 - **Locality**: each neuron looks at only a small region (the kernel), e.g. $3\times3$ — not the whole image
 - **Weight sharing**: the same kernel slides across the image → it detects one feature (edge, corner) at *every* position
@@ -34,6 +34,8 @@ $$
 (I * K)(x, y) = \sum_{i}\sum_{j} I(x+i,\, y+j)\, K(i, j)
 $$
 
+> Strictly speaking, what most DL libraries call "convolution" is **cross-correlation**: the kernel is not flipped as in the classical mathematical definition. In neural networks this barely matters, because the kernel weights are learned from data.
+
 <ConvViz lang="en" />
 
 ### Channels and feature maps
@@ -46,6 +48,14 @@ $$
 
 Each feature map is a "map" of where one specific feature appears in the image.
 
+### 1×1 convolution
+
+A $1\times1$ kernel mixes no spatial information (it covers a single pixel), but it **mixes information across channels**: at each position it learns a projection from $C_{in}$ to $C_{out}$. Common roles: increase/decrease the channel count, mix features across channels, and act as a **bottleneck** (in Inception, ResNet, MobileNet).
+
+<Note type="intuition">
+If a $3\times3$ conv asks *"what does the neighborhood say?"*, a $1\times1$ conv asks *"how should the channels at this one position be mixed?"*
+</Note>
+
 ### Stride, padding, output size
 
 - **Kernel size** $k$ — the field of view per step (typically 3 or 5)
@@ -55,16 +65,24 @@ Each feature map is a "map" of where one specific feature appears in the image.
 Output size per dimension:
 
 $$
-H' = \left\lfloor \frac{H - k + 2p}{s} \right\rfloor + 1
+H' = \left\lfloor \frac{H + 2p - k}{s} \right\rfloor + 1, \quad W' = \left\lfloor \frac{W + 2p - k}{s} \right\rfloor + 1
 $$
 
 ### Parameter savings
 
-A $3\times3$ conv layer with $C_{in}=C_{out}=64$ has only $3\times3\times64\times64 \approx 37\text{K}$ parameters — **independent of image size**. An equivalent FC layer on a $64\times56\times56$ feature map would need billions. Locality + weight sharing cut parameters by orders of magnitude.
+A $3\times3$ conv layer with $C_{in}=C_{out}=64$ has
+
+$$
+3 \times 3 \times 64 \times 64 = 36{,}864
+$$
+
+weights (plus $64$ biases if the layer uses bias) — **independent of image size**. An equivalent FC layer on a $64\times56\times56$ feature map would need billions. Locality + weight sharing cut parameters by orders of magnitude.
 
 ## Pooling and downsampling
 
 After a few conv layers we usually **pool** to reduce resolution: split the feature map into cells and take the max (**max pooling**) or average (**average pooling**) of each. Benefits: less computation, larger receptive field, and a bit of invariance to small shifts.
+
+In modern CNNs, downsampling **doesn't have to** use pooling — many architectures (ResNet, ConvNeXt) use a **strided convolution** ($s>1$) to both reduce resolution and *learn* how to downsample. The "conv → relu → pool" pattern is typical of classic CNNs, not mandatory for every CNN.
 
 <Note type="theorem">
 A key distinction: convolution is **translation-equivariant** — shift the input and the feature map shifts identically. Pooling adds **translation-invariance** — a small shift within a pooling cell doesn't change the output. CNNs combine both: they know *where* a feature is (equivariant) yet still recognize it when it moves a little (invariant).
@@ -81,6 +99,8 @@ $$
 <ReceptiveFieldViz lang="en" />
 
 This is the key: from **purely local** operations, a deep enough stack still captures **global context** — a neuron in the final layer sees almost the whole image.
+
+> The formula above is the *theoretical* receptive field. In practice not every pixel in that region contributes equally — those near the center have far more influence. This actual influence is the *effective receptive field*, usually smaller than the theoretical one.
 
 ## Feature hierarchy
 
@@ -111,10 +131,21 @@ Deeper in, spatial resolution shrinks (pooling) while the number of channels gro
 | 2014 | VGG | Only stacked $3\times3$ convs → simple, deep (16–19 layers) |
 | 2014 | GoogLeNet / Inception | Multi-scale Inception block (parallel kernel sizes) + $1\times1$ convs for dimension reduction |
 
-Inception left two ideas that still matter today. **Multi-scale**: instead of picking one kernel size, an Inception block runs several kernels in parallel ($1\times1$, $3\times3$, $5\times5$) and concatenates the results — letting the network choose the right scale. **The $1\times1$ conv**: a $1\times1$ kernel doesn't look at space, it only mixes channels at each pixel — used to *reduce the channel count* before expensive convs, cutting computation while keeping expressiveness. It's exactly this $1\times1$ idea that ResNet reuses for its **bottleneck block**.
+Inception left two ideas that still matter today. **Multi-scale**: instead of picking one kernel size, an Inception block runs several kernels in parallel ($1\times1$, $3\times3$, $5\times5$) and concatenates the results — letting the network choose the right scale. **The $1\times1$ conv** (introduced above): used to *reduce the channel count* before expensive convs — exactly the idea ResNet reuses for its **bottleneck block**.
+
+## Limitations of CNNs
+
+CNNs are powerful when data has local spatial structure, like images. But that same locality bias is also a limitation:
+
+- **Hard to train when too deep**: the pre-2015 trend was to add depth (LeNet a few layers → AlexNet 8 → VGG 16–19) for more abstract features. But deeper is *not automatically* better — too deep and training error rises due to **degradation**.
+- **Long-range relations need many layers** to connect (the receptive field only grows gradually).
+- **Fixed square kernels** are inflexible for long-range structure or global context.
+- **Pooling/downsampling** can discard spatial detail.
+
+These limitations motivated later designs: **ResNet** (residual connections to train very deep nets), then FPN / dilated convs (multi-scale), and finally **attention / Vision Transformers** (direct global relations).
 
 <Note type="result">
-A clear trend: **deeper is better** — LeNet a few layers, AlexNet 8, VGG 19. But pushing deeper still, training error started to *rise* instead of fall. That paradox motivated ResNet — see [ResNet & Modern CNN](/dl-anatomy/architectures/resnet-en).
+The next step — solving the depth problem — see [ResNet & Modern CNN](/dl-anatomy/architectures/resnet-en).
 </Note>
 
 ## References
