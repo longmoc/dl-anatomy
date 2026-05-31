@@ -31,10 +31,14 @@ Weight sharing là một dạng regularization mạnh: thay vì học riêng cho
 Kernel (còn gọi là filter) là một ma trận nhỏ trượt trên input; tại mỗi vị trí, output là **tổng có trọng số** của vùng nó phủ:
 
 $$
-(I * K)(x, y) = \sum_{i}\sum_{j} I(x+i,\, y+j)\, K(i, j)
+(I * K)(x, y) = \sum_{i}\sum_{j} I(x-i,\, y-j)\, K(i, j)
 $$
 
-> Nói chặt chẽ hơn, "convolution" trong các thư viện DL thường là **cross-correlation**: kernel không bị lật như định nghĩa convolution toán học. Trong neural network điều này hầu như không gây vấn đề vì kernel được học từ dữ liệu.
+> Đây là định nghĩa convolution toán học — kernel bị **lật** (dấu $x-i$). Nhưng trong các thư viện DL, phép thực thi thực ra là **cross-correlation**: kernel **không** lật. Vì kernel được học từ dữ liệu nên khác biệt này hầu như không ảnh hưởng, và ta vẫn quen gọi nó là "convolution". Công thức thực sự được tính là:
+
+$$
+(I \star K)(x, y) = \sum_{i}\sum_{j} I(x+i,\, y+j)\, K(i, j)
+$$
 
 <ConvViz />
 

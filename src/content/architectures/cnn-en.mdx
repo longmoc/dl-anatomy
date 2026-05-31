@@ -31,10 +31,14 @@ Weight sharing is a strong form of regularization: instead of learning per-posit
 A kernel (or filter) is a small matrix that slides over the input; at each position the output is a **weighted sum** of the patch it covers:
 
 $$
-(I * K)(x, y) = \sum_{i}\sum_{j} I(x+i,\, y+j)\, K(i, j)
+(I * K)(x, y) = \sum_{i}\sum_{j} I(x-i,\, y-j)\, K(i, j)
 $$
 
-> Strictly speaking, what most DL libraries call "convolution" is **cross-correlation**: the kernel is not flipped as in the classical mathematical definition. In neural networks this barely matters, because the kernel weights are learned from data.
+> This is the mathematical definition of convolution — the kernel is **flipped** (the $x-i$ sign). But what DL libraries actually compute is **cross-correlation**: the kernel is **not** flipped. Because the kernel is learned from data this barely matters, and we still loosely call it "convolution". The operation actually computed is:
+
+$$
+(I \star K)(x, y) = \sum_{i}\sum_{j} I(x+i,\, y+j)\, K(i, j)
+$$
 
 <ConvViz lang="en" />
 
