@@ -15,7 +15,7 @@ import ResidualBlockDiagram from '../../components/ResidualBlockDiagram.astro';
 
 # ResNet & Modern CNN
 
-Bài [Convolutional Networks](/dl-anatomy/architectures/cnn) kết thúc ở một nghịch lý: về mặt biểu diễn, mạng sâu hơn đáng lẽ **không nên** tệ hơn mạng nông — các layer thêm vào chỉ cần học identity là tệ nhất cũng bằng. Nhưng trong thực nghiệm, khi CNN quá sâu, *training error cũng tăng*. Đây là **degradation problem**: vấn đề không nằm ở overfitting, mà ở chỗ mạng sâu trở nên **khó tối ưu**.
+Bài [Convolutional Networks](/dl-anatomy/architectures/cnn) kết thúc ở một nghịch lý: về mặt biểu diễn, mạng sâu hơn đáng lẽ **không nên** tệ hơn mạng nông — nếu các layer thêm vào học được identity, mạng sâu có thể mô phỏng lại mạng nông. Nhưng trong thực nghiệm, khi CNN quá sâu, *training error cũng tăng*. Đây là **degradation problem**: vấn đề không nằm ở overfitting, mà ở chỗ mạng sâu trở nên **khó tối ưu**.
 
 ## Vì sao CNN quá sâu thất bại
 
@@ -43,7 +43,7 @@ $$
 \frac{\partial L}{\partial x} = \frac{\partial L}{\partial y}\left( \frac{\partial F(x)}{\partial x} + 1 \right)
 $$
 
-Số hạng $+1$ là chìa khóa: dù $\frac{\partial F}{\partial x}$ nhỏ đến đâu, gradient vẫn có một "đường cao tốc" $\frac{\partial L}{\partial y}\cdot 1$ đi thẳng qua nhánh identity, không bị suy giảm. Nhờ đó ResNet train được mạng **hơn 1000 layer**.
+Số hạng $+1$ tạo một đường truyền gradient trực tiếp qua nhánh identity — $\frac{\partial L}{\partial y}\cdot 1$. Nó không đảm bảo gradient luôn hoàn hảo, nhưng làm tín hiệu backward dễ truyền qua nhiều block hơn rất nhiều so với một stack thuần không có skip connection. Cùng với BatchNorm và thiết kế block phù hợp, residual connection giúp ResNet train được cả những mạng rất sâu — thậm chí **trên 1000 layer** trong thí nghiệm.
 
 <ResidualBlockDiagram />
 
@@ -66,7 +66,7 @@ Bài hay dùng lẫn nhiều tên; phân biệt cho rõ:
 
 ### Basic block
 
-Dùng trong **ResNet-18 / ResNet-34** — hai conv $3\times3$:
+Trong ResNet v1, basic block dùng trong **ResNet-18 / ResNet-34** gồm hai convolution $3\times3$:
 
 ```
 x → [3×3 conv → BN → ReLU → 3×3 conv → BN] → (+x) → ReLU
@@ -81,6 +81,8 @@ x → [1×1 conv (giảm) → 3×3 conv → 1×1 conv (nở)] → (+x) → ReLU
 ```
 
 Conv $1\times1$ đầu **giảm** số kênh, conv $3\times3$ xử lý không gian trên ít kênh hơn (rẻ hơn nhiều), conv $1\times1$ cuối **mở rộng** kênh trở lại. Cắt FLOPs đáng kể mà vẫn giữ độ biểu đạt — chính là ý tưởng $1\times1$ conv mượn từ Inception (xem [Convolutional Networks](/dl-anatomy/architectures/cnn)).
+
+Trong implementation phổ biến, bottleneck dùng **expansion ratio = 4**: nếu phần giữa có 64 kênh thì output của block là 256 kênh.
 
 ### Khi shape không khớp
 
@@ -108,8 +110,14 @@ BN → ReLU → Conv → BN → ReLU → Conv → Add
 
 Thiết kế này giữ nhánh identity "sạch" (không có activation chen vào sau Add), nên tín hiệu forward và gradient backward đi qua skip path trực tiếp hơn — train mạng cực sâu dễ hơn và generalize tốt hơn.
 
+| Variant | Block | Dùng cho | Ý chính |
+|---|---|---|---|
+| ResNet-18 / 34 | Basic | model vừa/nhỏ | hai conv $3\times3$ |
+| ResNet-50 / 101 / 152 | Bottleneck | model sâu | $1\times1$ giảm → $3\times3$ → $1\times1$ nở |
+| ResNet v2 | Pre-activation | model rất sâu | BN/ReLU trước conv, identity path sạch hơn |
+
 <Note type="warning">
-**BatchNorm** trong các block trên là một thành phần quan trọng riêng (ổn định phân phối activation, cho phép LR lớn) — nó là *kỹ thuật chuẩn hóa*, không phải thiết kế kiến trúc, nên sẽ được bàn trong một bài riêng về normalization.
+**BatchNorm** trong các block trên là một thành phần quan trọng của *thiết kế block* — đặc biệt khi so sánh ResNet v1 và pre-activation v2, vị trí đặt BN tạo khác biệt. Tuy vậy, normalization là một chủ đề riêng; bài này chỉ nhắc vai trò của nó trong ResNet, còn chi tiết sẽ bàn trong bài riêng về normalization.
 </Note>
 
 ## ResNet đổi cách nghĩ về layer
@@ -120,13 +128,14 @@ $$
 \text{representation mới} = \text{representation cũ} + \text{cập nhật học được}
 $$
 
-Cách nghĩ "tinh chỉnh dần thay vì thay mới hoàn toàn" này xuất hiện lại ở khắp nơi: residual path trong **Transformer**, U-Net, neural ODE, và cả adapter / LoRA (học một cập nhật nhỏ trên trọng số có sẵn).
+Cách nghĩ "tinh chỉnh dần thay vì thay mới hoàn toàn" này xuất hiện lại ở khắp nơi: residual path trong **Transformer**, U-Net, neural ODE, adapter trong fine-tuning (residual update trên *representation*), và LoRA ở tầng trọng số (low-rank update trên *weight* có sẵn).
 
 ## Họ CNN hiện đại
 
 Sau ResNet, residual connection thành mặc định, và CNN tiến hóa theo vài hướng chính:
 
-**1. Connectivity tốt hơn**
+**1. Block design và connectivity tốt hơn**
+- **ResNeXt (2017)**: mở rộng ResNet bằng grouped convolution và ý tưởng **cardinality** (số nhóm/nhánh song song) — cho thấy tăng cardinality có thể hiệu quả hơn chỉ tăng depth hoặc width.
 - **DenseNet (2016)**: nối mỗi layer với *mọi* layer sau → tái dùng feature tối đa, ít tham số hơn với cùng độ chính xác.
 
 **2. Convolution hiệu quả**
@@ -137,7 +146,7 @@ Sau ResNet, residual connection thành mặc định, và CNN tiến hóa theo v
 - **EfficientNet (2019)**: **compound scaling** — cân bằng depth/width/resolution theo một hệ số duy nhất, thay vì chỉ tăng một chiều.
 
 **4. ConvNet hiện đại hóa**
-- **ConvNeXt (2022)**: hiện đại hóa ResNet bằng nhiều design choice từ Vision Transformer — macro design, depthwise conv kernel lớn, LayerNorm, GELU, inverted bottleneck → cạnh tranh ngang ViT trên vision.
+- **ConvNeXt (2022)**: hiện đại hóa ResNet bằng nhiều design choice từ Vision Transformer — macro design, depthwise conv kernel lớn, LayerNorm, GELU, inverted bottleneck — cho thấy một *pure ConvNet*, nếu được hiện đại hóa đúng cách, vẫn có thể cạnh tranh với Transformer backbone trên nhiều benchmark vision.
 
 ## Residual vượt ra ngoài CNN
 
@@ -159,6 +168,7 @@ ResNet làm cho **độ sâu trở nên thực dụng**, và quan trọng hơn, 
 |---|---|
 | He et al. (2015) | Deep Residual Learning for Image Recognition (ResNet v1) |
 | He et al. (2016) | Identity Mappings in Deep Residual Networks (pre-activation, v2) |
+| Xie et al. (2017) | Aggregated Residual Transformations (ResNeXt) |
 | Huang et al. (2016) | Densely Connected Convolutional Networks (DenseNet) |
 | Howard et al. (2017) | MobileNets: Efficient CNNs for Mobile Vision |
 | Tan & Le (2019) | EfficientNet: Rethinking Model Scaling |

@@ -15,7 +15,7 @@ import ResidualBlockDiagram from '../../components/ResidualBlockDiagram.astro';
 
 # ResNet & Modern CNN
 
-The [Convolutional Networks](/dl-anatomy/architectures/cnn-en) article ended on a paradox: in terms of representation, a deeper network should **not** be worse than a shallower one — the extra layers could just learn the identity, so at worst it ties. But in practice, when a CNN gets too deep, *training error rises too*. This is the **degradation problem**: the issue isn't overfitting, it's that deep nets become **hard to optimize**.
+The [Convolutional Networks](/dl-anatomy/architectures/cnn-en) article ended on a paradox: in terms of representation, a deeper network should **not** be worse than a shallower one — if the extra layers could learn the identity, the deep net could just mimic the shallow one. But in practice, when a CNN gets too deep, *training error rises too*. This is the **degradation problem**: the issue isn't overfitting, it's that deep nets become **hard to optimize**.
 
 ## Why very deep CNNs failed
 
@@ -43,7 +43,7 @@ $$
 \frac{\partial L}{\partial x} = \frac{\partial L}{\partial y}\left( \frac{\partial F(x)}{\partial x} + 1 \right)
 $$
 
-The $+1$ is the key: however small $\frac{\partial F}{\partial x}$ becomes, the gradient still has a "highway" $\frac{\partial L}{\partial y}\cdot 1$ straight through the identity branch, undiminished. This let ResNet train networks of **over 1000 layers**.
+The $+1$ creates a direct gradient path through the identity branch — $\frac{\partial L}{\partial y}\cdot 1$. It doesn't guarantee gradients are always perfect, but it makes the backward signal far easier to propagate through many blocks than in a plain stack with no skip connections. Together with BatchNorm and a suitable block design, residual connections let ResNet train very deep networks — **over 1000 layers** in experiments.
 
 <ResidualBlockDiagram lang="en" />
 
@@ -66,7 +66,7 @@ These terms get used loosely; to be precise:
 
 ### Basic block
 
-Used in **ResNet-18 / ResNet-34** — two $3\times3$ convs:
+In ResNet v1, the basic block — used in **ResNet-18 / ResNet-34** — is two $3\times3$ convolutions:
 
 ```
 x → [3×3 conv → BN → ReLU → 3×3 conv → BN] → (+x) → ReLU
@@ -81,6 +81,8 @@ x → [1×1 conv (reduce) → 3×3 conv → 1×1 conv (expand)] → (+x) → ReL
 ```
 
 The first $1\times1$ conv **reduces** channels, the $3\times3$ conv processes space on fewer channels (much cheaper), and the last $1\times1$ conv **expands** channels back. It cuts FLOPs substantially while keeping expressiveness — exactly the $1\times1$ idea borrowed from Inception (see [Convolutional Networks](/dl-anatomy/architectures/cnn-en)).
+
+In the common implementation, the bottleneck uses an **expansion ratio of 4**: if the middle has 64 channels, the block's output has 256.
 
 ### When shapes don't match
 
@@ -108,8 +110,14 @@ BN → ReLU → Conv → BN → ReLU → Conv → Add
 
 This keeps the identity branch "clean" (no activation wedged in after the Add), so the forward signal and backward gradient pass through the skip path more directly — making extremely deep nets easier to train and slightly better at generalizing.
 
+| Variant | Block | For | Key idea |
+|---|---|---|---|
+| ResNet-18 / 34 | Basic | small/medium models | two $3\times3$ convs |
+| ResNet-50 / 101 / 152 | Bottleneck | deep models | $1\times1$ reduce → $3\times3$ → $1\times1$ expand |
+| ResNet v2 | Pre-activation | very deep models | BN/ReLU before conv, cleaner identity path |
+
 <Note type="warning">
-**BatchNorm** in the blocks above is an important component in its own right (it stabilizes activation distributions and allows larger learning rates) — it's a *normalization technique*, not an architectural design, so it will be covered in a separate article on normalization.
+**BatchNorm** in the blocks above is an important part of the *block design* — especially when comparing ResNet v1 and pre-activation v2, where BN placement makes a difference. Still, normalization is a topic of its own; this article only notes its role in ResNet, with details left to a separate article on normalization.
 </Note>
 
 ## How ResNet changed the way we think about layers
@@ -120,13 +128,14 @@ $$
 \text{new representation} = \text{old representation} + \text{learned update}
 $$
 
-This "refine gradually rather than replace wholesale" mindset reappears everywhere: the residual path in **Transformers**, U-Net, neural ODEs, and even adapters / LoRA (learning a small update to existing weights).
+This "refine gradually rather than replace wholesale" mindset reappears everywhere: the residual path in **Transformers**, U-Net, neural ODEs, adapters in fine-tuning (a residual update on the *representation*), and LoRA at the weight level (a low-rank update on existing *weights*).
 
 ## The modern CNN family
 
 After ResNet, residual connections became the default, and CNNs evolved along a few main directions:
 
-**1. Better connectivity**
+**1. Block design and better connectivity**
+- **ResNeXt (2017)**: extends ResNet with grouped convolutions and the idea of **cardinality** (the number of parallel branches) — showing that increasing cardinality can be more effective than just adding depth or width.
 - **DenseNet (2016)**: connect each layer to *every* later layer → maximal feature reuse, fewer parameters for the same accuracy.
 
 **2. Efficient convolution**
@@ -137,7 +146,7 @@ After ResNet, residual connections became the default, and CNNs evolved along a 
 - **EfficientNet (2019)**: **compound scaling** — balance depth/width/resolution with a single coefficient instead of scaling one dimension.
 
 **4. Modernized ConvNet**
-- **ConvNeXt (2022)**: modernizes ResNet with many design choices from Vision Transformers — macro design, large-kernel depthwise convs, LayerNorm, GELU, inverted bottleneck → competitive with ViT on vision.
+- **ConvNeXt (2022)**: modernizes ResNet with many design choices from Vision Transformers — macro design, large-kernel depthwise convs, LayerNorm, GELU, inverted bottleneck — showing that a *pure ConvNet*, modernized properly, can still compete with Transformer backbones on many vision benchmarks.
 
 ## Residual beyond CNNs
 
@@ -159,6 +168,7 @@ ResNet made **depth practical**, and more importantly turned residual learning i
 |---|---|
 | He et al. (2015) | Deep Residual Learning for Image Recognition (ResNet v1) |
 | He et al. (2016) | Identity Mappings in Deep Residual Networks (pre-activation, v2) |
+| Xie et al. (2017) | Aggregated Residual Transformations (ResNeXt) |
 | Huang et al. (2016) | Densely Connected Convolutional Networks (DenseNet) |
 | Howard et al. (2017) | MobileNets: Efficient CNNs for Mobile Vision |
 | Tan & Le (2019) | EfficientNet: Rethinking Model Scaling |
