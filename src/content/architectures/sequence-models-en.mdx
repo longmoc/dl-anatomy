@@ -22,7 +22,7 @@ In an image, a pixel has a fairly stable spatial neighborhood. In a sequence, th
 
 > process step by step, carry a **state** that summarizes the past, and use that state to interpret the present.
 
-The evolution in this article starts from the idea of state: RNNs compress the past into a hidden state; LSTM/GRU make that state remember longer with gates; Seq2Seq uses state to map one sequence into another; attention breaks the bottleneck by turning all hidden states into a memory bank. The Transformer then keeps attention and drops recurrence. SSM/Mamba returns to state, but organizes it to scale linearly.
+The evolution in this article starts from the idea of state: RNNs compress the past into a hidden state; LSTM/GRU make that state remember longer with gates; Seq2Seq uses state to map one sequence into another; attention breaks the bottleneck by turning all hidden states into a memory bank. The Transformer then keeps attention and drops recurrence.
 
 ## RNN — state as compressed memory
 
@@ -152,13 +152,13 @@ LSTM/GRU solves much of the memory problem; attention solves the Seq2Seq bottlen
 
 At step $t$, we need $h_{t-1}$. So the model cannot parallelize over the time axis the way a CNN processes a whole image or a Transformer processes a whole sequence. Training can still parallelize over batches and feature dimensions, but sequence length remains the hard axis.
 
-This is why two major directions emerged after RNNs:
+This is why the next step in the series moves to the Transformer:
 
-- **Drop recurrence and parallelize fully** → [Transformer & Attention](/dl-anatomy/architectures/transformer-en), where every token can attend to every other token. The cost: standard attention is $O(n^2)$ in sequence length.
-- **Keep state but organize it as a structured linear scan** → [State Space Models](/dl-anatomy/architectures/state-space-models-en), where recurrence is designed to train/infer efficiently on long sequences.
+- **Drop recurrence and parallelize fully** → [Transformer & Attention](/dl-anatomy/architectures/transformer-en), where every token can attend to every other token.
+- After understanding the Transformer and its variants, we will return to the remaining question: can we keep compact state like an RNN while still training efficiently? That is the role of [State Space Models](/dl-anatomy/architectures/state-space-models-en).
 
 <Note type="result">
-The evolution here: RNN compresses the past into state → LSTM/GRU use gates to preserve memory longer → Seq2Seq turns RNNs into sequence-to-sequence models → attention turns encoder states into a memory bank. From there, the Transformer keeps attention and drops recurrence; SSMs return to state but make it scale linearly.
+The evolution here: RNN compresses the past into state → LSTM/GRU use gates to preserve memory longer → Seq2Seq turns RNNs into sequence-to-sequence models → attention turns encoder states into a memory bank. From there, the Transformer keeps attention and drops recurrence; SSM/Mamba appears later as a branch that returns to state but organizes it to scale better.
 </Note>
 
 ## References

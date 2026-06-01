@@ -22,7 +22,7 @@ Trong ảnh, một pixel có lân cận không gian khá cố định. Trong chu
 
 > xử lý từng bước, giữ một **state** tóm tắt quá khứ, rồi dùng state đó để hiểu bước hiện tại.
 
-Mạch tiến hóa của bài này bắt đầu từ ý tưởng state: RNN nén quá khứ vào hidden state; LSTM/GRU làm state nhớ lâu hơn bằng gate; Seq2Seq dùng state để nối một chuỗi đầu vào với một chuỗi đầu ra; attention phá bottleneck bằng cách biến toàn bộ hidden states thành memory bank. Transformer sau đó giữ attention và bỏ recurrence. SSM/Mamba quay lại state, nhưng tổ chức nó để scale tuyến tính.
+Mạch tiến hóa của bài này bắt đầu từ ý tưởng state: RNN nén quá khứ vào hidden state; LSTM/GRU làm state nhớ lâu hơn bằng gate; Seq2Seq dùng state để nối một chuỗi đầu vào với một chuỗi đầu ra; attention phá bottleneck bằng cách biến toàn bộ hidden states thành memory bank. Transformer sau đó giữ attention và bỏ recurrence.
 
 ## RNN — state như bộ nhớ nén
 
@@ -152,13 +152,13 @@ LSTM/GRU giải quyết phần lớn vấn đề memory, attention giải quyế
 
 Ở bước $t$, ta cần $h_{t-1}$. Vì vậy model không song song hóa được theo trục thời gian như CNN xử lý toàn bộ ảnh hay Transformer xử lý toàn bộ chuỗi. Training vẫn song song được theo batch và feature dimension, nhưng sequence length vẫn là trục khó.
 
-Đây là lý do sau RNN xuất hiện hai hướng lớn:
+Đây là lý do bước tiếp theo trong series đi sang Transformer:
 
-- **Bỏ recurrence, song song hóa hoàn toàn** → [Transformer & Attention](/dl-anatomy/architectures/transformer), nơi mọi token có thể nhìn mọi token khác qua attention. Giá phải trả: attention chuẩn tốn $O(n^2)$ theo độ dài chuỗi.
-- **Giữ state nhưng tổ chức thành scan tuyến tính có cấu trúc** → [State Space Models](/dl-anatomy/architectures/state-space-models), nơi recurrence được thiết kế để train/infer hiệu quả hơn ở chuỗi dài.
+- **Bỏ recurrence, song song hóa hoàn toàn** → [Transformer & Attention](/dl-anatomy/architectures/transformer), nơi mọi token có thể nhìn mọi token khác qua attention.
+- Sau khi hiểu Transformer và các biến thể của nó, ta sẽ quay lại câu hỏi còn lại: có thể giữ state gọn như RNN nhưng vẫn train hiệu quả không? Đó là vai trò của [State Space Models](/dl-anatomy/architectures/state-space-models).
 
 <Note type="result">
-Mạch tiến hóa phần này: RNN nén quá khứ vào state → LSTM/GRU dùng gate để giữ memory lâu hơn → Seq2Seq biến RNN thành mô hình chuỗi-sang-chuỗi → attention biến encoder states thành memory bank. Từ đây, Transformer giữ attention và bỏ recurrence; SSM quay lại state nhưng làm nó scale tuyến tính.
+Mạch tiến hóa phần này: RNN nén quá khứ vào state → LSTM/GRU dùng gate để giữ memory lâu hơn → Seq2Seq biến RNN thành mô hình chuỗi-sang-chuỗi → attention biến encoder states thành memory bank. Từ đây, Transformer giữ attention và bỏ recurrence; SSM/Mamba sẽ xuất hiện sau như một nhánh quay lại state nhưng tổ chức nó để scale tốt hơn.
 </Note>
 
 ## Papers tham khảo

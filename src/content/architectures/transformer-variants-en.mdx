@@ -3,7 +3,7 @@ title: "Transformer Variants & MoE"
 description: "Encoder-only, decoder-only, ViT, efficient transformers — and Mixture of Experts to scale parameters without scaling compute."
 lang: en
 category: architectures
-order: 7
+order: 6
 parent: architecture-anatomy
 translation: transformer-variants
 tags: [transformer, bert, gpt, vit, moe, scaling]
@@ -69,6 +69,8 @@ Left unchecked, the router tends to **funnel most tokens to a few favorite exper
 ## The picture
 
 One transformer block → change the **mask** for encoder/decoder/enc-dec → change the **input** (patches) for ViT → optimize **attention** for efficient transformers → multiply the **FFN** for MoE. It's all the same attention core.
+
+But even after optimizing masks, kernels, or FFNs, attention keeps one system-level question: for very long context, do we have to keep memory per token? The next article moves to [State Space Models (Mamba)](/dl-anatomy/architectures/state-space-models-en), a branch that returns to **fixed state** and **linear scan** to reduce long-sequence cost.
 
 ## References
 

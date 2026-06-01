@@ -3,7 +3,7 @@ title: "Transformer Variants & MoE"
 description: "Encoder-only, decoder-only, ViT, efficient transformer — và Mixture of Experts để scale tham số mà không scale compute."
 lang: vi
 category: architectures
-order: 7
+order: 6
 parent: architecture-anatomy
 translation: transformer-variants-en
 tags: [transformer, bert, gpt, vit, moe, scaling]
@@ -69,6 +69,8 @@ Nếu để router tự do, nó dễ **dồn hầu hết token vào vài expert*
 ## Bức tranh
 
 Một transformer block → đổi **mask** ra encoder/decoder/enc-dec → đổi **input** (patch) ra ViT → tối ưu **attention** ra efficient transformer → nhân **FFN** ra MoE. Tất cả vẫn là cùng một lõi attention.
+
+Nhưng dù tối ưu mask, kernel hay FFN, attention vẫn mang một câu hỏi hệ thống: nếu context rất dài, ta có bắt buộc phải giữ memory theo từng token không? Bài tiếp theo đi sang [State Space Models (Mamba)](/dl-anatomy/architectures/state-space-models), một nhánh quay lại **state cố định** và **scan tuyến tính** để giảm chi phí sequence dài.
 
 ## Papers tham khảo
 

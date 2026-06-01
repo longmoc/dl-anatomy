@@ -9,85 +9,98 @@ const L = lang === 'en'
       attn: 'Attention — KV-cache',
       ssm: 'SSM — fixed state',
       query: 'qₜ',
-      state: 'state (fixed)',
-      attnNote: 'memory grows with n',
-      ssmNote: 'memory = constant',
-      cap: 'Attention keeps a key/value entry for every past token, so its memory grows with sequence length. An SSM compresses the whole past into one fixed-size state — constant memory, at the cost of exact recall.',
+      state: 'hₜ',
+      attnNote: 'memory grows with context length',
+      ssmNote: 'one fixed-size state',
+      many: 'one KV pair per token',
+      compress: 'compress past',
+      fixed: 'fixed',
+      cap: 'Attention keeps a key/value entry for every past token, so memory grows with context length. An SSM compresses the whole past into one fixed-size state — constant memory, at the cost of exact recall.',
     }
   : {
       attn: 'Attention — KV-cache',
       ssm: 'SSM — state cố định',
       query: 'qₜ',
-      state: 'state (cố định)',
-      attnNote: 'bộ nhớ tăng theo n',
-      ssmNote: 'bộ nhớ = hằng số',
+      state: 'hₜ',
+      attnNote: 'bộ nhớ tăng theo context',
+      ssmNote: 'một state kích thước cố định',
+      many: 'mỗi token một cặp KV',
+      compress: 'nén quá khứ',
+      fixed: 'cố định',
       cap: 'Attention giữ một key/value cho mỗi token quá khứ, nên bộ nhớ tăng theo độ dài chuỗi. SSM nén toàn bộ quá khứ vào một state cố định — bộ nhớ hằng số, đổi lại khó truy xuất chính xác.',
     };
 ---
 
 <figure class="avm">
-  <svg viewBox="0 0 560 206" role="img" aria-label="Attention KV-cache versus SSM fixed state" class="avm-svg">
+  <svg viewBox="0 0 640 226" role="img" aria-label="Attention KV-cache versus SSM fixed state" class="avm-svg">
     <defs>
       <marker id="avm-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
         <path d="M0,0 L10,5 L0,10 z" class="avm-head" />
       </marker>
     </defs>
 
-    <line x1="282" y1="18" x2="282" y2="186" class="avm-divider" />
+    <line x1="368" y1="18" x2="368" y2="200" class="avm-divider" />
 
-    <text x="141" y="26" class="avm-title">{L.attn}</text>
-    <text x="421" y="26" class="avm-title">{L.ssm}</text>
+    <text x="184" y="26" class="avm-title">{L.attn}</text>
+    <text x="504" y="26" class="avm-title">{L.ssm}</text>
 
     <!-- ===== Left: KV-cache grows ===== -->
-    {['₁','₂','₃','₄'].map((k,i) => {
-      const x = 46 + i*52;
+    <text x="184" y="48" class="avm-note">{L.many}</text>
+    {['₁','₂','₃','₄','₅','₆'].map((k,i) => {
+      const x = 28 + i*50;
       return (
         <g>
-          <rect x={x} y="62" width="44" height="26" rx="5" class="avm-kv" />
-          <text x={x+22} y="79" class="avm-kvt">k{k}v{k}</text>
-          <line x1="141" y1="138" x2={x+22} y2="92" class="avm-attn-line" marker-end="url(#avm-arrow)" />
+          <rect x={x} y="70" width="42" height="26" rx="5" class="avm-kv" />
+          <text x={x+21} y="87" class="avm-kvt">k{k}v{k}</text>
+          <line x1="184" y1="152" x2={x+21} y2="100" class="avm-attn-line" marker-end="url(#avm-arrow)" />
         </g>
       );
     })}
-    <text x="252" y="79" class="avm-more">…</text>
-    <circle cx="141" cy="150" r="13" class="avm-q" />
-    <text x="141" y="154" class="avm-small">{L.query}</text>
-    <text x="141" y="178" class="avm-note">{L.attnNote}</text>
+    <text x="344" y="88" class="avm-more">…</text>
+    <circle cx="184" cy="164" r="15" class="avm-q" />
+    <text x="184" y="168" class="avm-small">{L.query}</text>
+    <path d="M40 196 H328" class="avm-growth" marker-end="url(#avm-arrow)" />
+    <text x="184" y="214" class="avm-note avm-strong">{L.attnNote}</text>
 
     <!-- ===== Right: fixed state ===== -->
-    {['₁','₂','₃','₄'].map((t,i) => {
-      const x = 355 + i*44;
+    <text x="504" y="48" class="avm-note">{L.compress}</text>
+    {['₁','₂','₃','₄','₅','₆'].map((t,i) => {
+      const x = 410 + i*34;
       return (
         <g>
-          <circle cx={x} cy="64" r="11" class="avm-tok" />
-          <text x={x} y="68" class="avm-small">x{t}</text>
-          <line x1={x} y1="75" x2="421" y2="106" class="avm-line" marker-end="url(#avm-arrow)" />
+          <circle cx={x} cy="76" r="9" class="avm-tok" />
+          <text x={x} y="80" class="avm-small">x{t}</text>
+          <line x1={x} y1="88" x2="504" y2="116" class="avm-line" marker-end="url(#avm-arrow)" />
         </g>
       );
     })}
-    <rect x="354" y="106" width="134" height="40" rx="9" class="avm-state" />
-    <text x="421" y="131" class="avm-state-text">{L.state}</text>
-    <text x="421" y="178" class="avm-note">{L.ssmNote}</text>
+    <rect x="456" y="116" width="96" height="56" rx="12" class="avm-state" />
+    <text x="504" y="138" class="avm-state-text">{L.state}</text>
+    <text x="504" y="156" class="avm-state-sub">{L.fixed}</text>
+    <text x="504" y="214" class="avm-note avm-strong">{L.ssmNote}</text>
   </svg>
   <figcaption class="avm-cap">{L.cap}</figcaption>
 </figure>
 
 <style>
   .avm { margin: 1.75rem 0; border: 1px solid var(--border); border-radius: 10px; background: var(--bg2); padding: 0.8rem 0 0.25rem; }
-  .avm-svg { display: block; width: 100%; max-width: 640px; height: auto; margin: 0 auto; }
+  .avm-svg { display: block; width: 100%; max-width: 720px; height: auto; margin: 0 auto; }
   .avm-title { fill: var(--text); font-family: var(--mono); font-size: 13px; font-weight: 600; text-anchor: middle; }
   .avm-divider { stroke: var(--border); stroke-width: 1; stroke-dasharray: 4 4; }
   .avm-kv { fill: var(--bg); stroke: var(--accent); stroke-width: 1.5; }
-  .avm-kvt { fill: var(--text); font-family: var(--mono); font-size: 10.5px; text-anchor: middle; }
+  .avm-kvt { fill: var(--text); font-family: var(--mono); font-size: 10px; text-anchor: middle; }
   .avm-more { fill: var(--muted); font-family: var(--mono); font-size: 15px; text-anchor: middle; }
   .avm-q { fill: var(--bg); stroke: var(--amber); stroke-width: 1.6; }
   .avm-tok { fill: var(--bg); stroke: var(--amber); stroke-width: 1.6; }
   .avm-state { fill: var(--bg); stroke: var(--accent2); stroke-width: 1.8; }
   .avm-small { fill: var(--text); font-family: var(--mono); font-size: 11px; text-anchor: middle; }
   .avm-state-text { fill: var(--text); font-family: var(--mono); font-size: 12.5px; font-weight: 600; text-anchor: middle; }
+  .avm-state-sub { fill: var(--muted); font-family: var(--mono); font-size: 9.5px; text-anchor: middle; }
   .avm-line { stroke: var(--muted); stroke-width: 1.4; }
   .avm-attn-line { stroke: var(--accent); stroke-width: 1.2; opacity: 0.55; }
+  .avm-growth { stroke: var(--accent); stroke-width: 2; }
   .avm-head { fill: var(--muted); }
   .avm-note { fill: var(--muted); font-family: var(--mono); font-size: 10px; text-anchor: middle; font-style: italic; }
+  .avm-strong { fill: var(--text); font-style: normal; font-weight: 600; }
   .avm-cap { font-size: 0.78rem; color: var(--muted); text-align: center; padding: 0.5rem 1rem 0.65rem; font-style: italic; line-height: 1.5; }
 </style>
