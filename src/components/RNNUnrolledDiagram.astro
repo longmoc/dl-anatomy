@@ -22,7 +22,7 @@ const L = lang === 'en'
 ---
 
 <figure class="rnn-unroll">
-  <svg viewBox="0 0 560 240" role="img" aria-label="RNN unrolled through time" class="rnn-svg">
+  <svg viewBox="0 0 560 300" role="img" aria-label="RNN unrolled through time" class="rnn-svg">
     <defs>
       <marker id="rnn-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
         <path d="M0,0 L10,5 L0,10 z" class="rnn-head" />
@@ -34,36 +34,38 @@ const L = lang === 'en'
 
     <text x="294" y="22" class="rnn-title">{L.title}</text>
 
+    <g transform="translate(0,20)">
     <!-- row labels (left margin, clear of first column) -->
-    <text x="12" y="60" class="rnn-label">{L.input}</text>
-    <text x="12" y="160" class="rnn-label">{L.state}</text>
+    <text x="12" y="56" class="rnn-label">{L.input}</text>
+    <text x="12" y="178" class="rnn-label">{L.state}</text>
 
     {['1', '2', '3', '4'].map((t, i) => {
       const x = 120 + i * 116;
       return (
         <g>
-          <circle cx={x} cy="56" r="14" class="rnn-input" />
-          <text x={x} y="60" class="rnn-small">x{t}</text>
-          <line x1={x} y1="70" x2={x} y2="80" class="rnn-line" marker-end="url(#rnn-arrow)" />
+          <circle cx={x} cy="52" r="14" class="rnn-input" />
+          <text x={x} y="56" class="rnn-small">x{t}</text>
+          <line x1={x} y1="66" x2={x} y2="86" class="rnn-line" marker-end="url(#rnn-arrow)" />
 
-          <rect x={x - 34} y="80" width="68" height="50" rx="8" class="rnn-cell" />
-          <text x={x} y="110" class="rnn-cell-text">RNN</text>
+          <rect x={x - 34} y="88" width="68" height="50" rx="8" class="rnn-cell" />
+          <text x={x} y="117" class="rnn-cell-text">RNN</text>
 
-          <line x1={x} y1="130" x2={x} y2="142" class="rnn-line" marker-end="url(#rnn-arrow)" />
-          <circle cx={x} cy="156" r="14" class="rnn-state" />
-          <text x={x} y="160" class="rnn-small">h{t}</text>
+          <line x1={x} y1="138" x2={x} y2="158" class="rnn-line" marker-end="url(#rnn-arrow)" />
+          <circle cx={x} cy="174" r="14" class="rnn-state" />
+          <text x={x} y="178" class="rnn-small">h{t}</text>
         </g>
       );
     })}
 
     <!-- recurrent forward arrows between cells (hidden state passed forward) -->
-    <line x1="154" y1="105" x2="202" y2="105" class="rnn-line" marker-end="url(#rnn-arrow)" />
-    <line x1="270" y1="105" x2="318" y2="105" class="rnn-line" marker-end="url(#rnn-arrow)" />
-    <line x1="386" y1="105" x2="434" y2="105" class="rnn-line" marker-end="url(#rnn-arrow)" />
+    <line x1="154" y1="113" x2="202" y2="113" class="rnn-line" marker-end="url(#rnn-arrow)" />
+    <line x1="270" y1="113" x2="318" y2="113" class="rnn-line" marker-end="url(#rnn-arrow)" />
+    <line x1="386" y1="113" x2="434" y2="113" class="rnn-line" marker-end="url(#rnn-arrow)" />
 
-    <!-- gradient back-path, clearly below the state row -->
-    <path d="M468,176 C360,224 228,224 120,176" class="rnn-grad" fill="none" marker-end="url(#rnn-back)" />
-    <text x="294" y="234" class="rnn-grad-text">{L.grad}</text>
+    <!-- gradient back-path: gentle symmetric arc below the state row -->
+    <path d="M468,202 C386,252 206,252 122,202" class="rnn-grad" fill="none" marker-end="url(#rnn-back)" />
+    <text x="294" y="268" class="rnn-grad-text">{L.grad}</text>
+    </g>
   </svg>
   <figcaption class="rnn-cap">{L.cap}</figcaption>
 </figure>
