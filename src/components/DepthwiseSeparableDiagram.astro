@@ -7,28 +7,34 @@ const { lang = 'vi' } = Astro.props;
 const L = lang === 'en'
   ? {
       standard: 'Standard convolution',
-      stdDesc: 'one operation mixes space AND channels',
+      stdDesc: 'one op mixes space AND channels',
       dwsep: 'Depthwise separable',
+      conv: 'conv k×k',
+      convSub: 'space + channels',
       depthwise: 'Depthwise',
-      dwDesc: 'per-channel spatial filtering',
+      dwSub: 'k×k / channel',
       pointwise: 'Pointwise 1×1',
-      pwDesc: 'mix across channels',
+      pwSub: 'mix channels',
+      cost: 'cost',
       cap: 'A standard conv filters space and mixes channels in one shot. Depthwise-separable factorizes it: a per-channel spatial filter, then a 1×1 conv that mixes channels — far fewer FLOPs.',
     }
   : {
       standard: 'Convolution chuẩn',
       stdDesc: 'một phép toán trộn cả không gian VÀ kênh',
       dwsep: 'Depthwise separable',
+      conv: 'conv k×k',
+      convSub: 'không gian + kênh',
       depthwise: 'Depthwise',
-      dwDesc: 'lọc không gian theo từng kênh',
+      dwSub: 'k×k / kênh',
       pointwise: 'Pointwise 1×1',
-      pwDesc: 'trộn giữa các kênh',
+      pwSub: 'trộn kênh',
+      cost: 'cost',
       cap: 'Conv chuẩn lọc không gian và trộn kênh cùng lúc. Depthwise-separable tách đôi: lọc không gian theo từng kênh, rồi conv 1×1 trộn kênh — ít FLOPs hơn nhiều.',
     };
 ---
 
 <figure class="dws" data-lang={lang}>
-  <svg viewBox="0 0 460 230" role="img" aria-label="Depthwise separable convolution" class="dws-svg">
+  <svg viewBox="0 0 520 244" role="img" aria-label="Depthwise separable convolution" class="dws-svg">
     <defs>
       <marker id="dws-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
         <path d="M0,0 L10,5 L0,10 z" class="dws-head" />
@@ -36,64 +42,62 @@ const L = lang === 'en'
     </defs>
 
     <!-- ===== Standard conv (top) ===== -->
-    <text x="10" y="20" class="dws-title">{L.standard}</text>
-    <text x="10" y="34" class="dws-sub">{L.stdDesc}</text>
+    <text x="14" y="22" class="dws-title">{L.standard}</text>
+    <text x="14" y="37" class="dws-sub">{L.stdDesc}</text>
 
     <!-- input channels -->
-    <g>
-      <rect x="14" y="46" width="22" height="22" rx="3" class="dws-ch dws-c1" />
-      <rect x="22" y="54" width="22" height="22" rx="3" class="dws-ch dws-c2" />
-      <rect x="30" y="62" width="22" height="22" rx="3" class="dws-ch dws-c3" />
-    </g>
-    <line x1="58" y1="68" x2="92" y2="68" class="dws-line" marker-end="url(#dws-arrow)" />
+    <rect x="18" y="49" width="22" height="22" rx="3" class="dws-ch dws-c1" />
+    <rect x="26" y="57" width="22" height="22" rx="3" class="dws-ch dws-c2" />
+    <rect x="34" y="65" width="22" height="22" rx="3" class="dws-ch dws-c3" />
+    <line x1="62" y1="70" x2="94" y2="70" class="dws-line" marker-end="url(#dws-arrow)" />
+
     <!-- one big kernel that touches all channels -->
-    <rect x="96" y="48" width="60" height="40" rx="6" class="dws-box dws-std" />
-    <text x="126" y="64" class="dws-boxlbl">k×k</text>
-    <text x="126" y="78" class="dws-boxlbl-sm">×Cᵢₙ×Cₒᵤₜ</text>
-    <line x1="160" y1="68" x2="194" y2="68" class="dws-line" marker-end="url(#dws-arrow)" />
+    <rect x="98" y="48" width="104" height="44" rx="6" class="dws-box dws-std" />
+    <text x="150" y="68" class="dws-boxlbl">{L.conv}</text>
+    <text x="150" y="83" class="dws-boxlbl-sm">{L.convSub}</text>
+    <line x1="206" y1="70" x2="238" y2="70" class="dws-line" marker-end="url(#dws-arrow)" />
+
     <!-- output channels -->
-    <g>
-      <rect x="198" y="50" width="20" height="20" rx="3" class="dws-ch dws-o1" />
-      <rect x="205" y="57" width="20" height="20" rx="3" class="dws-ch dws-o2" />
-      <rect x="212" y="64" width="20" height="20" rx="3" class="dws-ch dws-o3" />
-    </g>
-    <text x="270" y="64" class="dws-cost">cost</text>
-    <text x="270" y="78" class="dws-costval">k²·Cᵢₙ·Cₒᵤₜ</text>
+    <rect x="242" y="52" width="20" height="20" rx="3" class="dws-ch dws-o1" />
+    <rect x="249" y="59" width="20" height="20" rx="3" class="dws-ch dws-o2" />
+    <rect x="256" y="66" width="20" height="20" rx="3" class="dws-ch dws-o3" />
+
+    <!-- cost -->
+    <text x="306" y="66" class="dws-cost">{L.cost}</text>
+    <text x="306" y="83" class="dws-costval">k<tspan baseline-shift="super" font-size="8">2</tspan> · C<tspan baseline-shift="sub" font-size="8">in</tspan> · C<tspan baseline-shift="sub" font-size="8">out</tspan></text>
 
     <!-- divider -->
-    <line x1="10" y1="106" x2="450" y2="106" class="dws-divider" />
+    <line x1="12" y1="110" x2="508" y2="110" class="dws-divider" />
 
     <!-- ===== Depthwise separable (bottom) ===== -->
-    <text x="10" y="126" class="dws-title">{L.dwsep}</text>
+    <text x="14" y="132" class="dws-title">{L.dwsep}</text>
 
     <!-- input -->
-    <g>
-      <rect x="14" y="150" width="20" height="20" rx="3" class="dws-ch dws-c1" />
-      <rect x="21" y="157" width="20" height="20" rx="3" class="dws-ch dws-c2" />
-      <rect x="28" y="164" width="20" height="20" rx="3" class="dws-ch dws-c3" />
-    </g>
-    <line x1="54" y1="170" x2="80" y2="170" class="dws-line" marker-end="url(#dws-arrow)" />
+    <rect x="18" y="154" width="20" height="20" rx="3" class="dws-ch dws-c1" />
+    <rect x="25" y="161" width="20" height="20" rx="3" class="dws-ch dws-c2" />
+    <rect x="32" y="168" width="20" height="20" rx="3" class="dws-ch dws-c3" />
+    <line x1="58" y1="172" x2="84" y2="172" class="dws-line" marker-end="url(#dws-arrow)" />
 
-    <!-- depthwise: one kernel per channel (stack) -->
-    <rect x="84" y="150" width="46" height="40" rx="6" class="dws-box dws-dw" />
-    <text x="107" y="166" class="dws-boxlbl">{L.depthwise}</text>
-    <text x="107" y="180" class="dws-boxlbl-sm">{lang === 'en' ? 'k×k / channel' : 'k×k / kênh'}</text>
-    <line x1="134" y1="170" x2="160" y2="170" class="dws-line" marker-end="url(#dws-arrow)" />
+    <!-- depthwise -->
+    <rect x="88" y="150" width="72" height="44" rx="6" class="dws-box dws-dw" />
+    <text x="124" y="170" class="dws-boxlbl">{L.depthwise}</text>
+    <text x="124" y="185" class="dws-boxlbl-sm">{L.dwSub}</text>
+    <line x1="164" y1="172" x2="190" y2="172" class="dws-line" marker-end="url(#dws-arrow)" />
 
     <!-- pointwise 1x1 -->
-    <rect x="164" y="150" width="60" height="40" rx="6" class="dws-box dws-pw" />
-    <text x="194" y="166" class="dws-boxlbl">{L.pointwise}</text>
-    <text x="194" y="180" class="dws-boxlbl-sm">{lang === 'en' ? 'mix channels' : 'trộn kênh'}</text>
-    <line x1="228" y1="170" x2="254" y2="170" class="dws-line" marker-end="url(#dws-arrow)" />
+    <rect x="194" y="150" width="84" height="44" rx="6" class="dws-box dws-pw" />
+    <text x="236" y="170" class="dws-boxlbl">{L.pointwise}</text>
+    <text x="236" y="185" class="dws-boxlbl-sm">{L.pwSub}</text>
+    <line x1="282" y1="172" x2="308" y2="172" class="dws-line" marker-end="url(#dws-arrow)" />
 
     <!-- output -->
-    <g>
-      <rect x="258" y="152" width="18" height="18" rx="3" class="dws-ch dws-o1" />
-      <rect x="264" y="158" width="18" height="18" rx="3" class="dws-ch dws-o2" />
-      <rect x="270" y="164" width="18" height="18" rx="3" class="dws-ch dws-o3" />
-    </g>
-    <text x="330" y="166" class="dws-cost">cost</text>
-    <text x="330" y="180" class="dws-costval">k²·Cᵢₙ + Cᵢₙ·Cₒᵤₜ</text>
+    <rect x="312" y="156" width="18" height="18" rx="3" class="dws-ch dws-o1" />
+    <rect x="318" y="162" width="18" height="18" rx="3" class="dws-ch dws-o2" />
+    <rect x="324" y="168" width="18" height="18" rx="3" class="dws-ch dws-o3" />
+
+    <!-- cost -->
+    <text x="372" y="168" class="dws-cost">{L.cost}</text>
+    <text x="372" y="185" class="dws-costval">k<tspan baseline-shift="super" font-size="8">2</tspan> · C<tspan baseline-shift="sub" font-size="8">in</tspan> + C<tspan baseline-shift="sub" font-size="8">in</tspan> · C<tspan baseline-shift="sub" font-size="8">out</tspan></text>
   </svg>
   <figcaption class="dws-cap">{L.cap}</figcaption>
 </figure>
@@ -106,20 +110,20 @@ const L = lang === 'en'
     background: var(--bg2);
     padding: 0.75rem 0 0.2rem;
   }
-  .dws-svg { display: block; width: 100%; max-width: 470px; height: auto; margin: 0 auto; }
-  .dws-title { fill: var(--text); font-family: var(--mono); font-size: 12px; font-weight: 600; }
-  .dws-sub { fill: var(--muted); font-family: var(--mono); font-size: 9.5px; }
+  .dws-svg { display: block; width: 100%; max-width: 520px; height: auto; margin: 0 auto; }
+  .dws-title { fill: var(--text); font-family: var(--mono); font-size: 12.5px; font-weight: 600; }
+  .dws-sub { fill: var(--muted); font-family: var(--mono); font-size: 10px; }
   .dws-box { stroke-width: 1.5; fill: var(--bg); }
   .dws-std { stroke: var(--amber); }
   .dws-dw  { stroke: var(--accent); }
   .dws-pw  { stroke: var(--accent2); }
-  .dws-boxlbl { fill: var(--text); font-family: var(--mono); font-size: 10px; text-anchor: middle; }
-  .dws-boxlbl-sm { fill: var(--muted); font-family: var(--mono); font-size: 8.5px; text-anchor: middle; }
+  .dws-boxlbl { fill: var(--text); font-family: var(--mono); font-size: 11px; text-anchor: middle; }
+  .dws-boxlbl-sm { fill: var(--muted); font-family: var(--mono); font-size: 9.5px; text-anchor: middle; }
   .dws-line { stroke: var(--muted); stroke-width: 1.5; }
   .dws-head { fill: var(--muted); }
   .dws-divider { stroke: var(--border); stroke-width: 1; stroke-dasharray: 4 4; }
-  .dws-cost { fill: var(--muted); font-family: var(--mono); font-size: 9.5px; }
-  .dws-costval { fill: var(--accent); font-family: var(--mono); font-size: 10px; font-weight: 600; }
+  .dws-cost { fill: var(--muted); font-family: var(--mono); font-size: 10px; }
+  .dws-costval { fill: var(--accent); font-family: var(--mono); font-size: 11.5px; font-weight: 600; }
   .dws-ch { stroke: var(--bg2); stroke-width: 1; opacity: 0.9; }
   .dws-c1 { fill: var(--accent); }
   .dws-c2 { fill: var(--accent2); }
