@@ -24,12 +24,12 @@ Series này đi theo hai tầng:
 2. **Model families** — cách các backbone được tổ chức thành hệ mô hình lớn hơn: học biểu diễn, sinh dữ liệu, hoặc nối nhiều modality.
 
 <Note type="intuition">
-Phase 1 trả lời câu hỏi "mô hình xử lý cấu trúc dữ liệu bằng cơ chế nào?". Phase 2 trả lời câu hỏi "ta dùng các cơ chế đó để học latent space, sinh dữ liệu, hay align nhiều loại tín hiệu như thế nào?".
+Backbone architectures trả lời câu hỏi "thông tin di chuyển qua mô hình bằng cơ chế nào?". Model families trả lời câu hỏi "ta dùng các cơ chế đó để học latent space, sinh dữ liệu, hay align nhiều loại tín hiệu như thế nào?".
 </Note>
 
 ## Series bài viết
 
-### Phase 1 — Backbone architectures
+### Backbone architectures
 
 | Bài | Nội dung |
 |---|---|
@@ -42,17 +42,13 @@ Phase 1 trả lời câu hỏi "mô hình xử lý cấu trúc dữ liệu bằn
 | [Transformer Variants & MoE](/dl-anatomy/architectures/transformer-variants) | Encoder/decoder, ViT, efficient transformer, MoE |
 | [Graph Neural Networks](/dl-anatomy/architectures/graph-neural-networks) | Message passing, GCN, GAT, Graph Transformer |
 
-### Phase 2 — Model families
+### Model families
 
 | Bài | Nội dung |
 |---|---|
 | Representation Learning | Autoencoder, VAE, VQ-VAE, contrastive learning, masked modeling |
 | Generative Models | Autoregressive models, GAN, normalizing flow, diffusion, energy-based models |
 | Multimodal Models | CLIP-style alignment, vision-language models, text-to-image, audio-language, unified multimodal models |
-
-<Note type="paper">
-Phase 3 sẽ tách thành hub riêng: **Applied & System Architectures**. Ở đó trọng tâm không còn là thiết kế một model family, mà là cách ghép model vào task, pipeline training, inference, serving, compression và deployment.
-</Note>
 
 ## Một mạch nối: message passing
 

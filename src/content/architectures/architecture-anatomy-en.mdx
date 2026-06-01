@@ -24,12 +24,12 @@ This series moves through two layers:
 2. **Model families** — how those backbones are organized into larger modeling patterns: representation learning, generative modeling, or multimodal alignment.
 
 <Note type="intuition">
-Phase 1 asks "what mechanism does the model use to process data structure?". Phase 2 asks "how do we use those mechanisms to learn latent spaces, generate data, or align multiple kinds of signals?".
+Backbone architectures ask "what mechanism moves information through the model?". Model families ask "how do we use those mechanisms to learn latent spaces, generate data, or align multiple kinds of signals?".
 </Note>
 
 ## Articles in this series
 
-### Phase 1 — Backbone architectures
+### Backbone architectures
 
 | Article | Content |
 |---|---|
@@ -42,17 +42,13 @@ Phase 1 asks "what mechanism does the model use to process data structure?". Pha
 | [Transformer Variants & MoE](/dl-anatomy/architectures/transformer-variants-en) | Encoder/decoder, ViT, efficient transformers, MoE |
 | [Graph Neural Networks](/dl-anatomy/architectures/graph-neural-networks-en) | Message passing, GCN, GAT, Graph Transformer |
 
-### Phase 2 — Model families
+### Model families
 
 | Article | Content |
 |---|---|
 | Representation Learning | Autoencoders, VAE, VQ-VAE, contrastive learning, masked modeling |
 | Generative Models | Autoregressive models, GANs, normalizing flows, diffusion, energy-based models |
 | Multimodal Models | CLIP-style alignment, vision-language models, text-to-image, audio-language, unified multimodal models |
-
-<Note type="paper">
-Phase 3 will split into a separate hub: **Applied & System Architectures**. Its focus is no longer the design of a single model family, but how models are assembled into tasks, training pipelines, inference systems, serving, compression, and deployment.
-</Note>
 
 ## One unifying thread: message passing
 
