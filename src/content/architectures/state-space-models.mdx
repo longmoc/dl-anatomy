@@ -10,6 +10,9 @@ tags: [ssm, mamba, sequence, linear-attention]
 ---
 
 import Note from '../../components/Note.astro';
+import SSMTwoViewsDiagram from '../../components/SSMTwoViewsDiagram.astro';
+import SelectiveScanDiagram from '../../components/SelectiveScanDiagram.astro';
+import AttnVsSSMMemoryDiagram from '../../components/AttnVsSSMMemoryDiagram.astro';
 
 # State Space Models (Mamba)
 
@@ -83,17 +86,7 @@ $$
 
 Với S4 và các SSM có cấu trúc, kernel có thể được tính và áp dụng rất hiệu quả, thường gần tuyến tính theo độ dài chuỗi trong implementation hiện đại. Với Mamba, selective scan được thiết kế để chạy tuyến tính theo sequence length.
 
-```text
-Training view:
-x1  x2  x3  x4  ...  xn
- |   |   |   |        |
- +---+---+---+---...--+  long convolution / scan
-             |
-        y1..yn in parallel
-
-Inference view:
-x_t --> update fixed state h_t --> y_t
-```
+<SSMTwoViewsDiagram />
 
 ## SSM khác RNN và Transformer ở đâu?
 
@@ -106,6 +99,8 @@ RNN, Transformer và SSM đều là cách trả lời câu hỏi: **token hiện
 | SSM/Mamba | state cố định có cấu trúc | tuyến tính hoặc gần tuyến tính theo chuỗi | chuỗi dài, streaming, inference gọn | state nén có thể mất chi tiết cần truy xuất chính xác |
 
 Attention giữ một memory bank rõ ràng: mỗi token quá khứ để lại key/value riêng. SSM không giữ mọi token; nó nén quá khứ vào state. Vì vậy SSM thường rất hấp dẫn cho audio, genomics, time-series, long-context và các workload cần streaming.
+
+<AttnVsSSMMemoryDiagram />
 
 <Note type="warning">
 State cố định không phải "miễn phí". Nó là một bottleneck có chủ đích. Nếu task cần truy xuất chính xác một chi tiết xa trong quá khứ, attention vẫn có lợi thế tự nhiên vì nó có thể nhìn trực tiếp từng token cũ.
@@ -143,14 +138,7 @@ $$
 
 Trực giác: Mamba không chỉ có một bộ lọc cố định chạy qua chuỗi. Nó để mỗi token quyết định **ghi gì, giữ gì, đọc gì**.
 
-```text
-x_t
- |----> produces Delta_t, B_t, C_t
- |
- +----> selective scan updates h_t
- |
- +----> y_t reads from selected state
-```
+<SelectiveScanDiagram />
 
 Đổi lại, khi $B_t, C_t, \Delta_t$ phụ thuộc vào input, ta không còn một convolution kernel cố định như S4 cổ điển. Mamba vì vậy dùng **selective scan**: một thuật toán scan song song được tối ưu cho GPU, giữ chi phí tuyến tính theo độ dài chuỗi nhưng vẫn train hiệu quả.
 

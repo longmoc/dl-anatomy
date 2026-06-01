@@ -10,6 +10,9 @@ tags: [ssm, mamba, sequence, linear-attention]
 ---
 
 import Note from '../../components/Note.astro';
+import SSMTwoViewsDiagram from '../../components/SSMTwoViewsDiagram.astro';
+import SelectiveScanDiagram from '../../components/SelectiveScanDiagram.astro';
+import AttnVsSSMMemoryDiagram from '../../components/AttnVsSSMMemoryDiagram.astro';
 
 # State Space Models (Mamba)
 
@@ -83,17 +86,7 @@ This is the most elegant part of SSMs: the same model has two views.
 
 With S4 and other structured SSMs, the kernel can be computed and applied very efficiently, often near-linear in sequence length in modern implementations. With Mamba, selective scan is designed to run linearly in sequence length.
 
-```text
-Training view:
-x1  x2  x3  x4  ...  xn
- |   |   |   |        |
- +---+---+---+---...--+  long convolution / scan
-             |
-        y1..yn in parallel
-
-Inference view:
-x_t --> update fixed state h_t --> y_t
-```
+<SSMTwoViewsDiagram lang="en" />
 
 ## How are SSMs different from RNNs and Transformers?
 
@@ -106,6 +99,8 @@ RNNs, Transformers, and SSMs are all answers to the same question: **how should 
 | SSM/Mamba | structured fixed state | linear or near-linear in sequence length | long sequences, streaming, compact inference | compressed state may lose details that need exact lookup |
 
 Attention keeps an explicit memory bank: every past token leaves its own key/value. An SSM does not keep every token; it compresses the past into state. That makes SSMs attractive for audio, genomics, time-series, long-context workloads, and streaming.
+
+<AttnVsSSMMemoryDiagram lang="en" />
 
 <Note type="warning">
 A fixed state is not "free." It is an intentional bottleneck. If a task needs exact retrieval of a distant detail, attention still has a natural advantage because it can look directly at old tokens.
@@ -143,14 +138,7 @@ $$
 
 Intuition: Mamba is not just one fixed filter running across the sequence. Each token helps decide **what to write, what to keep, and what to read**.
 
-```text
-x_t
- |----> produces Delta_t, B_t, C_t
- |
- +----> selective scan updates h_t
- |
- +----> y_t reads from selected state
-```
+<SelectiveScanDiagram lang="en" />
 
 The trade-off is that once $B_t, C_t, \Delta_t$ depend on the input, there is no longer one fixed convolution kernel as in classic S4. Mamba therefore uses **selective scan**: a GPU-optimized parallel scan algorithm that keeps cost linear in sequence length while remaining efficient to train.
 
