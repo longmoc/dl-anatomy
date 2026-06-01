@@ -33,13 +33,15 @@ Modern CNN là lịch sử của các câu trả lời khác nhau cho câu hỏi
 
 ResNet thường scale bằng **depth** (nhiều layer) hoặc **width** (nhiều kênh). **ResNeXt (2017)** thêm một trục thứ ba: **cardinality** — số transformation song song trong một block.
 
-Thay vì một bottleneck lớn, ResNeXt chia thành nhiều nhánh nhỏ giống hệt nhau rồi cộng lại:
+Thay vì một bottleneck lớn, ResNeXt chia thành nhiều nhánh nhỏ **cùng cấu trúc** rồi cộng lại:
 
 $$
 y = x + \sum_{i=1}^{C} T_i(x)
 $$
 
-trong đó $C$ là cardinality. Đây là intuition; implementation dùng **grouped convolution** (chia kênh thành $C$ nhóm, mỗi nhóm xử lý riêng) để tính hiệu quả. ResNeXt cho thấy: với cùng budget, **tăng cardinality thường hiệu quả hơn** tăng depth hoặc width.
+trong đó $C$ là cardinality. Đây là intuition; các nhánh có cùng topology nhưng tham số riêng, và implementation dùng **grouped convolution** (chia kênh thành $C$ nhóm, mỗi nhóm xử lý riêng) để tính hiệu quả. ResNeXt cho thấy: với cùng budget, **tăng cardinality thường hiệu quả hơn** tăng depth hoặc width.
+
+Khác biệt với width nằm ở chỗ: width làm một transformation lớn hơn, còn cardinality tạo nhiều transformation nhỏ song song. Các nhóm này giống như nhiều "góc nhìn" khác nhau trên channel space; grouped conv giữ chi phí thấp, trong khi phép cộng cuối tổng hợp chúng lại thành một residual update chung.
 
 <Note type="intuition">
 ResNeXt đổi câu hỏi từ "mạng nên sâu/rộng bao nhiêu?" thành "một block nên có bao nhiêu transformation song song?".
@@ -73,7 +75,7 @@ Khi chuyển từ "accuracy trên server" sang "compute budget cho mobile/edge",
 So sánh chi phí (trực giác):
 
 $$
-\underbrace{k^2 \cdot C_{in} \cdot C_{out}}_{\text{conv chuẩn}} \;\longrightarrow\; \underbrace{k^2 \cdot C_{in} + C_{in} \cdot C_{out}}_{\text{depthwise separable}}
+\underbrace{k^2 \cdot C_{in} \cdot C_{out}}_{\text{standard conv}} \;\longrightarrow\; \underbrace{k^2 \cdot C_{in} + C_{in} \cdot C_{out}}_{\text{depthwise separable}}
 $$
 
 → giảm FLOPs nhiều lần.
@@ -86,9 +88,11 @@ $$
 MobileNet giữ inductive bias của convolution nhưng **factorize** phép toán để rẻ hơn. ShuffleNet bổ sung: efficiency không chỉ là giảm phép tính, mà còn phải giữ đường trao đổi thông tin giữa các kênh.
 </Note>
 
+MobileNetV2 thêm một ý tưởng trở thành rất quan trọng về sau: **inverted bottleneck**. Thay vì giảm kênh rồi xử lý như ResNet bottleneck, block mở rộng kênh trước, chạy depthwise conv trong không gian rộng hơn, rồi project về ít kênh. Pattern *expand → depthwise → project* này là cầu nối trực tiếp sang EfficientNet và ConvNeXt.
+
 ## EfficientNet — compound scaling
 
-Tăng riêng lẻ một chiều đều có giới hạn: **depth** sâu hơn khó train; **width** rộng hơn dễ bão hòa; **resolution** lớn hơn làm FLOPs tăng mạnh. **EfficientNet (2019)** tìm một baseline tốt (MBConv / inverted bottleneck từ MobileNetV2) rồi scale **cả ba chiều cùng nhau** theo một hệ số $\phi$:
+Tăng riêng lẻ một chiều đều có giới hạn: **depth** sâu hơn khó train; **width** rộng hơn dễ bão hòa; **resolution** lớn hơn làm FLOPs tăng mạnh. **EfficientNet (2019)** tìm một baseline tốt bằng NAS — EfficientNet-B0, xây quanh **MBConv + squeeze-and-excitation** (inverted bottleneck từ MobileNetV2) — rồi scale **cả ba chiều cùng nhau** theo một hệ số $\phi$:
 
 $$
 \text{depth } d = \alpha^\phi, \quad \text{width } w = \beta^\phi, \quad \text{resolution } r = \gamma^\phi
@@ -120,6 +124,8 @@ ResNet baseline
 → ConvNeXt
 ```
 
+Các thay đổi này không chỉ là cosmetic. **Patchify stem** giảm compute ở resolution cao ngay từ đầu; **depthwise conv kernel lớn** tăng receptive field với chi phí thấp; **inverted bottleneck** làm block giống MLP trong Transformer hơn — mở rộng chiều ẩn rồi project lại; còn LayerNorm, GELU và ít activation hơn đưa ConvNet đến gần style của các kiến trúc hiện đại.
+
 <Note type="result">
 ConvNeXt cho thấy nhiều lợi thế của Transformer vision **không chỉ đến từ attention**, mà còn từ macro design, training recipe, normalization, activation và kỷ luật scaling. ConvNet, nếu hiện đại hóa đúng cách, vẫn cạnh tranh với Transformer backbone trên nhiều benchmark vision.
 </Note>
@@ -144,7 +150,7 @@ CNN sau ResNet không phải chuỗi model rời rạc, mà là quá trình tìm
 Ngoài các nhánh chính ở đây còn có SENet (channel attention), RegNet (design space), NFNet (normalizer-free), ConvMixer… nhưng bài này tập trung vào các trục thiết kế có ảnh hưởng rộng nhất.
 </Note>
 
-## Cầu nối
+## Từ lưới ảnh sang chuỗi
 
 CNN hiện đại vẫn giữ inductive bias mạnh: locality, translation equivariance, hierarchy — rất hợp với thế giới dạng **lưới ảnh**. Nhưng khi dữ liệu là **chuỗi** (văn bản, âm thanh), thứ tự và phụ thuộc dài trở thành trung tâm, ta cần kiến trúc truyền thông tin linh hoạt hơn. Đó là lý do mạch tiếp theo đi sang [Sequence Models](/dl-anatomy/architectures/sequence-models) và Transformer.
 

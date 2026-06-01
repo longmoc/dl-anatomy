@@ -33,13 +33,15 @@ Modern CNNs are the history of different answers to that question. This article 
 
 ResNet usually scales via **depth** (more layers) or **width** (more channels). **ResNeXt (2017)** adds a third axis: **cardinality** — the number of parallel transformations in a block.
 
-Instead of one large bottleneck, ResNeXt splits into many identical small branches and sums them:
+Instead of one large bottleneck, ResNeXt splits into many small branches with the **same structure** and sums them:
 
 $$
 y = x + \sum_{i=1}^{C} T_i(x)
 $$
 
-where $C$ is the cardinality. That's the intuition; the implementation uses **grouped convolution** (split channels into $C$ groups, each processed separately) for efficiency. ResNeXt showed that, for the same budget, **increasing cardinality is often more effective** than adding depth or width.
+where $C$ is the cardinality. That's the intuition; the branches share the same topology but have separate parameters, and the implementation uses **grouped convolution** (split channels into $C$ groups, each processed separately) for efficiency. ResNeXt showed that, for the same budget, **increasing cardinality is often more effective** than adding depth or width.
+
+The difference from width is subtle but important: width makes one transformation larger, while cardinality creates many smaller transformations in parallel. These groups act like multiple "views" over channel space; grouped conv keeps the cost low, and the final sum aggregates them into one residual update.
 
 <Note type="intuition">
 ResNeXt changes the question from "how deep/wide should the network be?" to "how many parallel transformations should a block have?".
@@ -86,9 +88,11 @@ $$
 MobileNet keeps the convolution's inductive bias but **factorizes** the operation to make it cheaper. ShuffleNet adds: efficiency isn't only about fewer operations, but also about preserving the path of information exchange between channels.
 </Note>
 
+MobileNetV2 adds an idea that becomes important later: the **inverted bottleneck**. Instead of reducing channels first like a ResNet bottleneck, the block expands channels, runs depthwise conv in the wider space, then projects back down. This *expand → depthwise → project* pattern becomes a direct bridge to EfficientNet and ConvNeXt.
+
 ## EfficientNet — compound scaling
 
-Scaling any single dimension has limits: deeper **depth** is harder to train; wider **width** saturates; larger **resolution** blows up FLOPs. **EfficientNet (2019)** finds a good baseline (MBConv / inverted bottleneck from MobileNetV2) and scales **all three together** with one coefficient $\phi$:
+Scaling any single dimension has limits: deeper **depth** is harder to train; wider **width** saturates; larger **resolution** blows up FLOPs. **EfficientNet (2019)** finds a good baseline with NAS — EfficientNet-B0, built around **MBConv + squeeze-and-excitation** (the inverted bottleneck from MobileNetV2) — and scales **all three together** with one coefficient $\phi$:
 
 $$
 \text{depth } d = \alpha^\phi, \quad \text{width } w = \beta^\phi, \quad \text{resolution } r = \gamma^\phi
@@ -120,6 +124,8 @@ ResNet baseline
 → ConvNeXt
 ```
 
+These changes are not just cosmetic. The **patchify stem** cuts early high-resolution compute; **large-kernel depthwise conv** expands receptive field cheaply; the **inverted bottleneck** makes the block closer to a Transformer MLP — expand the hidden dimension, then project back; and LayerNorm, GELU, and fewer activations move the ConvNet toward the style of modern architectures.
+
 <Note type="result">
 ConvNeXt shows that much of vision Transformers' advantage comes **not only from attention**, but also from macro design, training recipe, normalization, activation, and scaling discipline. A ConvNet, modernized properly, still competes with Transformer backbones on many vision benchmarks.
 </Note>
@@ -144,7 +150,7 @@ The common thread: they all **keep the convolution's inductive bias** — locali
 Beyond the main branches here there's also SENet (channel attention), RegNet (design spaces), NFNet (normalizer-free), ConvMixer, and more — but this article focuses on the most broadly influential design axes.
 </Note>
 
-## Bridge
+## From Image Grids to Sequences
 
 Modern CNNs keep a strong inductive bias: locality, translation equivariance, hierarchy — a great fit for the **grid** world of images. But when data is a **sequence** (text, audio), order and long-range dependencies become central, and we need architectures with a more flexible way to move information. That's why the next thread moves to [Sequence Models](/dl-anatomy/architectures/sequence-models-en) and the Transformer.
 
