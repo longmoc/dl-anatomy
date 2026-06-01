@@ -20,7 +20,7 @@ CNNs assume *locality* (nearby pixels matter). RNNs assume *order* (sequential s
 
 This series moves through two layers:
 
-1. **Backbone architectures** — how information moves through the model: convolution, recurrence, attention, message passing.
+1. **Backbone architectures** — how information moves through the model: convolution, recurrence, attention, state-space, graph message passing.
 2. **Model families** — how those backbones are organized into larger modeling patterns: representation learning, generative modeling, or multimodal alignment.
 
 <Note type="intuition">
@@ -54,7 +54,7 @@ Backbone architectures ask "what mechanism moves information through the model?"
 
 One useful way to read architectures is to ask: at each layer, which other units is a unit allowed to take information from?
 
-In a CNN, a pixel or patch mainly sees a local neighborhood. In an RNN, the current timestep sees the previous state. In a GNN, a node sees the nodes connected to it by edges. In a Transformer, each token can see every other token through attention.
+In a CNN, a pixel or patch mainly sees a local neighborhood. In an RNN, the current timestep sees the previous state. In a Transformer, each token can see every other token through attention. In an SSM, each token updates a compact state instead of retaining the whole token history. In a GNN, a node sees the nodes connected to it by edges.
 
 In more general language, this is **message passing**: each unit receives "messages" from a set of information sources, aggregates them, and updates its representation. Architectures differ mostly in how they define that source set.
 
@@ -62,8 +62,9 @@ In more general language, this is **message passing**: each unit receives "messa
 |---|---|---|
 | CNN | Image grid | Nearby pixels/patches in the kernel |
 | RNN | Sequence | The previous step's state |
-| GNN | Arbitrary graph | Nodes connected by edges |
 | Transformer | Sequence as a complete graph | *Every* other token through attention |
+| SSM | Sequence | A compact state updated by the current token |
+| GNN | Arbitrary graph | Nodes connected by edges |
 
 <Note type="intuition">
 Through the message passing lens, a Transformer can be seen as a **GNN on a complete graph**: every token connects to every other token, and the edge weights are the attention scores. This is why it is so flexible but also expensive — if every token talks to every other token, the number of interactions grows as $O(n^2)$.
