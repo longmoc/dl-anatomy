@@ -11,6 +11,7 @@ tags: [rnn, lstm, gru, seq2seq, sequence, attention]
 
 import Note from '../../components/Note.astro';
 import RNNUnrolledDiagram from '../../components/RNNUnrolledDiagram.astro';
+import LSTMCellDiagram from '../../components/LSTMCellDiagram.astro';
 import Seq2SeqAttentionDiagram from '../../components/Seq2SeqAttentionDiagram.astro';
 
 # Sequence Models: RNN → Seq2Seq
@@ -89,6 +90,8 @@ c_t = f_t \odot c_{t-1} + i_t \odot \tilde{c}_t
 $$
 
 Dạng này quan trọng vì có đường **cộng** qua thời gian. Nếu forget gate gần 1, cell state có thể giữ thông tin cũ qua nhiều bước mà không bị nhân liên tục bởi một ma trận tùy ý như RNN thuần.
+
+<LSTMCellDiagram />
 
 <Note type="intuition">
 Gate trong LSTM và residual connection trong ResNet chia sẻ cùng một insight: muốn gradient sống sót qua nhiều bước, hãy tạo một con đường mà thông tin đi qua gần như **cộng** thay vì **nhân** liên tục.

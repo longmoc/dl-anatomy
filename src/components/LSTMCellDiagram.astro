@@ -1,0 +1,108 @@
+---
+interface Props {
+  lang?: 'vi' | 'en';
+}
+const { lang = 'vi' } = Astro.props;
+
+const L = lang === 'en'
+  ? {
+      title: 'LSTM cell — the cell-state highway',
+      forget: '(forget)',
+      input: '(input)',
+      output: '(output)',
+      gatesFrom: '[ xₜ , hₜ₋₁ ]  →  gates (σ)',
+      cap: 'The cell state c flows across the top with a mostly additive update cₜ = fₜ⊙cₜ₋₁ + iₜ⊙c̃ₜ. When the forget gate ≈ 1, memory and gradient pass through almost unchanged — a learnable version of the residual highway. hₜ is read out through the output gate.',
+    }
+  : {
+      title: 'LSTM cell — đường cao tốc cell state',
+      forget: '(forget)',
+      input: '(input)',
+      output: '(output)',
+      gatesFrom: '[ xₜ , hₜ₋₁ ]  →  các gate (σ)',
+      cap: 'Cell state c chạy dọc phía trên với cập nhật gần như cộng: cₜ = fₜ⊙cₜ₋₁ + iₜ⊙c̃ₜ. Khi forget gate ≈ 1, ký ức và gradient đi qua gần như nguyên vẹn — một phiên bản học được của residual highway. hₜ được đọc ra qua output gate.',
+    };
+---
+
+<figure class="lstm">
+  <svg viewBox="0 0 540 250" role="img" aria-label="LSTM cell diagram" class="lstm-svg">
+    <defs>
+      <marker id="lstm-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" class="lstm-head" />
+      </marker>
+    </defs>
+
+    <text x="270" y="24" class="lstm-title">{L.title}</text>
+
+    <!-- cell frame -->
+    <rect x="40" y="44" width="462" height="172" rx="12" class="lstm-frame" />
+
+    <!-- cell-state highway (top) -->
+    <text x="20" y="82" class="lstm-io">cₜ₋₁</text>
+    <line x1="42" y1="78" x2="500" y2="78" class="lstm-highway" marker-end="url(#lstm-arrow)" />
+    <text x="520" y="82" class="lstm-io">cₜ</text>
+
+    <!-- forget gate multiply on the highway -->
+    <circle cx="175" cy="78" r="13" class="lstm-op" />
+    <text x="175" y="83" class="lstm-op-sym">×</text>
+    <!-- add new info on the highway -->
+    <circle cx="320" cy="78" r="13" class="lstm-op" />
+    <text x="320" y="84" class="lstm-op-sym">+</text>
+
+    <!-- gate pills -->
+    <rect x="140" y="116" width="70" height="34" rx="8" class="lstm-pill" />
+    <text x="175" y="132" class="lstm-pill-sym">fₜ</text>
+    <text x="175" y="144" class="lstm-pill-sub">{L.forget}</text>
+    <line x1="175" y1="116" x2="175" y2="93" class="lstm-line" marker-end="url(#lstm-arrow)" />
+
+    <rect x="278" y="116" width="84" height="34" rx="8" class="lstm-pill" />
+    <text x="320" y="132" class="lstm-pill-sym">iₜ ⊙ c̃ₜ</text>
+    <text x="320" y="144" class="lstm-pill-sub">{L.input}</text>
+    <line x1="320" y1="116" x2="320" y2="93" class="lstm-line" marker-end="url(#lstm-arrow)" />
+
+    <rect x="410" y="116" width="74" height="34" rx="8" class="lstm-pill" />
+    <text x="447" y="132" class="lstm-pill-sym">oₜ</text>
+    <text x="447" y="144" class="lstm-pill-sub">{L.output}</text>
+    <!-- output gate reads the cell state -->
+    <line x1="447" y1="90" x2="447" y2="116" class="lstm-line-faint" />
+    <!-- h_t read out -->
+    <line x1="484" y1="133" x2="512" y2="133" class="lstm-line" marker-end="url(#lstm-arrow)" />
+    <text x="524" y="137" class="lstm-io">hₜ</text>
+
+    <!-- gate source bar -->
+    <rect x="120" y="176" width="350" height="30" rx="8" class="lstm-bar" />
+    <text x="295" y="195" class="lstm-bar-text">{L.gatesFrom}</text>
+    <line x1="175" y1="176" x2="175" y2="152" class="lstm-line" marker-end="url(#lstm-arrow)" />
+    <line x1="320" y1="176" x2="320" y2="152" class="lstm-line" marker-end="url(#lstm-arrow)" />
+    <line x1="447" y1="176" x2="447" y2="152" class="lstm-line" marker-end="url(#lstm-arrow)" />
+  </svg>
+  <figcaption class="lstm-cap">{L.cap}</figcaption>
+</figure>
+
+<style>
+  .lstm {
+    margin: 1.75rem 0;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg2);
+    padding: 0.8rem 0 0.25rem;
+  }
+  .lstm-svg { display: block; width: 100%; max-width: 600px; height: auto; margin: 0 auto; }
+  .lstm-title { fill: var(--text); font-family: var(--mono); font-size: 13px; font-weight: 600; text-anchor: middle; }
+  .lstm-frame { fill: none; stroke: var(--border); stroke-width: 1.2; stroke-dasharray: 5 4; }
+  .lstm-highway { stroke: var(--accent2); stroke-width: 3; }
+  .lstm-io { fill: var(--text); font-family: var(--mono); font-size: 11px; font-weight: 600; text-anchor: middle; }
+  .lstm-op { fill: var(--bg); stroke: var(--amber); stroke-width: 1.8; }
+  .lstm-op-sym { fill: var(--amber); font-family: var(--mono); font-size: 13px; font-weight: 700; text-anchor: middle; }
+  .lstm-pill { fill: var(--bg); stroke: var(--accent); stroke-width: 1.5; }
+  .lstm-pill-sym { fill: var(--text); font-family: var(--mono); font-size: 11px; font-weight: 600; text-anchor: middle; }
+  .lstm-pill-sub { fill: var(--muted); font-family: var(--mono); font-size: 8px; text-anchor: middle; }
+  .lstm-bar { fill: var(--bg3); stroke: var(--border); stroke-width: 1.2; }
+  .lstm-bar-text { fill: var(--muted); font-family: var(--mono); font-size: 10px; text-anchor: middle; }
+  .lstm-line { stroke: var(--muted); stroke-width: 1.5; }
+  .lstm-line-faint { stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 3 3; opacity: 0.6; }
+  .lstm-head { fill: var(--muted); }
+  .lstm-cap {
+    font-size: 0.78rem; color: var(--muted); text-align: center;
+    padding: 0.5rem 1rem 0.65rem; font-style: italic; line-height: 1.5;
+  }
+</style>

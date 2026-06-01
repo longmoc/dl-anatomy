@@ -11,6 +11,7 @@ tags: [rnn, lstm, gru, seq2seq, sequence, attention]
 
 import Note from '../../components/Note.astro';
 import RNNUnrolledDiagram from '../../components/RNNUnrolledDiagram.astro';
+import LSTMCellDiagram from '../../components/LSTMCellDiagram.astro';
 import Seq2SeqAttentionDiagram from '../../components/Seq2SeqAttentionDiagram.astro';
 
 # Sequence Models: RNN → Seq2Seq
@@ -89,6 +90,8 @@ c_t = f_t \odot c_{t-1} + i_t \odot \tilde{c}_t
 $$
 
 This form matters because it gives memory an **additive** path through time. If the forget gate is near 1, the cell state can preserve old information across many steps without repeatedly multiplying by an arbitrary recurrent matrix.
+
+<LSTMCellDiagram lang="en" />
 
 <Note type="intuition">
 LSTM gates and ResNet residual connections share the same insight: for a gradient to survive many steps, create a path where information mostly **adds** rather than repeatedly **multiplies**.
