@@ -10,6 +10,8 @@ tags: [cnn, resnext, densenet, mobilenet, efficientnet, convnext]
 ---
 
 import Note from '../../components/Note.astro';
+import DepthwiseSeparableDiagram from '../../components/DepthwiseSeparableDiagram.astro';
+import DenseConnectivityDiagram from '../../components/DenseConnectivityDiagram.astro';
 
 # Modern CNNs: From ResNeXt to ConvNeXt
 
@@ -53,6 +55,8 @@ $$
 
 Hệ quả: gradient có nhiều đường ngắn quay về layer đầu, và **feature reuse** rất mạnh — layer sau dùng lại cạnh/texture/bộ phận đã học thay vì học lại. Mỗi layer chỉ thêm một số kênh nhỏ (**growth rate**), nên DenseNet thường parameter-efficient; bù lại, concatenation tốn activation memory hơn.
 
+<DenseConnectivityDiagram />
+
 <Note type="intuition">
 DenseNet xem độ sâu như quá trình **tích lũy một feature bank**: layer mới không thay thế representation cũ, mà bổ sung feature mới vào kho chung.
 </Note>
@@ -72,7 +76,11 @@ $$
 \underbrace{k^2 \cdot C_{in} \cdot C_{out}}_{\text{conv chuẩn}} \;\longrightarrow\; \underbrace{k^2 \cdot C_{in} + C_{in} \cdot C_{out}}_{\text{depthwise separable}}
 $$
 
-→ giảm FLOPs nhiều lần. **ShuffleNet** đẩy xa hơn với grouped $1\times1$ conv, nhưng group làm các kênh ít giao tiếp — nên thêm **channel shuffle** trộn kênh giữa các group để thông tin vẫn đi qua được.
+→ giảm FLOPs nhiều lần.
+
+<DepthwiseSeparableDiagram />
+
+**ShuffleNet** đẩy xa hơn với grouped $1\times1$ conv, nhưng group làm các kênh ít giao tiếp — nên thêm **channel shuffle** trộn kênh giữa các group để thông tin vẫn đi qua được.
 
 <Note type="result">
 MobileNet giữ inductive bias của convolution nhưng **factorize** phép toán để rẻ hơn. ShuffleNet bổ sung: efficiency không chỉ là giảm phép tính, mà còn phải giữ đường trao đổi thông tin giữa các kênh.

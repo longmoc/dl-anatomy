@@ -10,6 +10,8 @@ tags: [cnn, resnext, densenet, mobilenet, efficientnet, convnext]
 ---
 
 import Note from '../../components/Note.astro';
+import DepthwiseSeparableDiagram from '../../components/DepthwiseSeparableDiagram.astro';
+import DenseConnectivityDiagram from '../../components/DenseConnectivityDiagram.astro';
 
 # Modern CNNs: From ResNeXt to ConvNeXt
 
@@ -53,6 +55,8 @@ $$
 
 The consequences: gradients have many short paths back to early layers, and **feature reuse** is strong — later layers reuse learned edges/textures/parts instead of relearning them. Each layer adds only a small number of channels (**growth rate**), so DenseNet is often parameter-efficient; in exchange, concatenation costs more activation memory.
 
+<DenseConnectivityDiagram lang="en" />
+
 <Note type="intuition">
 DenseNet treats depth as **accumulating a feature bank**: a new layer doesn't replace the old representation, it adds new features to a shared pool.
 </Note>
@@ -72,7 +76,11 @@ $$
 \underbrace{k^2 \cdot C_{in} \cdot C_{out}}_{\text{standard conv}} \;\longrightarrow\; \underbrace{k^2 \cdot C_{in} + C_{in} \cdot C_{out}}_{\text{depthwise separable}}
 $$
 
-→ a large FLOP reduction. **ShuffleNet** pushes further with grouped $1\times1$ convs, but groups make channels communicate less — so it adds **channel shuffle** to mix channels across groups so information still flows.
+→ a large FLOP reduction.
+
+<DepthwiseSeparableDiagram lang="en" />
+
+**ShuffleNet** pushes further with grouped $1\times1$ convs, but groups make channels communicate less — so it adds **channel shuffle** to mix channels across groups so information still flows.
 
 <Note type="result">
 MobileNet keeps the convolution's inductive bias but **factorizes** the operation to make it cheaper. ShuffleNet adds: efficiency isn't only about fewer operations, but also about preserving the path of information exchange between channels.
