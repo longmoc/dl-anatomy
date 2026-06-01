@@ -1,6 +1,6 @@
 ---
 title: "Transformer & Attention"
-description: "Scaled dot-product attention, self-attention, positional encoding và multi-head — cơ chế cốt lõi của kiến trúc thống trị deep learning hiện đại."
+description: "Scaled dot-product attention, self-attention, positional encoding, multi-head và Transformer block — cơ chế cốt lõi của deep learning hiện đại."
 lang: vi
 category: architectures
 order: 6
@@ -14,60 +14,178 @@ import AttentionViz from '../../components/AttentionViz.astro';
 
 # Transformer & Attention
 
-Năm 2017, *"Attention Is All You Need"* bỏ hoàn toàn recurrence: không RNN, không convolution — chỉ còn **attention**. Đây là kiến trúc nền của gần như mọi LLM hiện nay.
+Bài [Sequence Models](/dl-anatomy/architectures/sequence-models) cho thấy attention ban đầu xuất hiện như một cách phá bottleneck của Seq2Seq RNN: decoder không cần nhồi toàn bộ câu nguồn vào một vector duy nhất, mà có thể nhìn lại từng hidden state của encoder.
+
+Năm 2017, *"Attention Is All You Need"* đi xa hơn: bỏ recurrence khỏi backbone. Không còn xử lý token từng bước như RNN; toàn bộ chuỗi được xử lý song song qua **self-attention**. Attention là cơ chế token mixing chính, nhưng một Transformer block đầy đủ vẫn cần FFN, residual connection, normalization và thông tin vị trí.
+
+## Từ embedding đến Q, K, V
+
+Mỗi token đi vào Transformer dưới dạng embedding. Từ cùng một ma trận input $X$, model tạo ba phiên bản tuyến tính:
+
+$$
+Q = XW_Q, \qquad K = XW_K, \qquad V = XW_V
+$$
+
+- **Query** $q$ — token này đang tìm gì?
+- **Key** $k$ — token này có thể được nhận diện bằng gì?
+- **Value** $v$ — token này mang thông tin gì nếu được lấy ra?
+
+Attention không trực tiếp trộn embedding gốc. Nó dùng query/key để tính mức liên quan, rồi dùng trọng số đó để tổng hợp value.
 
 ## Scaled dot-product attention
 
-Ý tưởng: mỗi token tạo ba vector — **query** $q$ (tôi đang tìm gì), **key** $k$ (tôi chứa gì), **value** $v$ (tôi mang thông tin gì). Token $i$ tổng hợp value của các token khác, có trọng số theo độ khớp giữa query của nó và key của chúng:
+Với một token $i$, attention so query của nó với key của mọi token khác. Điểm khớp càng cao, value của token kia càng đóng góp nhiều vào output:
 
 $$
 \text{Attention}(Q, K, V) = \text{softmax}\!\left(\frac{QK^\top}{\sqrt{d_k}}\right) V
 $$
 
 - $QK^\top$ — điểm khớp giữa mọi cặp token
-- chia $\sqrt{d_k}$ — chuẩn hóa: khi $d_k$ lớn, dot product có phương sai lớn → softmax bão hòa (gradient gần 0); chia $\sqrt{d_k}$ giữ phương sai ổn định
+- chia $\sqrt{d_k}$ — khi $d_k$ lớn, dot product có phương sai lớn; chia để softmax không bão hòa quá sớm
 - softmax — biến điểm khớp thành trọng số tổng bằng 1
+- nhân với $V$ — lấy weighted sum của thông tin cần đọc ra
 
 <Note type="intuition">
-Attention là một dạng "tra cứu mềm" (soft dictionary lookup): query so với mọi key, lấy value theo trọng số khớp. Khác hashtable cứng (chỉ một key trúng), ở đây mọi key đóng góp một phần.
+Attention là một dạng "tra cứu mềm" (soft dictionary lookup): query so với mọi key, rồi lấy value theo trọng số khớp. Khác hashtable cứng, không chỉ một key trúng; mọi key có thể đóng góp một phần.
 </Note>
 
 <AttentionViz />
 
-## Self-attention permutation-equivariant
+## Self-attention như message passing
 
-Trong **self-attention**, $Q, K, V$ đều sinh từ cùng một chuỗi → mỗi token nhìn mọi token (kể cả chính nó). Hệ quả quan trọng: attention **bất biến theo hoán vị** — đảo thứ tự token thì output cũng chỉ đảo theo, attention không "biết" vị trí. Tốt cho set, nhưng văn bản thì thứ tự là tất cả.
+Trong **self-attention**, $Q, K, V$ đều sinh từ cùng một chuỗi. Mỗi token gửi key/value của mình cho các token khác, đồng thời dùng query của nó để quyết định nên nhận thông tin từ đâu.
 
-## Positional encoding — bơm thông tin vị trí
+Dưới góc nhìn [message passing](/dl-anatomy/architectures/architecture-anatomy), Transformer là một đồ thị đầy đủ: mọi token có thể trao đổi thông tin với mọi token khác trong một layer.
 
-Vì attention không có khái niệm thứ tự, ta phải thêm vị trí vào input:
+| Kiến trúc | Mỗi bước/layer nhìn ai? |
+|---|---|
+| RNN | state trước đó |
+| CNN | lân cận trong kernel |
+| GNN | node nối bằng cạnh |
+| Transformer | mọi token trong chuỗi |
+
+Đây là lý do đường đi giữa hai token bất kỳ chỉ dài một bước attention. Với RNN, thông tin từ token đầu đến token cuối phải đi qua nhiều update tuần tự; với Transformer, token cuối có thể attend trực tiếp token đầu.
+
+## Vì sao cần positional information?
+
+Self-attention thuần túy **đồng biến theo hoán vị**: nếu đảo thứ tự token đầu vào, output cũng đảo theo cùng cách. Attention tự nó không biết token nào đứng trước token nào.
+
+Điều này ổn với set, nhưng văn bản, âm thanh hay code đều phụ thuộc mạnh vào thứ tự. Vì vậy Transformer phải thêm thông tin vị trí:
 
 - **Sinusoidal PE (2017)**: cộng vào embedding các sóng sin/cos nhiều tần số — vị trí tuyệt đối, cố định, không cần học
-- **Learned PE**: học một vector cho mỗi vị trí (BERT, GPT-2)
-- **RoPE (2021)**: *xoay* vector q/k theo góc tỉ lệ với vị trí → mã hóa vị trí **tương đối**, extrapolate tốt hơn cho chuỗi dài; dùng trong LLaMA, hầu hết LLM mới
-- **ALiBi (2021)**: cộng bias tuyến tính theo khoảng cách vào điểm attention
+- **Learned PE**: học một vector cho mỗi vị trí — dùng trong BERT, GPT-2
+- **RoPE (2021)**: xoay vector query/key theo góc phụ thuộc vị trí — mã hóa quan hệ tương đối tốt hơn, phổ biến trong LLaMA và nhiều LLM mới
+- **ALiBi (2021)**: cộng bias tuyến tính theo khoảng cách vào attention score
+
+<Note type="warning">
+Không nên hiểu positional encoding là một chi tiết phụ. Nếu bỏ thông tin vị trí, self-attention chỉ thấy một túi token; nó không phân biệt được "dog bites man" với "man bites dog" chỉ bằng attention score.
+</Note>
+
+## Attention mask — token nào được nhìn token nào?
+
+Cùng một công thức attention có thể tạo ra nhiều "tính cách" khác nhau chỉ bằng cách đổi **mask**.
+
+| Kiểu attention | Token được nhìn | Dùng trong |
+|---|---|---|
+| Bidirectional self-attention | cả trái và phải | encoder, BERT-style model |
+| Causal self-attention | chỉ quá khứ và hiện tại | decoder-only LLM, GPT-style model |
+| Cross-attention | decoder query nhìn encoder key/value | encoder-decoder, translation, summarization |
+
+Trong decoder-only LLM, causal mask là điều bắt buộc: khi dự đoán token tiếp theo, model không được nhìn tương lai. Bài [Transformer Variants & MoE](/dl-anatomy/architectures/transformer-variants) sẽ dùng chính ý tưởng mask này để phân biệt encoder-only, decoder-only và encoder-decoder.
 
 ## Multi-head attention
 
-Thay vì một attention, dùng $h$ "đầu" song song, mỗi đầu học một kiểu quan hệ khác (cú pháp, đồng tham chiếu, …), rồi ghép lại. Giống nhiều kernel trong CNN — nhiều bộ lọc quan hệ chạy đồng thời.
+Một attention head chỉ có một không gian query/key/value. Transformer dùng nhiều head song song:
+
+$$
+\text{head}_i = \text{Attention}(XW_Q^{(i)}, XW_K^{(i)}, XW_V^{(i)})
+$$
+
+Sau đó concat các head và chiếu lại:
+
+$$
+\text{MHA}(X) = \text{Concat}(\text{head}_1,\dots,\text{head}_h)W_O
+$$
+
+Trực giác: mỗi head học một kiểu quan hệ khác nhau. Một head có thể tập trung vào token gần, head khác vào subject-verb agreement, head khác vào dấu câu, coreference hoặc cấu trúc dài hơn. Không nên hiểu quá cứng rằng mỗi head luôn có "vai trò ngôn ngữ học" rõ ràng, nhưng multi-head cho model nhiều subspace để trộn thông tin.
+
+Giống CNN dùng nhiều kernel để nhìn nhiều pattern không gian, Transformer dùng nhiều attention head để nhìn nhiều pattern quan hệ.
 
 ## Transformer block
 
-Một block xếp chồng: **multi-head attention → FFN** (mạng 2 lớp áp cho từng token), mỗi phần bọc trong **residual connection** (xem [ResNet & Residual Learning](/dl-anatomy/architectures/resnet)) + **normalization**. Xếp $N$ block → Transformer.
+Attention chỉ là một nửa block. Một Transformer block chuẩn có hai phần lớn:
 
-Tại sao thắng RNN: (1) **song song hóa** toàn chuỗi khi train, (2) đường đi giữa hai token bất kỳ chỉ dài 1 bước → bắt phụ thuộc xa dễ, (3) **scale** mượt theo data và compute.
+1. **Multi-head attention** — trộn thông tin giữa các token
+2. **Feed-forward network (FFN)** — biến đổi representation của từng token độc lập
 
-<Note type="result">
-Transformer = GNN trên đồ thị đầy đủ (mọi token nối nhau, trọng số cạnh = attention). Nó bỏ inductive bias về thứ tự/locality, đổi lại đòi hỏi data + compute lớn — và chính sự "ít giả định" đó khiến nó tổng quát hóa được sang văn bản, ảnh, âm thanh, protein…
+```text
+x
+|--> Multi-head attention --> Add/Norm
+|                              |
++------------------------------+
+                               |
+                               v
+                         Feed-forward network --> Add/Norm
+                               |                    |
+                               +--------------------+
+```
+
+FFN thường là MLP hai lớp áp riêng cho từng token:
+
+$$
+\text{FFN}(x) = W_2 \sigma(W_1 x + b_1) + b_2
+$$
+
+Nếu attention là phần "token này nên lấy thông tin từ token nào?", thì FFN là phần "sau khi đã trộn thông tin, mỗi token nên xử lý representation của mình ra sao?".
+
+Residual connection giúp thông tin và gradient đi qua nhiều block dễ hơn — cùng tinh thần với [ResNet & Residual Learning](/dl-anatomy/architectures/resnet). Normalization, thường là LayerNorm/RMSNorm trong Transformer hiện đại, giúp ổn định scale activation; xem thêm [Normalization Layers](/dl-anatomy/architectures/normalization-layers).
+
+<Note type="intuition">
+Transformer block không chỉ là attention. Attention trộn token; FFN tăng năng lực phi tuyến trên từng token; residual giữ đường truyền thông tin; normalization giữ training ổn định. Bỏ một trong các phần này, block sẽ không còn là Transformer thực tế mà ta dùng trong LLM.
 </Note>
 
-Từ cùng một block này, người ta tạo ra nhiều biến thể (encoder-only, decoder-only, ViT) và cách scale tham số (MoE) — xem bài tiếp theo: [Transformer Variants & MoE](/dl-anatomy/architectures/transformer-variants).
+## Pre-norm và post-norm
+
+Transformer gốc đặt normalization sau residual:
+
+```text
+x -> sublayer -> Add -> Norm
+```
+
+Nhiều Transformer hiện đại dùng **pre-norm**:
+
+```text
+x -> Norm -> sublayer -> Add
+```
+
+Pre-norm thường ổn định hơn khi scale lên rất sâu, vì gradient có đường đi qua residual path sạch hơn. Chi tiết normalization được tách riêng ở bài [Normalization Layers](/dl-anatomy/architectures/normalization-layers); ở đây chỉ cần nhớ rằng vị trí đặt norm là một phần quan trọng của block design.
+
+## Vì sao Transformer scale tốt?
+
+Transformer thắng RNN không chỉ vì attention "hay" hơn. Nó thắng vì kiến trúc này hợp với phần cứng và scale:
+
+- **Song song hóa khi train**: mọi token trong chuỗi có thể được xử lý cùng lúc, thay vì chờ state bước trước như RNN.
+- **Đường đi ngắn**: hai token bất kỳ có thể tương tác trong một layer attention.
+- **Objective đơn giản**: với decoder-only LLM, dự đoán token tiếp theo scale rất tốt với data lớn.
+- **Block lặp lại đều đặn**: cùng một module attention + FFN có thể xếp hàng chục, hàng trăm layer.
+
+Nhưng cái giá cũng rõ:
+
+- attention chuẩn cần ma trận $n \times n$, nên compute/memory tăng $O(n^2)$ theo độ dài chuỗi
+- inference decoder-only thường cần **KV-cache**, và cache này tăng theo context length
+- vì ít inductive bias hơn CNN/RNN/GNN, Transformer thường cần nhiều data và compute hơn để học cấu trúc
+
+<Note type="result">
+Dưới góc nhìn message passing, Transformer là một GNN trên đồ thị đầy đủ: mọi token nối với mọi token khác, trọng số cạnh là attention. Nó rất linh hoạt, nhưng linh hoạt đó có giá — số tương tác tăng theo bình phương độ dài chuỗi.
+</Note>
+
+Từ cùng một block này, người ta tạo ra nhiều biến thể bằng cách đổi mask, input format, attention pattern hoặc FFN. Bài tiếp theo: [Transformer Variants & MoE](/dl-anatomy/architectures/transformer-variants).
 
 ## Papers tham khảo
 
 | Paper | |
 |---|---|
 | Vaswani et al. (2017) | Attention Is All You Need |
+| Bahdanau et al. (2015) | Neural Machine Translation by Jointly Learning to Align and Translate |
 | Su et al. (2021) | RoFormer: Rotary Position Embedding (RoPE) |
 | Press et al. (2021) | ALiBi: Train Short, Test Long |
-| Bahdanau et al. (2015) | Neural Machine Translation by Jointly Learning to Align and Translate |

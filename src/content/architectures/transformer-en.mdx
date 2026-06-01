@@ -1,6 +1,6 @@
 ---
 title: "Transformer & Attention"
-description: "Scaled dot-product attention, self-attention, positional encoding and multi-head — the core mechanism of the architecture that dominates modern deep learning."
+description: "Scaled dot-product attention, self-attention, positional encoding, multi-head attention, and the Transformer block — the core mechanism of modern deep learning."
 lang: en
 category: architectures
 order: 6
@@ -14,60 +14,178 @@ import AttentionViz from '../../components/AttentionViz.astro';
 
 # Transformer & Attention
 
-In 2017, *"Attention Is All You Need"* dropped recurrence entirely: no RNN, no convolution — just **attention**. It's the foundation of nearly every modern LLM.
+The [Sequence Models](/dl-anatomy/architectures/sequence-models-en) article showed attention first appearing as a way to break the bottleneck of Seq2Seq RNNs: the decoder no longer had to compress the whole source sentence into one vector, and could instead look back at each encoder hidden state.
+
+In 2017, *"Attention Is All You Need"* went further: it removed recurrence from the backbone. Instead of processing tokens step by step like an RNN, the whole sequence is processed in parallel through **self-attention**. Attention is the main token-mixing mechanism, but a full Transformer block still needs an FFN, residual connections, normalization, and positional information.
+
+## From embeddings to Q, K, V
+
+Each token enters the Transformer as an embedding. From the same input matrix $X$, the model creates three linear projections:
+
+$$
+Q = XW_Q, \qquad K = XW_K, \qquad V = XW_V
+$$
+
+- **Query** $q$ — what is this token looking for?
+- **Key** $k$ — how can this token be identified?
+- **Value** $v$ — what information does this token carry if retrieved?
+
+Attention does not mix the original embeddings directly. It uses queries and keys to compute relevance, then uses those weights to aggregate values.
 
 ## Scaled dot-product attention
 
-The idea: each token produces three vectors — a **query** $q$ (what am I looking for), a **key** $k$ (what do I contain), a **value** $v$ (what information do I carry). Token $i$ aggregates the values of other tokens, weighted by how well its query matches their keys:
+For a token $i$, attention compares its query with the keys of all other tokens. The higher the match, the more that token's value contributes to the output:
 
 $$
 \text{Attention}(Q, K, V) = \text{softmax}\!\left(\frac{QK^\top}{\sqrt{d_k}}\right) V
 $$
 
 - $QK^\top$ — match scores between every pair of tokens
-- dividing by $\sqrt{d_k}$ — normalization: when $d_k$ is large, the dot product has high variance → softmax saturates (near-zero gradients); dividing by $\sqrt{d_k}$ keeps the variance stable
-- softmax — turns scores into weights that sum to 1
+- dividing by $\sqrt{d_k}$ — when $d_k$ is large, dot products have high variance; scaling keeps softmax from saturating too early
+- softmax — turns match scores into weights that sum to 1
+- multiplying by $V$ — takes a weighted sum of the information to read out
 
 <Note type="intuition">
-Attention is a "soft dictionary lookup": the query is compared against every key, and values are retrieved weighted by match. Unlike a hard hashtable (one key hits), here every key contributes a share.
+Attention is a "soft dictionary lookup": a query is compared against every key, then values are retrieved weighted by match. Unlike a hard hashtable, there is not just one hit; every key can contribute a share.
 </Note>
 
 <AttentionViz lang="en" />
 
-## Self-attention is permutation-equivariant
+## Self-attention as message passing
 
-In **self-attention**, $Q, K, V$ all come from the same sequence → each token attends to every token (including itself). An important consequence: attention is **permutation-equivariant** — shuffle the tokens and the output just shuffles too; attention doesn't "know" position. Fine for sets, but for text order is everything.
+In **self-attention**, $Q, K, V$ all come from the same sequence. Each token sends out its key/value to the other tokens, while using its query to decide where to receive information from.
 
-## Positional encoding — injecting position
+Through the [message passing](/dl-anatomy/architectures/architecture-anatomy-en) lens, a Transformer is a complete graph: every token can exchange information with every other token in one layer.
 
-Since attention has no notion of order, we must add position to the input:
+| Architecture | Who does each step/layer look at? |
+|---|---|
+| RNN | the previous state |
+| CNN | neighbors inside the kernel |
+| GNN | nodes connected by edges |
+| Transformer | every token in the sequence |
+
+This is why the path between any two tokens is only one attention step. In an RNN, information from the first token to the last must pass through many sequential updates; in a Transformer, the last token can attend directly to the first.
+
+## Why positional information is necessary
+
+Pure self-attention is **permutation-equivariant**: if we shuffle the input tokens, the output shuffles in the same way. Attention itself does not know which token came first.
+
+That is fine for sets, but text, audio, and code depend heavily on order. So Transformers must add positional information:
 
 - **Sinusoidal PE (2017)**: add multi-frequency sine/cosine waves to the embedding — absolute position, fixed, no learning needed
-- **Learned PE**: learn a vector per position (BERT, GPT-2)
-- **RoPE (2021)**: *rotate* the q/k vectors by an angle proportional to position → encodes **relative** position, extrapolates better to long sequences; used in LLaMA and most recent LLMs
-- **ALiBi (2021)**: add a distance-linear bias to the attention scores
+- **Learned PE**: learn one vector per position — used in BERT and GPT-2
+- **RoPE (2021)**: rotate query/key vectors by a position-dependent angle — better relative-position behavior, common in LLaMA and many recent LLMs
+- **ALiBi (2021)**: add a distance-linear bias to attention scores
+
+<Note type="warning">
+Positional encoding is not a minor detail. Without positional information, self-attention sees a bag of tokens; it cannot distinguish "dog bites man" from "man bites dog" through attention scores alone.
+</Note>
+
+## Attention masks — which tokens may see which?
+
+The same attention formula can produce different "personalities" by changing the **mask**.
+
+| Attention type | Tokens visible | Used in |
+|---|---|---|
+| Bidirectional self-attention | both left and right context | encoder, BERT-style models |
+| Causal self-attention | only past and current tokens | decoder-only LLMs, GPT-style models |
+| Cross-attention | decoder queries look at encoder keys/values | encoder-decoder, translation, summarization |
+
+In decoder-only LLMs, the causal mask is mandatory: when predicting the next token, the model must not see the future. The [Transformer Variants & MoE](/dl-anatomy/architectures/transformer-variants-en) article will use this exact mask idea to distinguish encoder-only, decoder-only, and encoder-decoder models.
 
 ## Multi-head attention
 
-Instead of one attention, use $h$ parallel "heads", each learning a different kind of relation (syntax, coreference, …), then concatenate. Like multiple kernels in a CNN — several relational filters running at once.
+One attention head has one query/key/value space. A Transformer runs multiple heads in parallel:
+
+$$
+\text{head}_i = \text{Attention}(XW_Q^{(i)}, XW_K^{(i)}, XW_V^{(i)})
+$$
+
+Then it concatenates the heads and projects them back:
+
+$$
+\text{MHA}(X) = \text{Concat}(\text{head}_1,\dots,\text{head}_h)W_O
+$$
+
+Intuition: each head can learn a different kind of relation. One head may focus on nearby tokens, another on subject-verb agreement, another on punctuation, coreference, or longer structure. We should not force every head to have a clean linguistic role, but multi-head attention gives the model multiple subspaces for mixing information.
+
+Like a CNN uses many kernels to see many spatial patterns, a Transformer uses many attention heads to see many relational patterns.
 
 ## The Transformer block
 
-A block stacks: **multi-head attention → FFN** (a 2-layer network applied per token), each wrapped in a **residual connection** (see [ResNet & Residual Learning](/dl-anatomy/architectures/resnet-en)) + **normalization**. Stack $N$ blocks → a Transformer.
+Attention is only half the block. A standard Transformer block has two main parts:
 
-Why it beats RNNs: (1) **parallelizable** over the whole sequence during training, (2) the path between any two tokens is just 1 step → long-range dependencies are easy to capture, (3) it **scales** smoothly with data and compute.
+1. **Multi-head attention** — mixes information between tokens
+2. **Feed-forward network (FFN)** — transforms each token representation independently
 
-<Note type="result">
-A Transformer is a GNN on a complete graph (every token connected, edge weights = attention). It drops the inductive biases of order/locality, requiring large data + compute in return — and that very "assumption-free" nature is what lets it generalize to text, images, audio, proteins, and more.
+```text
+x
+|--> Multi-head attention --> Add/Norm
+|                              |
++------------------------------+
+                               |
+                               v
+                         Feed-forward network --> Add/Norm
+                               |                    |
+                               +--------------------+
+```
+
+The FFN is usually a two-layer MLP applied separately to each token:
+
+$$
+\text{FFN}(x) = W_2 \sigma(W_1 x + b_1) + b_2
+$$
+
+If attention asks "which token should this token read from?", the FFN asks "after information has been mixed, how should each token transform its own representation?"
+
+Residual connections help information and gradients pass through many blocks, in the same spirit as [ResNet & Residual Learning](/dl-anatomy/architectures/resnet-en). Normalization, usually LayerNorm or RMSNorm in modern Transformers, keeps activation scale stable; see [Normalization Layers](/dl-anatomy/architectures/normalization-layers-en).
+
+<Note type="intuition">
+A Transformer block is not just attention. Attention mixes tokens; the FFN adds nonlinear capacity per token; residual paths preserve information flow; normalization keeps training stable. Remove one of these pieces and the block is no longer the practical Transformer used in LLMs.
 </Note>
 
-From this same block come many variants (encoder-only, decoder-only, ViT) and ways to scale parameters (MoE) — see the next article: [Transformer Variants & MoE](/dl-anatomy/architectures/transformer-variants-en).
+## Pre-norm and post-norm
+
+The original Transformer placed normalization after the residual:
+
+```text
+x -> sublayer -> Add -> Norm
+```
+
+Many modern Transformers use **pre-norm**:
+
+```text
+x -> Norm -> sublayer -> Add
+```
+
+Pre-norm is often more stable when scaling to very deep networks because gradients have a cleaner path through the residual stream. The details of normalization are separated into [Normalization Layers](/dl-anatomy/architectures/normalization-layers-en); here the key point is that norm placement is an important part of block design.
+
+## Why Transformers scale well
+
+Transformers did not beat RNNs only because attention is a clever mechanism. They won because the architecture fits hardware and scale:
+
+- **Parallel training**: all tokens in the sequence can be processed at once, instead of waiting for the previous recurrent state.
+- **Short paths**: any two tokens can interact in one attention layer.
+- **Simple objective**: in decoder-only LLMs, next-token prediction scales very well with large data.
+- **Regular repeated block**: the same attention + FFN module can be stacked dozens or hundreds of times.
+
+But the cost is clear:
+
+- standard attention needs an $n \times n$ matrix, so compute and memory grow as $O(n^2)$ with sequence length
+- decoder-only inference usually needs a **KV cache**, and that cache grows with context length
+- because Transformers have fewer inductive biases than CNNs/RNNs/GNNs, they often need more data and compute to learn structure
+
+<Note type="result">
+Through the message passing lens, a Transformer is a GNN on a complete graph: every token connects to every other token, and edge weights are attention scores. It is very flexible, but that flexibility has a price — the number of interactions grows quadratically with sequence length.
+</Note>
+
+From this same block, researchers create many variants by changing the mask, input format, attention pattern, or FFN. Next: [Transformer Variants & MoE](/dl-anatomy/architectures/transformer-variants-en).
 
 ## References
 
 | Paper | |
 |---|---|
 | Vaswani et al. (2017) | Attention Is All You Need |
+| Bahdanau et al. (2015) | Neural Machine Translation by Jointly Learning to Align and Translate |
 | Su et al. (2021) | RoFormer: Rotary Position Embedding (RoPE) |
 | Press et al. (2021) | ALiBi: Train Short, Test Long |
-| Bahdanau et al. (2015) | Neural Machine Translation by Jointly Learning to Align and Translate |
