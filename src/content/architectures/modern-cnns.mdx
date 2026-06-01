@@ -1,0 +1,153 @@
+---
+title: "Modern CNNs: From ResNeXt to ConvNeXt"
+description: "CNN sau ResNet tiến hóa như thế nào: cardinality, dense connectivity, efficient convolution, compound scaling, và ConvNeXt."
+lang: vi
+category: architectures
+order: 3
+parent: architecture-anatomy
+translation: modern-cnns-en
+tags: [cnn, resnext, densenet, mobilenet, efficientnet, convnext]
+---
+
+import Note from '../../components/Note.astro';
+
+# Modern CNNs: From ResNeXt to ConvNeXt
+
+[ResNet](/dl-anatomy/architectures/resnet) làm một việc rất quan trọng: biến **độ sâu** thành thứ có thể train được. Nhưng sau ResNet, câu hỏi của CNN không còn đơn giản là "làm mạng sâu hơn được không?". Câu hỏi mới là:
+
+> Với cùng một ngân sách compute, ta nên phân bổ capacity vào đâu — depth, width, cardinality, connectivity, resolution, hay block design?
+
+Modern CNN là lịch sử của các câu trả lời khác nhau cho câu hỏi đó. Bài này coi residual + bottleneck là **baseline mặc định** (không giải thích lại), và tập trung vào các trục tiến hóa sau ResNet.
+
+| Hướng | Đại diện | Ý tưởng |
+|---|---|---|
+| Cardinality | ResNeXt | tăng số nhóm/nhánh thay vì chỉ tăng depth/width |
+| Dense connectivity | DenseNet | tái dùng feature bằng kết nối dày đặc |
+| Efficient convolution | MobileNet, ShuffleNet | giảm compute cho mobile/edge |
+| Scaling | EfficientNet | cân bằng depth/width/resolution |
+| Modernization | ConvNeXt | ConvNet học lại design từ ViT |
+
+## ResNeXt — cardinality là một trục scaling mới
+
+ResNet thường scale bằng **depth** (nhiều layer) hoặc **width** (nhiều kênh). **ResNeXt (2017)** thêm một trục thứ ba: **cardinality** — số transformation song song trong một block.
+
+Thay vì một bottleneck lớn, ResNeXt chia thành nhiều nhánh nhỏ giống hệt nhau rồi cộng lại:
+
+$$
+y = x + \sum_{i=1}^{C} T_i(x)
+$$
+
+trong đó $C$ là cardinality. Đây là intuition; implementation dùng **grouped convolution** (chia kênh thành $C$ nhóm, mỗi nhóm xử lý riêng) để tính hiệu quả. ResNeXt cho thấy: với cùng budget, **tăng cardinality thường hiệu quả hơn** tăng depth hoặc width.
+
+<Note type="intuition">
+ResNeXt đổi câu hỏi từ "mạng nên sâu/rộng bao nhiêu?" thành "một block nên có bao nhiêu transformation song song?".
+</Note>
+
+## DenseNet — tái dùng feature thay vì học lại
+
+ResNet **cộng** feature: $x + F(x)$. **DenseNet (2016)** đi theo cực đối lập thú vị: **nối (concatenate)** feature — mỗi layer nhận input là tất cả feature map của các layer trước:
+
+$$
+x_\ell = H_\ell\big([\,x_0, x_1, \dots, x_{\ell-1}\,]\big)
+$$
+
+Hệ quả: gradient có nhiều đường ngắn quay về layer đầu, và **feature reuse** rất mạnh — layer sau dùng lại cạnh/texture/bộ phận đã học thay vì học lại. Mỗi layer chỉ thêm một số kênh nhỏ (**growth rate**), nên DenseNet thường parameter-efficient; bù lại, concatenation tốn activation memory hơn.
+
+<Note type="intuition">
+DenseNet xem độ sâu như quá trình **tích lũy một feature bank**: layer mới không thay thế representation cũ, mà bổ sung feature mới vào kho chung.
+</Note>
+
+## MobileNet & ShuffleNet — convolution hiệu quả
+
+Khi chuyển từ "accuracy trên server" sang "compute budget cho mobile/edge", câu hỏi đổi: làm sao giảm FLOPs mà vẫn giữ inductive bias của convolution?
+
+**MobileNet (2017)** dùng **depthwise-separable convolution** — tách một conv chuẩn (vốn trộn không gian và kênh cùng lúc) thành hai bước:
+
+1. **Depthwise conv**: mỗi kênh có kernel riêng, chỉ xử lý không gian
+2. **Pointwise conv $1\times1$**: trộn thông tin giữa các kênh
+
+So sánh chi phí (trực giác):
+
+$$
+\underbrace{k^2 \cdot C_{in} \cdot C_{out}}_{\text{conv chuẩn}} \;\longrightarrow\; \underbrace{k^2 \cdot C_{in} + C_{in} \cdot C_{out}}_{\text{depthwise separable}}
+$$
+
+→ giảm FLOPs nhiều lần. **ShuffleNet** đẩy xa hơn với grouped $1\times1$ conv, nhưng group làm các kênh ít giao tiếp — nên thêm **channel shuffle** trộn kênh giữa các group để thông tin vẫn đi qua được.
+
+<Note type="result">
+MobileNet giữ inductive bias của convolution nhưng **factorize** phép toán để rẻ hơn. ShuffleNet bổ sung: efficiency không chỉ là giảm phép tính, mà còn phải giữ đường trao đổi thông tin giữa các kênh.
+</Note>
+
+## EfficientNet — compound scaling
+
+Tăng riêng lẻ một chiều đều có giới hạn: **depth** sâu hơn khó train; **width** rộng hơn dễ bão hòa; **resolution** lớn hơn làm FLOPs tăng mạnh. **EfficientNet (2019)** tìm một baseline tốt (MBConv / inverted bottleneck từ MobileNetV2) rồi scale **cả ba chiều cùng nhau** theo một hệ số $\phi$:
+
+$$
+\text{depth } d = \alpha^\phi, \quad \text{width } w = \beta^\phi, \quad \text{resolution } r = \gamma^\phi
+$$
+
+với ràng buộc gần đúng (vì width và resolution làm cost xấp xỉ bình phương):
+
+$$
+\alpha \cdot \beta^2 \cdot \gamma^2 \approx 2
+$$
+
+<Note type="intuition">
+EfficientNet biến scaling từ **nghệ thuật thủ công** thành một **recipe có cấu trúc**: cố định tỉ lệ giữa ba chiều, chỉ chỉnh một hệ số $\phi$ để to/nhỏ model.
+</Note>
+
+## ConvNeXt — ConvNet học lại bài học từ ViT
+
+Đây là cao trào. **ConvNeXt (2022)** không phải "CNN đánh bại Transformer", mà là một thí nghiệm công bằng: *nếu hiện đại hóa ResNet bằng training recipe và design choice của ViT/Swin, một pure ConvNet còn mạnh đến đâu?*
+
+ConvNeXt bắt đầu từ ResNet-50 và thay đổi dần:
+
+```
+ResNet baseline
+→ train như modern vision model (AdamW, augmentation mạnh, lịch dài)
+→ đổi macro design (stage ratio kiểu Swin, patchify stem)
+→ depthwise conv kernel lớn (7×7)
+→ inverted bottleneck
+→ LayerNorm thay BatchNorm, GELU thay ReLU, ít activation hơn
+→ ConvNeXt
+```
+
+<Note type="result">
+ConvNeXt cho thấy nhiều lợi thế của Transformer vision **không chỉ đến từ attention**, mà còn từ macro design, training recipe, normalization, activation và kỷ luật scaling. ConvNet, nếu hiện đại hóa đúng cách, vẫn cạnh tranh với Transformer backbone trên nhiều benchmark vision.
+</Note>
+
+Lưu ý: ConvNeXt **không** phủ nhận Transformer. Attention vẫn linh hoạt hơn cho tương tác toàn cục; ConvNet vẫn hiệu quả và có locality bias tốt cho vision. Đây là sự cạnh tranh, không phải thay thế.
+
+## Bức tranh chung
+
+CNN sau ResNet không phải chuỗi model rời rạc, mà là quá trình tìm cách **phân bổ compute** tốt hơn — mỗi model trả lời một câu hỏi thiết kế:
+
+| Model | Trục | Câu hỏi thiết kế |
+|---|---|---|
+| ResNeXt | Cardinality | Một block nên có bao nhiêu transformation song song? |
+| DenseNet | Connectivity | Layer sau nên dùng lại feature cũ thế nào? |
+| MobileNet / ShuffleNet | Efficiency | Giảm compute mà vẫn giữ information flow ra sao? |
+| EfficientNet | Scaling | Tăng depth/width/resolution theo tỉ lệ nào? |
+| ConvNeXt | Modernization | ConvNet với recipe hiện đại còn mạnh đến đâu? |
+
+Điểm chung: tất cả vẫn **giữ inductive bias của convolution** — locality, weight sharing, hierarchy — nhưng tổ chức compute thông minh hơn. Đó là lý do CNN không biến mất trong thời đại Transformer; nó trở thành một baseline mạnh, hiệu quả và vẫn rất đáng hiểu.
+
+<Note type="paper">
+Ngoài các nhánh chính ở đây còn có SENet (channel attention), RegNet (design space), NFNet (normalizer-free), ConvMixer… nhưng bài này tập trung vào các trục thiết kế có ảnh hưởng rộng nhất.
+</Note>
+
+## Cầu nối
+
+CNN hiện đại vẫn giữ inductive bias mạnh: locality, translation equivariance, hierarchy — rất hợp với thế giới dạng **lưới ảnh**. Nhưng khi dữ liệu là **chuỗi** (văn bản, âm thanh), thứ tự và phụ thuộc dài trở thành trung tâm, ta cần kiến trúc truyền thông tin linh hoạt hơn. Đó là lý do mạch tiếp theo đi sang [Sequence Models](/dl-anatomy/architectures/sequence-models) và Transformer.
+
+## Papers tham khảo
+
+| Paper | Vai trò |
+|---|---|
+| Xie et al. (2017) | Aggregated Residual Transformations (ResNeXt, cardinality) |
+| Huang et al. (2016) | Densely Connected Convolutional Networks (DenseNet) |
+| Howard et al. (2017) | MobileNets (depthwise separable convolution) |
+| Zhang et al. (2017) | ShuffleNet (channel shuffle) |
+| Sandler et al. (2018) | MobileNetV2 (inverted residuals, linear bottleneck) |
+| Tan & Le (2019) | EfficientNet (compound scaling) |
+| Liu et al. (2022) | A ConvNet for the 2020s (ConvNeXt) |

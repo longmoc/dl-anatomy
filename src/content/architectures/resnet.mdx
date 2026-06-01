@@ -1,19 +1,19 @@
 ---
-title: "ResNet & Modern CNN"
-description: "Degradation problem, residual learning, basic/bottleneck block, projection shortcut, pre-activation, và họ CNN hiện đại đến ConvNeXt."
+title: "ResNet & Residual Learning"
+description: "Degradation problem, residual learning, basic/bottleneck block, projection shortcut, pre-activation, và residual như một design pattern phổ quát."
 lang: vi
 category: architectures
 order: 2
 parent: architecture-anatomy
 translation: resnet-en
-tags: [resnet, residual, bottleneck, densenet, convnext]
+tags: [resnet, residual, bottleneck, skip-connection, pre-activation]
 ---
 
 import Note from '../../components/Note.astro';
 import ResidualGradientViz from '../../components/ResidualGradientViz.astro';
 import ResidualBlockDiagram from '../../components/ResidualBlockDiagram.astro';
 
-# ResNet & Modern CNN
+# ResNet & Residual Learning
 
 Bài [Convolutional Networks](/dl-anatomy/architectures/cnn) kết thúc ở một nghịch lý: về mặt biểu diễn, mạng sâu hơn đáng lẽ **không nên** tệ hơn mạng nông — nếu các layer thêm vào học được identity, mạng sâu có thể mô phỏng lại mạng nông. Nhưng trong thực nghiệm, khi CNN quá sâu, *training error cũng tăng*. Đây là **degradation problem**: vấn đề không nằm ở overfitting, mà ở chỗ mạng sâu trở nên **khó tối ưu**.
 
@@ -132,23 +132,11 @@ $$
 
 Cách nghĩ "tinh chỉnh dần thay vì thay mới hoàn toàn" này xuất hiện lại ở khắp nơi: residual path trong **Transformer**, U-Net, neural ODE, adapter trong fine-tuning (residual update trên *representation*), và LoRA ở tầng trọng số (low-rank update trên *weight* có sẵn).
 
-## Họ CNN hiện đại
+## Sau ResNet: CNN tiến hóa tiếp
 
-Sau ResNet, residual connection thành mặc định, và CNN tiến hóa theo vài hướng chính:
+ResNet biến *độ sâu* thành thứ train được, biến residual + bottleneck thành baseline mặc định. Nhưng "sâu hơn" không phải con đường duy nhất — CNN sau đó tiến hóa theo nhiều trục thiết kế: **cardinality** (ResNeXt), **connectivity** (DenseNet), **efficiency** (MobileNet/ShuffleNet), **scaling** (EfficientNet), và **modernization** (ConvNeXt).
 
-**1. Block design và connectivity tốt hơn**
-- **ResNeXt (2017)**: mở rộng ResNet bằng grouped convolution và ý tưởng **cardinality** (số nhóm/nhánh song song) — cho thấy tăng cardinality có thể hiệu quả hơn chỉ tăng depth hoặc width.
-- **DenseNet (2016)**: nối mỗi layer với *mọi* layer sau → tái dùng feature tối đa, ít tham số hơn với cùng độ chính xác.
-
-**2. Convolution hiệu quả**
-- **MobileNet (2017)**: depthwise-separable convolution → giảm FLOPs mạnh cho thiết bị di động.
-- **ShuffleNet**: channel shuffle để group convolution hiệu quả hơn.
-
-**3. Chiến lược scaling**
-- **EfficientNet (2019)**: **compound scaling** — cân bằng depth/width/resolution theo một hệ số duy nhất, thay vì chỉ tăng một chiều.
-
-**4. ConvNet hiện đại hóa**
-- **ConvNeXt (2022)**: hiện đại hóa ResNet bằng nhiều design choice từ Vision Transformer — macro design, depthwise conv kernel lớn, LayerNorm, GELU, inverted bottleneck — cho thấy một *pure ConvNet*, nếu được hiện đại hóa đúng cách, vẫn có thể cạnh tranh với Transformer backbone trên nhiều benchmark vision.
+Đó là một câu chuyện riêng về việc *phân bổ compute* thông minh hơn — xem [Modern CNNs: From ResNeXt to ConvNeXt](/dl-anatomy/architectures/modern-cnns).
 
 ## Residual vượt ra ngoài CNN
 
@@ -170,8 +158,3 @@ ResNet làm cho **độ sâu trở nên thực dụng**, và quan trọng hơn, 
 |---|---|
 | He et al. (2015) | Deep Residual Learning for Image Recognition (ResNet v1) |
 | He et al. (2016) | Identity Mappings in Deep Residual Networks (pre-activation, v2) |
-| Xie et al. (2017) | Aggregated Residual Transformations (ResNeXt) |
-| Huang et al. (2016) | Densely Connected Convolutional Networks (DenseNet) |
-| Howard et al. (2017) | MobileNets: Efficient CNNs for Mobile Vision |
-| Tan & Le (2019) | EfficientNet: Rethinking Model Scaling |
-| Liu et al. (2022) | A ConvNet for the 2020s (ConvNeXt) |

@@ -1,0 +1,153 @@
+---
+title: "Modern CNNs: From ResNeXt to ConvNeXt"
+description: "How CNNs evolved after ResNet: cardinality, dense connectivity, efficient convolution, compound scaling, and ConvNeXt."
+lang: en
+category: architectures
+order: 3
+parent: architecture-anatomy
+translation: modern-cnns
+tags: [cnn, resnext, densenet, mobilenet, efficientnet, convnext]
+---
+
+import Note from '../../components/Note.astro';
+
+# Modern CNNs: From ResNeXt to ConvNeXt
+
+[ResNet](/dl-anatomy/architectures/resnet-en) did something crucial: it made **depth** trainable. But after ResNet, the CNN question was no longer simply "can we go deeper?". The new question is:
+
+> Given the same compute budget, where should we allocate capacity — depth, width, cardinality, connectivity, resolution, or block design?
+
+Modern CNNs are the history of different answers to that question. This article treats residual + bottleneck as the **default baseline** (without re-explaining them) and focuses on the design axes that came after ResNet.
+
+| Axis | Representative | Idea |
+|---|---|---|
+| Cardinality | ResNeXt | more parallel branches instead of just more depth/width |
+| Dense connectivity | DenseNet | feature reuse via dense connections |
+| Efficient convolution | MobileNet, ShuffleNet | cut compute for mobile/edge |
+| Scaling | EfficientNet | balance depth/width/resolution |
+| Modernization | ConvNeXt | a ConvNet relearning design from ViT |
+
+## ResNeXt — cardinality, a new scaling axis
+
+ResNet usually scales via **depth** (more layers) or **width** (more channels). **ResNeXt (2017)** adds a third axis: **cardinality** — the number of parallel transformations in a block.
+
+Instead of one large bottleneck, ResNeXt splits into many identical small branches and sums them:
+
+$$
+y = x + \sum_{i=1}^{C} T_i(x)
+$$
+
+where $C$ is the cardinality. That's the intuition; the implementation uses **grouped convolution** (split channels into $C$ groups, each processed separately) for efficiency. ResNeXt showed that, for the same budget, **increasing cardinality is often more effective** than adding depth or width.
+
+<Note type="intuition">
+ResNeXt changes the question from "how deep/wide should the network be?" to "how many parallel transformations should a block have?".
+</Note>
+
+## DenseNet — reuse features instead of relearning them
+
+ResNet **adds** features: $x + F(x)$. **DenseNet (2016)** takes the interesting opposite extreme: it **concatenates** features — each layer takes as input all feature maps of the preceding layers:
+
+$$
+x_\ell = H_\ell\big([\,x_0, x_1, \dots, x_{\ell-1}\,]\big)
+$$
+
+The consequences: gradients have many short paths back to early layers, and **feature reuse** is strong — later layers reuse learned edges/textures/parts instead of relearning them. Each layer adds only a small number of channels (**growth rate**), so DenseNet is often parameter-efficient; in exchange, concatenation costs more activation memory.
+
+<Note type="intuition">
+DenseNet treats depth as **accumulating a feature bank**: a new layer doesn't replace the old representation, it adds new features to a shared pool.
+</Note>
+
+## MobileNet & ShuffleNet — efficient convolution
+
+Moving from "accuracy on a server" to "compute budget on mobile/edge" changes the question: how do we cut FLOPs while keeping the convolution's inductive bias?
+
+**MobileNet (2017)** uses **depthwise-separable convolution** — factorizing a standard conv (which mixes space and channels at once) into two steps:
+
+1. **Depthwise conv**: each channel has its own kernel, processing space only
+2. **Pointwise $1\times1$ conv**: mixes information across channels
+
+Cost comparison (intuition):
+
+$$
+\underbrace{k^2 \cdot C_{in} \cdot C_{out}}_{\text{standard conv}} \;\longrightarrow\; \underbrace{k^2 \cdot C_{in} + C_{in} \cdot C_{out}}_{\text{depthwise separable}}
+$$
+
+→ a large FLOP reduction. **ShuffleNet** pushes further with grouped $1\times1$ convs, but groups make channels communicate less — so it adds **channel shuffle** to mix channels across groups so information still flows.
+
+<Note type="result">
+MobileNet keeps the convolution's inductive bias but **factorizes** the operation to make it cheaper. ShuffleNet adds: efficiency isn't only about fewer operations, but also about preserving the path of information exchange between channels.
+</Note>
+
+## EfficientNet — compound scaling
+
+Scaling any single dimension has limits: deeper **depth** is harder to train; wider **width** saturates; larger **resolution** blows up FLOPs. **EfficientNet (2019)** finds a good baseline (MBConv / inverted bottleneck from MobileNetV2) and scales **all three together** with one coefficient $\phi$:
+
+$$
+\text{depth } d = \alpha^\phi, \quad \text{width } w = \beta^\phi, \quad \text{resolution } r = \gamma^\phi
+$$
+
+with the approximate constraint (since width and resolution make cost roughly quadratic):
+
+$$
+\alpha \cdot \beta^2 \cdot \gamma^2 \approx 2
+$$
+
+<Note type="intuition">
+EfficientNet turns scaling from a **manual craft** into a **structured recipe**: fix the ratio between the three dimensions, and tune a single $\phi$ to grow or shrink the model.
+</Note>
+
+## ConvNeXt — a ConvNet relearning lessons from ViT
+
+This is the climax. **ConvNeXt (2022)** isn't "CNN beats Transformer" — it's a fair experiment: *if we modernize ResNet with the training recipe and design choices of ViT/Swin, how far can a pure ConvNet go?*
+
+ConvNeXt starts from ResNet-50 and changes it gradually:
+
+```
+ResNet baseline
+→ train like a modern vision model (AdamW, strong augmentation, long schedule)
+→ change macro design (Swin-like stage ratio, patchify stem)
+→ large-kernel depthwise conv (7×7)
+→ inverted bottleneck
+→ LayerNorm instead of BatchNorm, GELU instead of ReLU, fewer activations
+→ ConvNeXt
+```
+
+<Note type="result">
+ConvNeXt shows that much of vision Transformers' advantage comes **not only from attention**, but also from macro design, training recipe, normalization, activation, and scaling discipline. A ConvNet, modernized properly, still competes with Transformer backbones on many vision benchmarks.
+</Note>
+
+A caveat: ConvNeXt does **not** dismiss Transformers. Attention is still more flexible for global interaction; ConvNets remain efficient with a strong locality bias for vision. This is competition, not replacement.
+
+## The big picture
+
+CNNs after ResNet aren't a series of disconnected models, but a search for how to **allocate compute** better — each model answers one design question:
+
+| Model | Axis | Design question |
+|---|---|---|
+| ResNeXt | Cardinality | How many parallel transformations should a block have? |
+| DenseNet | Connectivity | How should later layers reuse earlier features? |
+| MobileNet / ShuffleNet | Efficiency | How do we cut compute while keeping information flow? |
+| EfficientNet | Scaling | At what ratio should we grow depth/width/resolution? |
+| ConvNeXt | Modernization | How strong is a ConvNet with a modern recipe? |
+
+The common thread: they all **keep the convolution's inductive bias** — locality, weight sharing, hierarchy — but organize compute more cleverly. That's why CNNs didn't disappear in the Transformer era; they became a strong, efficient baseline still very much worth understanding.
+
+<Note type="paper">
+Beyond the main branches here there's also SENet (channel attention), RegNet (design spaces), NFNet (normalizer-free), ConvMixer, and more — but this article focuses on the most broadly influential design axes.
+</Note>
+
+## Bridge
+
+Modern CNNs keep a strong inductive bias: locality, translation equivariance, hierarchy — a great fit for the **grid** world of images. But when data is a **sequence** (text, audio), order and long-range dependencies become central, and we need architectures with a more flexible way to move information. That's why the next thread moves to [Sequence Models](/dl-anatomy/architectures/sequence-models-en) and the Transformer.
+
+## References
+
+| Paper | Role |
+|---|---|
+| Xie et al. (2017) | Aggregated Residual Transformations (ResNeXt, cardinality) |
+| Huang et al. (2016) | Densely Connected Convolutional Networks (DenseNet) |
+| Howard et al. (2017) | MobileNets (depthwise separable convolution) |
+| Zhang et al. (2017) | ShuffleNet (channel shuffle) |
+| Sandler et al. (2018) | MobileNetV2 (inverted residuals, linear bottleneck) |
+| Tan & Le (2019) | EfficientNet (compound scaling) |
+| Liu et al. (2022) | A ConvNet for the 2020s (ConvNeXt) |

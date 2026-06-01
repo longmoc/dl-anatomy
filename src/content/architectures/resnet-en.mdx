@@ -1,19 +1,19 @@
 ---
-title: "ResNet & Modern CNN"
-description: "The degradation problem, residual learning, basic/bottleneck blocks, projection shortcuts, pre-activation, and the modern CNN family up to ConvNeXt."
+title: "ResNet & Residual Learning"
+description: "The degradation problem, residual learning, basic/bottleneck blocks, projection shortcuts, pre-activation, and residual as a universal design pattern."
 lang: en
 category: architectures
 order: 2
 parent: architecture-anatomy
 translation: resnet
-tags: [resnet, residual, bottleneck, densenet, convnext]
+tags: [resnet, residual, bottleneck, skip-connection, pre-activation]
 ---
 
 import Note from '../../components/Note.astro';
 import ResidualGradientViz from '../../components/ResidualGradientViz.astro';
 import ResidualBlockDiagram from '../../components/ResidualBlockDiagram.astro';
 
-# ResNet & Modern CNN
+# ResNet & Residual Learning
 
 The [Convolutional Networks](/dl-anatomy/architectures/cnn-en) article ended on a paradox: in terms of representation, a deeper network should **not** be worse than a shallower one — if the extra layers could learn the identity, the deep net could just mimic the shallow one. But in practice, when a CNN gets too deep, *training error rises too*. This is the **degradation problem**: the issue isn't overfitting, it's that deep nets become **hard to optimize**.
 
@@ -132,23 +132,11 @@ $$
 
 This "refine gradually rather than replace wholesale" mindset reappears everywhere: the residual path in **Transformers**, U-Net, neural ODEs, adapters in fine-tuning (a residual update on the *representation*), and LoRA at the weight level (a low-rank update on existing *weights*).
 
-## The modern CNN family
+## After ResNet: CNNs keep evolving
 
-After ResNet, residual connections became the default, and CNNs evolved along a few main directions:
+ResNet made *depth* trainable and turned residual + bottleneck into the default baseline. But "deeper" isn't the only path — CNNs then evolved along several design axes: **cardinality** (ResNeXt), **connectivity** (DenseNet), **efficiency** (MobileNet/ShuffleNet), **scaling** (EfficientNet), and **modernization** (ConvNeXt).
 
-**1. Block design and better connectivity**
-- **ResNeXt (2017)**: extends ResNet with grouped convolutions and the idea of **cardinality** (the number of parallel branches) — showing that increasing cardinality can be more effective than just adding depth or width.
-- **DenseNet (2016)**: connect each layer to *every* later layer → maximal feature reuse, fewer parameters for the same accuracy.
-
-**2. Efficient convolution**
-- **MobileNet (2017)**: depthwise-separable convolutions → big FLOP cuts for mobile devices.
-- **ShuffleNet**: channel shuffle to make group convolutions more efficient.
-
-**3. Scaling strategy**
-- **EfficientNet (2019)**: **compound scaling** — balance depth/width/resolution with a single coefficient instead of scaling one dimension.
-
-**4. Modernized ConvNet**
-- **ConvNeXt (2022)**: modernizes ResNet with many design choices from Vision Transformers — macro design, large-kernel depthwise convs, LayerNorm, GELU, inverted bottleneck — showing that a *pure ConvNet*, modernized properly, can still compete with Transformer backbones on many vision benchmarks.
+That's a separate story about allocating *compute* more cleverly — see [Modern CNNs: From ResNeXt to ConvNeXt](/dl-anatomy/architectures/modern-cnns-en).
 
 ## Residual beyond CNNs
 
@@ -170,8 +158,3 @@ ResNet made **depth practical**, and more importantly turned residual learning i
 |---|---|
 | He et al. (2015) | Deep Residual Learning for Image Recognition (ResNet v1) |
 | He et al. (2016) | Identity Mappings in Deep Residual Networks (pre-activation, v2) |
-| Xie et al. (2017) | Aggregated Residual Transformations (ResNeXt) |
-| Huang et al. (2016) | Densely Connected Convolutional Networks (DenseNet) |
-| Howard et al. (2017) | MobileNets: Efficient CNNs for Mobile Vision |
-| Tan & Le (2019) | EfficientNet: Rethinking Model Scaling |
-| Liu et al. (2022) | A ConvNet for the 2020s (ConvNeXt) |
