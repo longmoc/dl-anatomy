@@ -20,7 +20,7 @@ const L = lang === 'en'
     }
   : {
       standard: 'Convolution chuẩn',
-      stdDesc: 'một phép toán trộn cả không gian VÀ kênh',
+      stdDesc: '  (phép toán trộn cả không gian VÀ kênh)',
       dwsep: 'Depthwise separable',
       conv: 'conv k×k',
       convSub: 'không gian + kênh',
@@ -85,7 +85,7 @@ const L = lang === 'en'
     <line x1="164" y1="172" x2="190" y2="172" class="dws-line" marker-end="url(#dws-arrow)" />
 
     <!-- pointwise 1x1 -->
-    <rect x="194" y="150" width="84" height="44" rx="6" class="dws-box dws-pw" />
+    <rect x="194" y="150" width="90" height="44" rx="6" class="dws-box dws-pw" />
     <text x="236" y="170" class="dws-boxlbl">{L.pointwise}</text>
     <text x="236" y="185" class="dws-boxlbl-sm">{L.pwSub}</text>
     <line x1="282" y1="172" x2="308" y2="172" class="dws-line" marker-end="url(#dws-arrow)" />
@@ -110,7 +110,7 @@ const L = lang === 'en'
     background: var(--bg2);
     padding: 0.75rem 0 0.2rem;
   }
-  .dws-svg { display: block; width: 100%; max-width: 520px; height: auto; margin: 0 auto; }
+  .dws-svg { display: block; width: 100%; max-width: 600px; height: auto; margin: 0 auto; }
   .dws-title { fill: var(--text); font-family: var(--mono); font-size: 12.5px; font-weight: 600; }
   .dws-sub { fill: var(--muted); font-family: var(--mono); font-size: 10px; }
   .dws-box { stroke-width: 1.5; fill: var(--bg); }
