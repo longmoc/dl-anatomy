@@ -188,11 +188,11 @@ Vì vậy nhiều hướng thực tế dùng **hybrid architectures**: xen kẽ 
 
 Thay vì xem lịch sử là một đường thẳng duy nhất, nên nhìn sequence architecture như ba họ ý tưởng:
 
-```text
-Recurrence family:    RNN -> LSTM/GRU
-Attention family:     Seq2Seq attention -> Transformer
-State-space family:   S4 -> Mamba -> Mamba-2 / hybrid SSM
-```
+| Họ | Tiến hóa |
+|---|---|
+| Recurrence | RNN → LSTM/GRU |
+| Attention | Seq2Seq attention → Transformer |
+| State-space | S4 → Mamba → Mamba-2 / hybrid SSM |
 
 Ba họ này không thay thế nhau sạch sẽ. Chúng là ba cách đánh đổi giữa **bộ nhớ**, **song song hóa**, **khả năng truy xuất**, và **chi phí inference**.
 

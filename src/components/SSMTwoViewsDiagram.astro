@@ -8,7 +8,7 @@ const L = lang === 'en'
   ? {
       training: 'Training — convolution',
       inference: 'Inference — recurrent',
-      scan: 'long convolution / scan',
+      scan: 'convolution / scan',
       parallel: 'whole sequence, in parallel',
       rolling: 'one fixed state, rolled step by step',
       cap: 'The same SSM has two equivalent views: during training it runs as one long convolution over the whole sequence (parallel); at inference it runs as a recurrence, rolling a fixed-size state one token at a time.',
@@ -16,7 +16,7 @@ const L = lang === 'en'
   : {
       training: 'Training — convolution',
       inference: 'Inference — recurrent',
-      scan: 'convolution / scan toàn chuỗi',
+      scan: 'scan / convolution',
       parallel: 'cả chuỗi, song song',
       rolling: 'một state cố định, cuộn từng bước',
       cap: 'Cùng một SSM có hai cách nhìn tương đương: khi train nó chạy như một convolution dài trên cả chuỗi (song song); khi infer nó chạy như recurrence, cuộn một state cố định qua từng token.',
@@ -83,17 +83,17 @@ const L = lang === 'en'
 
 <style>
   .ssv { margin: 1.75rem 0; border: 1px solid var(--border); border-radius: 10px; background: var(--bg2); padding: 0.8rem 0 0.25rem; }
-  .ssv-svg { display: block; width: 100%; max-width: 600px; height: auto; margin: 0 auto; }
-  .ssv-title { fill: var(--text); font-family: var(--mono); font-size: 12.5px; font-weight: 600; text-anchor: middle; }
+  .ssv-svg { display: block; width: 100%; max-width: 640px; height: auto; margin: 0 auto; }
+  .ssv-title { fill: var(--text); font-family: var(--mono); font-size: 13px; font-weight: 600; text-anchor: middle; }
   .ssv-divider { stroke: var(--border); stroke-width: 1; stroke-dasharray: 4 4; }
   .ssv-tok { fill: var(--bg); stroke: var(--amber); stroke-width: 1.6; }
   .ssv-out { fill: var(--bg); stroke: var(--accent2); stroke-width: 1.6; }
   .ssv-state { fill: var(--bg); stroke: var(--accent); stroke-width: 1.7; }
   .ssv-bar { fill: var(--bg3); stroke: var(--accent); stroke-width: 1.5; }
-  .ssv-small { fill: var(--text); font-family: var(--mono); font-size: 10px; text-anchor: middle; }
-  .ssv-state-text { fill: var(--text); font-family: var(--mono); font-size: 11px; font-weight: 600; text-anchor: middle; }
-  .ssv-bar-text { fill: var(--muted); font-family: var(--mono); font-size: 10.5px; text-anchor: middle; }
-  .ssv-note { fill: var(--muted); font-family: var(--mono); font-size: 10px; text-anchor: middle; font-style: italic; }
+  .ssv-small { fill: var(--text); font-family: var(--mono); font-size: 10.5px; text-anchor: middle; }
+  .ssv-state-text { fill: var(--text); font-family: var(--mono); font-size: 11.5px; font-weight: 600; text-anchor: middle; }
+  .ssv-bar-text { fill: var(--muted); font-family: var(--mono); font-size: 11px; text-anchor: middle; }
+  .ssv-note { fill: var(--muted); font-family: var(--mono); font-size: 10.5px; text-anchor: middle; font-style: italic; }
   .ssv-line { stroke: var(--muted); stroke-width: 1.5; }
   .ssv-head { fill: var(--muted); }
   .ssv-cap { font-size: 0.78rem; color: var(--muted); text-align: center; padding: 0.5rem 1rem 0.65rem; font-style: italic; line-height: 1.5; }

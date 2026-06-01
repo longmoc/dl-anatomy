@@ -188,11 +188,11 @@ That is why many practical directions use **hybrid architectures**: interleaving
 
 Instead of treating history as one clean line of progress, it is better to see sequence architecture as three families:
 
-```text
-Recurrence family:    RNN -> LSTM/GRU
-Attention family:     Seq2Seq attention -> Transformer
-State-space family:   S4 -> Mamba -> Mamba-2 / hybrid SSM
-```
+| Family | Evolution |
+|---|---|
+| Recurrence | RNN → LSTM/GRU |
+| Attention | Seq2Seq attention → Transformer |
+| State-space | S4 → Mamba → Mamba-2 / hybrid SSM |
 
 These families do not replace one another cleanly. They are different trade-offs among **memory**, **parallelism**, **retrieval ability**, and **inference cost**.
 
