@@ -1,6 +1,6 @@
 ---
 title: "Architecture Anatomy"
-description: "Bản đồ các họ kiến trúc deep learning — từ CNN, RNN, Transformer đến GNN, qua lăng kính inductive bias."
+description: "Bản đồ các họ kiến trúc và model families trong deep learning — từ backbone, representation learning, generative models đến multimodal systems."
 lang: vi
 category: architectures
 order: 0
@@ -12,13 +12,24 @@ import Note from '../../components/Note.astro';
 
 # Architecture Anatomy
 
-**Architecture** là thiết kế cấu trúc của mạng — các layer nối với nhau như thế nào, thông tin chảy ra sao. Nó khác với *optimizer* (cách huấn luyện) và *activation* (hàm phi tuyến từng neuron). Câu hỏi cốt lõi của mọi kiến trúc:
+**Architecture** là thiết kế cấu trúc của mô hình — các layer nối với nhau như thế nào, thông tin chảy ra sao, và mô hình được tổ chức để giải loại bài toán nào. Nó khác với *optimizer* (cách huấn luyện) và *activation* (hàm phi tuyến từng neuron). Câu hỏi cốt lõi của mọi kiến trúc:
 
 > Thiết kế này mã hóa **inductive bias** gì — tức giả định nào về cấu trúc dữ liệu được "nướng" sẵn vào mô hình?
 
 CNN giả định *locality* (lân cận trong ảnh quan trọng). RNN giả định *thứ tự* (tín hiệu tuần tự). GNN giả định *quan hệ* (đồ thị). Transformer gần như *không giả định gì* về cấu trúc — chỉ học quan hệ từ data, đổi lại cần nhiều data và compute hơn.
 
+Series này đi theo hai tầng:
+
+1. **Backbone architectures** — cách thông tin di chuyển qua mô hình: convolution, recurrence, attention, message passing.
+2. **Model families** — cách các backbone được tổ chức thành hệ mô hình lớn hơn: học biểu diễn, sinh dữ liệu, hoặc nối nhiều modality.
+
+<Note type="intuition">
+Phase 1 trả lời câu hỏi "mô hình xử lý cấu trúc dữ liệu bằng cơ chế nào?". Phase 2 trả lời câu hỏi "ta dùng các cơ chế đó để học latent space, sinh dữ liệu, hay align nhiều loại tín hiệu như thế nào?".
+</Note>
+
 ## Series bài viết
+
+### Phase 1 — Backbone architectures
 
 | Bài | Nội dung |
 |---|---|
@@ -29,6 +40,18 @@ CNN giả định *locality* (lân cận trong ảnh quan trọng). RNN giả đ
 | [Transformer & Attention](/dl-anatomy/architectures/transformer) | Scaled dot-product, positional encoding, multi-head |
 | [Transformer Variants & MoE](/dl-anatomy/architectures/transformer-variants) | Encoder/decoder, ViT, efficient transformer, MoE |
 | [Graph Neural Networks](/dl-anatomy/architectures/graph-neural-networks) | Message passing, GCN, GAT, Graph Transformer |
+
+### Phase 2 — Model families
+
+| Bài | Nội dung |
+|---|---|
+| Representation Learning | Autoencoder, VAE, VQ-VAE, contrastive learning, masked modeling |
+| Generative Models | Autoregressive models, GAN, normalizing flow, diffusion, energy-based models |
+| Multimodal Models | CLIP-style alignment, vision-language models, text-to-image, audio-language, unified multimodal models |
+
+<Note type="paper">
+Phase 3 sẽ tách thành hub riêng: **Applied & System Architectures**. Ở đó trọng tâm không còn là thiết kế một model family, mà là cách ghép model vào task, pipeline training, inference, serving, compression và deployment.
+</Note>
 
 ## Một mạch nối: message passing
 
@@ -65,5 +88,5 @@ Một số "khối xây dựng" thường gặp trong kiến trúc đã được
 - **Normalization** (BatchNorm/LayerNorm/RMSNorm) → sẽ bàn riêng (là thành phần, không phải kiến trúc)
 
 <Note type="paper">
-Series này tập trung vào *thiết kế mô hình*. Các họ Representation Learning (autoencoder, VAE, contrastive), Generative Models (GAN, diffusion) và Multimodal (CLIP, VLM) sẽ là các đợt tiếp theo.
+Một số mô hình sẽ xuất hiện ở nhiều nơi với các góc nhìn khác nhau. VAE vừa là representation learning vừa là generative model; text-to-image vừa là generative vừa là multimodal. Trong series này, mỗi bài chọn một lens chính để tránh chia taxonomy quá cứng.
 </Note>

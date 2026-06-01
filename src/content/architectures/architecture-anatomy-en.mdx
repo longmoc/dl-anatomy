@@ -1,6 +1,6 @@
 ---
 title: "Architecture Anatomy"
-description: "A map of deep learning architecture families — from CNNs, RNNs, and Transformers to GNNs, through the lens of inductive bias."
+description: "A map of deep learning architectures and model families — from backbones and representation learning to generative and multimodal systems."
 lang: en
 category: architectures
 order: 0
@@ -12,13 +12,24 @@ import Note from '../../components/Note.astro';
 
 # Architecture Anatomy
 
-An **architecture** is the structural design of a network — how layers connect, how information flows. It's distinct from the *optimizer* (how you train) and the *activation* (the per-neuron nonlinearity). The central question of any architecture:
+An **architecture** is the structural design of a model — how layers connect, how information flows, and how the model is organized to solve a class of problems. It's distinct from the *optimizer* (how you train) and the *activation* (the per-neuron nonlinearity). The central question of any architecture:
 
 > What **inductive bias** does this design encode — which assumptions about data structure are baked into the model?
 
 CNNs assume *locality* (nearby pixels matter). RNNs assume *order* (sequential signals). GNNs assume *relations* (a graph). Transformers assume *almost nothing* about structure — they learn relations from data, at the cost of needing more data and compute.
 
+This series moves through two layers:
+
+1. **Backbone architectures** — how information moves through the model: convolution, recurrence, attention, message passing.
+2. **Model families** — how those backbones are organized into larger modeling patterns: representation learning, generative modeling, or multimodal alignment.
+
+<Note type="intuition">
+Phase 1 asks "what mechanism does the model use to process data structure?". Phase 2 asks "how do we use those mechanisms to learn latent spaces, generate data, or align multiple kinds of signals?".
+</Note>
+
 ## Articles in this series
+
+### Phase 1 — Backbone architectures
 
 | Article | Content |
 |---|---|
@@ -29,6 +40,18 @@ CNNs assume *locality* (nearby pixels matter). RNNs assume *order* (sequential s
 | [Transformer & Attention](/dl-anatomy/architectures/transformer-en) | Scaled dot-product, positional encoding, multi-head |
 | [Transformer Variants & MoE](/dl-anatomy/architectures/transformer-variants-en) | Encoder/decoder, ViT, efficient transformers, MoE |
 | [Graph Neural Networks](/dl-anatomy/architectures/graph-neural-networks-en) | Message passing, GCN, GAT, Graph Transformer |
+
+### Phase 2 — Model families
+
+| Article | Content |
+|---|---|
+| Representation Learning | Autoencoders, VAE, VQ-VAE, contrastive learning, masked modeling |
+| Generative Models | Autoregressive models, GANs, normalizing flows, diffusion, energy-based models |
+| Multimodal Models | CLIP-style alignment, vision-language models, text-to-image, audio-language, unified multimodal models |
+
+<Note type="paper">
+Phase 3 will split into a separate hub: **Applied & System Architectures**. Its focus is no longer the design of a single model family, but how models are assembled into tasks, training pipelines, inference systems, serving, compression, and deployment.
+</Note>
 
 ## One unifying thread: message passing
 
@@ -65,5 +88,5 @@ Some common building blocks are covered in other categories — they're *techniq
 - **Normalization** (BatchNorm/LayerNorm/RMSNorm) → covered separately (a component, not an architecture)
 
 <Note type="paper">
-This series focuses on *model design*. The Representation Learning (autoencoders, VAE, contrastive), Generative Models (GAN, diffusion), and Multimodal (CLIP, VLM) families are planned for later rounds.
+Some models will appear in multiple places under different lenses. A VAE is both representation learning and a generative model; text-to-image is both generative and multimodal. In this series, each article picks one primary lens instead of forcing the taxonomy to be too rigid.
 </Note>
