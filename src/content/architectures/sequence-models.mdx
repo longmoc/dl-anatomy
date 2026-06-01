@@ -1,21 +1,29 @@
 ---
 title: "Sequence Models: RNN → Seq2Seq"
-description: "RNN và bài toán vanishing gradient, LSTM/GRU với cơ chế gating, và Seq2Seq — nơi attention nảy mầm."
+description: "RNN như bộ nhớ nén theo thời gian, LSTM/GRU với gating, Seq2Seq encoder-decoder, và attention như cách phá bottleneck."
 lang: vi
 category: architectures
 order: 4
 parent: architecture-anatomy
 translation: sequence-models-en
-tags: [rnn, lstm, gru, seq2seq, sequence]
+tags: [rnn, lstm, gru, seq2seq, sequence, attention]
 ---
 
 import Note from '../../components/Note.astro';
+import RNNUnrolledDiagram from '../../components/RNNUnrolledDiagram.astro';
+import Seq2SeqAttentionDiagram from '../../components/Seq2SeqAttentionDiagram.astro';
 
 # Sequence Models: RNN → Seq2Seq
 
-Dữ liệu chuỗi (văn bản, âm thanh, time-series) có **thứ tự** — và inductive bias tự nhiên là xử lý tuần tự, mang theo một "trạng thái" tóm tắt quá khứ.
+Bài [Modern CNNs](/dl-anatomy/architectures/modern-cnns) kết thúc ở thế giới **lưới ảnh**: locality, weight sharing, hierarchy. Nhưng dữ liệu chuỗi — văn bản, âm thanh, time-series — có một cấu trúc khác: **thứ tự**.
 
-## RNN — recurrence và giới hạn của nó
+Trong ảnh, một pixel có lân cận không gian khá cố định. Trong chuỗi, phần tử hiện tại phụ thuộc vào những gì đã đến trước đó, đôi khi cách rất xa. Vì vậy inductive bias tự nhiên của sequence modeling là:
+
+> xử lý từng bước, giữ một **state** tóm tắt quá khứ, rồi dùng state đó để hiểu bước hiện tại.
+
+Mạch tiến hóa của bài này bắt đầu từ ý tưởng state: RNN nén quá khứ vào hidden state; LSTM/GRU làm state nhớ lâu hơn bằng gate; Seq2Seq dùng state để nối một chuỗi đầu vào với một chuỗi đầu ra; attention phá bottleneck bằng cách biến toàn bộ hidden states thành memory bank. Transformer sau đó giữ attention và bỏ recurrence. SSM/Mamba quay lại state, nhưng tổ chức nó để scale tuyến tính.
+
+## RNN — state như bộ nhớ nén
 
 Recurrent Neural Network duy trì hidden state $h_t$, cập nhật mỗi bước từ input $x_t$ và state cũ:
 
@@ -23,41 +31,123 @@ $$
 h_t = \tanh(W_h h_{t-1} + W_x x_t + b)
 $$
 
-Cùng một bộ trọng số dùng lại ở mọi bước (weight sharing theo thời gian). Vấn đề: lan gradient qua $T$ bước nghĩa là nhân $T$ lần với cùng ma trận → eigenvalue $< 1$ thì **vanishing**, $> 1$ thì **exploding**. RNN thuần gần như không học được phụ thuộc xa hơn vài chục bước.
+Cùng một bộ trọng số dùng lại ở mọi bước — **weight sharing theo thời gian**. Nếu unroll RNN ra, ta có một mạng rất sâu theo trục thời gian: cùng một cell được lặp lại từ $t=1$ đến $t=T$.
+
+<RNNUnrolledDiagram />
+
+Hidden state $h_t$ là một bản tóm tắt nén của quá khứ:
+
+$$
+h_t \approx \text{summary}(x_1, x_2, \dots, x_t)
+$$
+
+Điểm mạnh: RNN xử lý được chuỗi dài biến đổi, vì cùng một cell có thể chạy bao nhiêu bước cũng được. Điểm yếu: mọi thông tin quá khứ phải đi qua một vector có kích thước cố định. Khi chuỗi dài, state vừa phải nhớ thông tin cũ, vừa phải cập nhật thông tin mới — đây là một **information bottleneck** tự nhiên.
+
+## Temporal depth và vanishing gradient
+
+Vấn đề lớn hơn nằm ở backpropagation through time. Gradient từ bước cuối quay về bước đầu phải đi qua một chuỗi Jacobian:
+
+$$
+\frac{\partial L}{\partial h_t}
+=
+\frac{\partial L}{\partial h_T}
+\prod_{k=t+1}^{T}
+\frac{\partial h_k}{\partial h_{k-1}}
+$$
+
+Với RNN dùng $\tanh$, mỗi Jacobian chứa cả ma trận recurrent $W_h$ lẫn đạo hàm của activation:
+
+$$
+\frac{\partial h_k}{\partial h_{k-1}}
+=
+\operatorname{diag}(1 - h_k^2)\, W_h
+$$
+
+Nhân nhiều Jacobian liên tiếp làm gradient dễ **vanishing** nếu các trị riêng/singular value hiệu dụng nhỏ hơn 1, hoặc **exploding** nếu lớn hơn 1. Vì vậy RNN thuần thường khó học phụ thuộc dài hơn vài chục bước.
+
+<Note type="warning">
+Vấn đề không chỉ là "RNN quên" theo nghĩa tâm lý. Về toán học, chuỗi thời gian tạo ra một mạng rất sâu theo temporal dimension; gradient phải đi qua depth đó, nên gặp cùng loại khó khăn như mạng sâu trước ResNet.
+</Note>
 
 ## LSTM/GRU — gating để giữ ký ức
 
-**LSTM (Hochreiter & Schmidhuber, 1997)** thêm một **cell state** $c_t$ chảy gần như tuyến tính qua thời gian, điều khiển bởi các **gate** (cổng) học được:
+**LSTM (Hochreiter & Schmidhuber, 1997)** thêm một **cell state** $c_t$ chảy gần như tuyến tính qua thời gian. Thay vì ép mọi thứ vào hidden state, LSTM tách:
 
-- *Forget gate* — giữ lại bao nhiêu ký ức cũ
-- *Input gate* — ghi bao nhiêu thông tin mới
-- *Output gate* — lộ ra bao nhiêu cho bước sau
+- $c_t$ — memory dài hạn
+- $h_t$ — output/state lộ ra cho bước hiện tại
+
+Cell state được điều khiển bởi các **gate** học được. Gate thường là vector trong khoảng $[0,1]$, giống các van điều tiết:
+
+- *Forget gate* $f_t$ — giữ lại bao nhiêu ký ức cũ
+- *Input gate* $i_t$ — ghi bao nhiêu thông tin mới
+- *Output gate* $o_t$ — lộ ra bao nhiêu cho bước sau
+
+Phần cốt lõi của update:
 
 $$
 c_t = f_t \odot c_{t-1} + i_t \odot \tilde{c}_t
 $$
 
-Đường $c_t$ giống ý tưởng residual: cho gradient một lối đi ít suy giảm → giữ được phụ thuộc dài hơn nhiều. **GRU** là phiên bản gọn hơn (gộp gate, không tách cell state).
+Dạng này quan trọng vì có đường **cộng** qua thời gian. Nếu forget gate gần 1, cell state có thể giữ thông tin cũ qua nhiều bước mà không bị nhân liên tục bởi một ma trận tùy ý như RNN thuần.
 
 <Note type="intuition">
 Gate trong LSTM và residual connection trong ResNet chia sẻ cùng một insight: muốn gradient sống sót qua nhiều bước, hãy tạo một con đường mà thông tin đi qua gần như **cộng** thay vì **nhân** liên tục.
 </Note>
 
-## Seq2Seq — và mầm mống của attention
+**GRU** là phiên bản gọn hơn: gộp một số gate, không tách riêng cell state $c_t$. Nó thường ít tham số hơn LSTM, dễ train hơn RNN thuần, và đủ tốt trong nhiều bài toán sequence cổ điển.
 
-**Seq2Seq (Sutskever et al., 2014)** dùng một RNN *encoder* nén cả câu nguồn thành một vector cố định, rồi RNN *decoder* sinh câu đích từ vector đó. Điểm yếu chí mạng: **bottleneck** — nhồi cả câu dài vào một vector duy nhất làm mất thông tin.
+## Seq2Seq — encoder-decoder cho chuỗi sang chuỗi
 
-Giải pháp: cho decoder "nhìn lại" toàn bộ hidden state của encoder và tự chọn phần liên quan ở mỗi bước — đây chính là **attention** đầu tiên (Bahdanau, 2015), tiền đề trực tiếp dẫn tới Transformer (xem [Transformer & Attention](/dl-anatomy/architectures/transformer)).
+RNN/LSTM/GRU ban đầu thường dùng cho bài toán một chuỗi vào một nhãn, hoặc dự đoán từng bước. Nhưng nhiều task cần ánh xạ **một chuỗi sang một chuỗi khác**:
 
-## Vấn đề chung: tuần tự thì chậm
+- dịch máy: câu tiếng Anh → câu tiếng Việt
+- speech recognition: audio frames → text
+- summarization: văn bản dài → tóm tắt ngắn
 
-Mọi RNN đều phải tính **tuần tự** — bước $t$ cần $h_{t-1}$ — nên không song song hóa được trên độ dài chuỗi. Đây là giới hạn cốt lõi, và hai hướng giải quyết sinh ra hai họ kiến trúc kế tiếp:
+**Seq2Seq (Sutskever et al., 2014)** đưa ra khung encoder-decoder:
 
-- **Bỏ recurrence, song song hóa hoàn toàn** → [Transformer & Attention](/dl-anatomy/architectures/transformer) (trả giá $O(n^2)$ cho attention)
-- **Giữ recurrence nhưng làm nó tuyến tính** → [State Space Models](/dl-anatomy/architectures/state-space-models) (Mamba, $O(n)$)
+1. **Encoder** đọc toàn bộ chuỗi nguồn và tạo state cuối.
+2. **Decoder** dùng state đó để sinh chuỗi đích từng token một.
+
+Điểm mạnh của encoder-decoder là input và output có thể có độ dài khác nhau. Đây là bước nhảy lớn: model không chỉ classify một chuỗi, mà **dịch** một chuỗi thành chuỗi khác.
+
+Nhưng Seq2Seq cổ điển có điểm yếu chí mạng: **fixed-vector bottleneck**. Encoder phải nhồi toàn bộ câu nguồn vào một vector context duy nhất. Với câu dài, chi tiết ở đầu câu dễ bị mất trước khi decoder cần dùng đến.
+
+## Attention — phá bottleneck
+
+Giải pháp của Bahdanau et al. (2015) là cho decoder "nhìn lại" toàn bộ hidden state của encoder. Thay vì chỉ nhận một vector context cố định, mỗi bước decoder tạo một context riêng bằng weighted sum trên các encoder states:
+
+$$
+c_t = \sum_{i=1}^{n} \alpha_{t,i} h_i
+$$
+
+Trong đó $\alpha_{t,i}$ là trọng số attention: ở bước decoder $t$, model nên chú ý bao nhiêu đến vị trí nguồn $i$.
+
+<Seq2SeqAttentionDiagram />
+
+Đây là đổi góc nhìn rất quan trọng:
+
+- Encoder states trở thành một **memory bank**.
+- Decoder state đóng vai trò như một **query**.
+- Attention chọn phần memory liên quan ở mỗi bước sinh output.
 
 <Note type="result">
-Mạch tiến hóa phần này: RNN (tuần tự, vanishing) → LSTM/GRU (gating, giữ ký ức) → Seq2Seq (encoder-decoder, bottleneck → mầm attention). Bottleneck của Seq2Seq dẫn thẳng tới attention, và "tuần tự thì chậm" dẫn tới Transformer cùng SSM — hai bài tiếp theo.
+Attention ban đầu không thay thế RNN; nó được gắn vào encoder-decoder RNN để phá bottleneck. Transformer sau đó giữ lại ý tưởng attention-as-memory, nhưng bỏ recurrence và để mọi token attention trực tiếp tới nhau.
+</Note>
+
+## Vấn đề còn lại: tuần tự thì chậm
+
+LSTM/GRU giải quyết phần lớn vấn đề memory, attention giải quyết bottleneck của Seq2Seq. Nhưng RNN-family vẫn có một giới hạn hệ thống: **dependency theo thời gian**.
+
+Ở bước $t$, ta cần $h_{t-1}$. Vì vậy model không song song hóa được theo trục thời gian như CNN xử lý toàn bộ ảnh hay Transformer xử lý toàn bộ chuỗi. Training vẫn song song được theo batch và feature dimension, nhưng sequence length vẫn là trục khó.
+
+Đây là lý do sau RNN xuất hiện hai hướng lớn:
+
+- **Bỏ recurrence, song song hóa hoàn toàn** → [Transformer & Attention](/dl-anatomy/architectures/transformer), nơi mọi token có thể nhìn mọi token khác qua attention. Giá phải trả: attention chuẩn tốn $O(n^2)$ theo độ dài chuỗi.
+- **Giữ state nhưng tổ chức thành scan tuyến tính có cấu trúc** → [State Space Models](/dl-anatomy/architectures/state-space-models), nơi recurrence được thiết kế để train/infer hiệu quả hơn ở chuỗi dài.
+
+<Note type="result">
+Mạch tiến hóa phần này: RNN nén quá khứ vào state → LSTM/GRU dùng gate để giữ memory lâu hơn → Seq2Seq biến RNN thành mô hình chuỗi-sang-chuỗi → attention biến encoder states thành memory bank. Từ đây, Transformer giữ attention và bỏ recurrence; SSM quay lại state nhưng làm nó scale tuyến tính.
 </Note>
 
 ## Papers tham khảo

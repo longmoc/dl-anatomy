@@ -1,21 +1,29 @@
 ---
 title: "Sequence Models: RNN → Seq2Seq"
-description: "RNNs and the vanishing gradient problem, LSTM/GRU gating, and Seq2Seq — where attention was born."
+description: "RNNs as compressed memory over time, LSTM/GRU gating, Seq2Seq encoder-decoder, and attention as the way out of the bottleneck."
 lang: en
 category: architectures
 order: 4
 parent: architecture-anatomy
 translation: sequence-models
-tags: [rnn, lstm, gru, seq2seq, sequence]
+tags: [rnn, lstm, gru, seq2seq, sequence, attention]
 ---
 
 import Note from '../../components/Note.astro';
+import RNNUnrolledDiagram from '../../components/RNNUnrolledDiagram.astro';
+import Seq2SeqAttentionDiagram from '../../components/Seq2SeqAttentionDiagram.astro';
 
 # Sequence Models: RNN → Seq2Seq
 
-Sequential data (text, audio, time-series) has **order** — and the natural inductive bias is to process it step by step, carrying a "state" that summarizes the past.
+The [Modern CNNs](/dl-anatomy/architectures/modern-cnns-en) article ended in the world of **image grids**: locality, weight sharing, hierarchy. Sequential data — text, audio, time-series — has a different structure: **order**.
 
-## RNN — recurrence and its limit
+In an image, a pixel has a fairly stable spatial neighborhood. In a sequence, the current element depends on what came before, sometimes very far back. The natural inductive bias for sequence modeling is therefore:
+
+> process step by step, carry a **state** that summarizes the past, and use that state to interpret the present.
+
+The evolution in this article starts from the idea of state: RNNs compress the past into a hidden state; LSTM/GRU make that state remember longer with gates; Seq2Seq uses state to map one sequence into another; attention breaks the bottleneck by turning all hidden states into a memory bank. The Transformer then keeps attention and drops recurrence. SSM/Mamba returns to state, but organizes it to scale linearly.
+
+## RNN — state as compressed memory
 
 A Recurrent Neural Network maintains a hidden state $h_t$, updated each step from input $x_t$ and the previous state:
 
@@ -23,41 +31,123 @@ $$
 h_t = \tanh(W_h h_{t-1} + W_x x_t + b)
 $$
 
-The same weights are reused at every step (weight sharing across time). The problem: propagating the gradient through $T$ steps means multiplying by the same matrix $T$ times → eigenvalues $< 1$ cause **vanishing**, $> 1$ cause **exploding**. A vanilla RNN can barely learn dependencies beyond a few dozen steps.
+The same weights are reused at every step — **weight sharing across time**. If we unroll the RNN, we get a very deep network along the time axis: the same cell repeated from $t=1$ to $t=T$.
 
-## LSTM/GRU — gating to preserve memory
+<RNNUnrolledDiagram lang="en" />
 
-**LSTM (Hochreiter & Schmidhuber, 1997)** adds a **cell state** $c_t$ that flows almost linearly through time, controlled by learned **gates**:
+The hidden state $h_t$ is a compressed summary of the past:
 
-- *Forget gate* — how much old memory to keep
-- *Input gate* — how much new information to write
-- *Output gate* — how much to expose to the next step
+$$
+h_t \approx \text{summary}(x_1, x_2, \dots, x_t)
+$$
+
+The strength: an RNN handles variable-length sequences because the same cell can run for as many steps as needed. The weakness: all past information must pass through a fixed-size vector. As the sequence grows, the state must both preserve old information and absorb new information — a natural **information bottleneck**.
+
+## Temporal Depth and Vanishing Gradients
+
+The deeper problem appears in backpropagation through time. A gradient from the last step back to an early step must pass through a chain of Jacobians:
+
+$$
+\frac{\partial L}{\partial h_t}
+=
+\frac{\partial L}{\partial h_T}
+\prod_{k=t+1}^{T}
+\frac{\partial h_k}{\partial h_{k-1}}
+$$
+
+For a tanh RNN, each Jacobian contains both the recurrent matrix $W_h$ and the derivative of the activation:
+
+$$
+\frac{\partial h_k}{\partial h_{k-1}}
+=
+\operatorname{diag}(1 - h_k^2)\, W_h
+$$
+
+Multiplying many Jacobians makes gradients **vanish** if the effective singular values are below 1, or **explode** if they are above 1. This is why vanilla RNNs struggle with dependencies beyond a few dozen steps.
+
+<Note type="warning">
+The problem is not just that an RNN "forgets" in a psychological sense. Mathematically, time creates a very deep network along the temporal dimension; gradients must cross that depth, so RNNs face a difficulty similar to very deep networks before ResNet.
+</Note>
+
+## LSTM/GRU — Gating to Preserve Memory
+
+**LSTM (Hochreiter & Schmidhuber, 1997)** adds a **cell state** $c_t$ that flows almost linearly through time. Instead of forcing everything into the hidden state, LSTM separates:
+
+- $c_t$ — long-term memory
+- $h_t$ — the exposed output/state for the current step
+
+The cell state is controlled by learned **gates**. A gate is usually a vector in $[0,1]$, like a set of valves:
+
+- *Forget gate* $f_t$ — how much old memory to keep
+- *Input gate* $i_t$ — how much new information to write
+- *Output gate* $o_t$ — how much to expose to the next step
+
+The core update is:
 
 $$
 c_t = f_t \odot c_{t-1} + i_t \odot \tilde{c}_t
 $$
 
-The $c_t$ pathway echoes the residual idea: give the gradient a low-decay route → much longer dependencies survive. **GRU** is a leaner variant (merged gates, no separate cell state).
+This form matters because it gives memory an **additive** path through time. If the forget gate is near 1, the cell state can preserve old information across many steps without repeatedly multiplying by an arbitrary recurrent matrix.
 
 <Note type="intuition">
 LSTM gates and ResNet residual connections share the same insight: for a gradient to survive many steps, create a path where information mostly **adds** rather than repeatedly **multiplies**.
 </Note>
 
-## Seq2Seq — and the seed of attention
+**GRU** is a leaner variant: it merges some gates and does not keep a separate cell state $c_t$. It usually has fewer parameters than LSTM, trains much better than a vanilla RNN, and works well on many classical sequence tasks.
 
-**Seq2Seq (Sutskever et al., 2014)** uses an RNN *encoder* to compress the whole source sentence into a fixed vector, then an RNN *decoder* generates the target from it. The fatal weakness: the **bottleneck** — cramming a long sentence into a single vector loses information.
+## Seq2Seq — Encoder-Decoder for Sequence to Sequence
 
-The fix: let the decoder "look back" at all of the encoder's hidden states and pick the relevant parts at each step — this was the first **attention** (Bahdanau, 2015), the direct precursor to the Transformer (see [Transformer & Attention](/dl-anatomy/architectures/transformer-en)).
+Early RNN/LSTM/GRU models were often used for mapping one sequence to one label, or predicting step by step. But many tasks require mapping **one sequence to another sequence**:
 
-## The shared problem: sequential is slow
+- machine translation: English sentence → Vietnamese sentence
+- speech recognition: audio frames → text
+- summarization: long document → short summary
 
-Every RNN must compute **sequentially** — step $t$ needs $h_{t-1}$ — so it can't be parallelized over sequence length. This is the core limitation, and two ways to solve it spawned the next two architecture families:
+**Seq2Seq (Sutskever et al., 2014)** introduced the encoder-decoder framework:
 
-- **Drop recurrence, parallelize fully** → [Transformer & Attention](/dl-anatomy/architectures/transformer-en) (at the cost of $O(n^2)$ attention)
-- **Keep recurrence but make it linear** → [State Space Models](/dl-anatomy/architectures/state-space-models-en) (Mamba, $O(n)$)
+1. The **encoder** reads the whole source sequence and produces a final state.
+2. The **decoder** uses that state to generate the target sequence one token at a time.
+
+The strength of encoder-decoder is that input and output can have different lengths. This was a major step: the model no longer merely classifies a sequence, it **translates** one sequence into another.
+
+But classical Seq2Seq has a fatal weakness: the **fixed-vector bottleneck**. The encoder must squeeze the entire source sentence into one context vector. For long sentences, details near the beginning can disappear before the decoder needs them.
+
+## Attention — Breaking the Bottleneck
+
+The solution from Bahdanau et al. (2015) was to let the decoder "look back" at all encoder hidden states. Instead of receiving one fixed context vector, each decoder step builds its own context as a weighted sum over encoder states:
+
+$$
+c_t = \sum_{i=1}^{n} \alpha_{t,i} h_i
+$$
+
+Here $\alpha_{t,i}$ is the attention weight: at decoder step $t$, how much should the model attend to source position $i$?
+
+<Seq2SeqAttentionDiagram lang="en" />
+
+This is a crucial shift:
+
+- Encoder states become a **memory bank**.
+- The decoder state acts like a **query**.
+- Attention retrieves the relevant memory at each output step.
 
 <Note type="result">
-The evolution here: RNN (sequential, vanishing) → LSTM/GRU (gating, memory) → Seq2Seq (encoder-decoder, bottleneck → seed of attention). Seq2Seq's bottleneck leads straight to attention, and "sequential is slow" leads to both the Transformer and SSMs — the next two articles.
+Attention did not originally replace RNNs; it was attached to an RNN encoder-decoder to break the bottleneck. The Transformer later kept the idea of attention-as-memory, removed recurrence, and let every token attend directly to every other token.
+</Note>
+
+## The Remaining Problem: Sequential Is Slow
+
+LSTM/GRU solves much of the memory problem; attention solves the Seq2Seq bottleneck. But the RNN family still has a system-level limitation: **temporal dependency**.
+
+At step $t$, we need $h_{t-1}$. So the model cannot parallelize over the time axis the way a CNN processes a whole image or a Transformer processes a whole sequence. Training can still parallelize over batches and feature dimensions, but sequence length remains the hard axis.
+
+This is why two major directions emerged after RNNs:
+
+- **Drop recurrence and parallelize fully** → [Transformer & Attention](/dl-anatomy/architectures/transformer-en), where every token can attend to every other token. The cost: standard attention is $O(n^2)$ in sequence length.
+- **Keep state but organize it as a structured linear scan** → [State Space Models](/dl-anatomy/architectures/state-space-models-en), where recurrence is designed to train/infer efficiently on long sequences.
+
+<Note type="result">
+The evolution here: RNN compresses the past into state → LSTM/GRU use gates to preserve memory longer → Seq2Seq turns RNNs into sequence-to-sequence models → attention turns encoder states into a memory bank. From there, the Transformer keeps attention and drops recurrence; SSMs return to state but make it scale linearly.
 </Note>
 
 ## References
