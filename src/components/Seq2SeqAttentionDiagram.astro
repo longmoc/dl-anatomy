@@ -8,23 +8,27 @@ const L = lang === 'en'
   ? {
       bottleneck: 'Seq2Seq bottleneck',
       attention: 'With attention',
+      encStates: 'encoder states',
+      encMemory: 'encoder states = memory',
       context: 'single context vector',
-      memory: 'encoder states as memory',
       decoder: 'decoder',
+      out: 'y₁, y₂, …',
       cap: 'Classic Seq2Seq compresses the source into one fixed vector. Attention turns all encoder states into a memory bank, so each decoder step can retrieve the relevant source positions.',
     }
   : {
       bottleneck: 'Bottleneck Seq2Seq',
       attention: 'Có attention',
-      context: 'một vector context',
-      memory: 'encoder states như memory',
+      encStates: 'encoder states',
+      encMemory: 'encoder states = memory',
+      context: 'một vector context duy nhất',
       decoder: 'decoder',
+      out: 'y₁, y₂, …',
       cap: 'Seq2Seq cổ điển nén câu nguồn vào một vector cố định. Attention biến toàn bộ encoder states thành một memory bank, để mỗi bước decoder truy xuất phần nguồn liên quan.',
     };
 ---
 
 <figure class="s2s">
-  <svg viewBox="0 0 620 280" role="img" aria-label="Seq2Seq bottleneck versus attention" class="s2s-svg">
+  <svg viewBox="0 0 620 250" role="img" aria-label="Seq2Seq bottleneck versus attention" class="s2s-svg">
     <defs>
       <marker id="s2s-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
         <path d="M0,0 L10,5 L0,10 z" class="s2s-head" />
@@ -34,52 +38,57 @@ const L = lang === 'en'
       </marker>
     </defs>
 
-    <line x1="310" y1="18" x2="310" y2="250" class="s2s-divider" />
+    <line x1="310" y1="20" x2="310" y2="236" class="s2s-divider" />
 
-    <text x="155" y="28" class="s2s-title">{L.bottleneck}</text>
-    <text x="465" y="28" class="s2s-title">{L.attention}</text>
+    <!-- ===== Left: bottleneck (centered x=155) ===== -->
+    <text x="155" y="26" class="s2s-title">{L.bottleneck}</text>
+    <text x="155" y="50" class="s2s-label">{L.encStates}</text>
 
-    <!-- Bottleneck panel -->
-    {['h1', 'h2', 'h3', 'h4'].map((h, i) => {
-      const x = 50 + i * 48;
+    <!-- encoder states -->
+    {['1', '2', '3', '4'].map((h, i) => {
+      const x = 95 + i * 40;
       return (
         <g>
-          <circle cx={x} cy="92" r="15" class="s2s-enc" />
-          <text x={x} y="96" class="s2s-small">{h}</text>
+          <circle cx={x} cy="72" r="14" class="s2s-enc" />
+          <text x={x} y="76" class="s2s-small">h{h}</text>
+          <line x1={x} y1="86" x2="155" y2="101" class="s2s-line" marker-end="url(#s2s-arrow)" />
         </g>
       );
     })}
-    <line x1="210" y1="92" x2="248" y2="92" class="s2s-line" marker-end="url(#s2s-arrow)" />
-    <rect x="252" y="70" width="48" height="44" rx="8" class="s2s-context" />
-    <text x="276" y="88" class="s2s-small">c</text>
-    <text x="276" y="105" class="s2s-tiny">{L.context}</text>
-    <line x1="276" y1="116" x2="276" y2="154" class="s2s-line" marker-end="url(#s2s-arrow)" />
-    <rect x="232" y="158" width="88" height="42" rx="8" class="s2s-dec" />
-    <text x="276" y="183" class="s2s-cell">{L.decoder}</text>
 
-    <!-- Attention panel -->
-    {['h1', 'h2', 'h3', 'h4'].map((h, i) => {
-      const x = 360 + i * 48;
+    <!-- single context vector -->
+    <rect x="123" y="102" width="64" height="32" rx="7" class="s2s-context" />
+    <text x="155" y="122" class="s2s-small">c</text>
+    <text x="155" y="152" class="s2s-tiny">{L.context}</text>
+
+    <line x1="155" y1="134" x2="155" y2="166" class="s2s-line" marker-end="url(#s2s-arrow)" />
+    <rect x="109" y="168" width="92" height="40" rx="8" class="s2s-dec" />
+    <text x="155" y="192" class="s2s-cell">{L.decoder}</text>
+    <text x="155" y="230" class="s2s-label">{L.out}</text>
+
+    <!-- ===== Right: attention (centered x=465) ===== -->
+    <text x="465" y="26" class="s2s-title">{L.attention}</text>
+    <text x="465" y="50" class="s2s-label">{L.encMemory}</text>
+
+    {['1', '2', '3', '4'].map((h, i) => {
+      const x = 399 + i * 44;
       return (
         <g>
-          <circle cx={x} cy="92" r="15" class="s2s-enc2" />
-          <text x={x} y="96" class="s2s-small">{h}</text>
+          <circle cx={x} cy="72" r="14" class="s2s-enc2" />
+          <text x={x} y="76" class="s2s-small">h{h}</text>
         </g>
       );
     })}
-    <text x="432" y="126" class="s2s-memory">{L.memory}</text>
-    <rect x="458" y="158" width="88" height="42" rx="8" class="s2s-dec" />
-    <text x="502" y="183" class="s2s-cell">{L.decoder}</text>
-    <path d="M360,108 C370,150 430,150 470,160" class="s2s-attn-line" fill="none" marker-end="url(#s2s-attn)" />
-    <path d="M408,108 C415,140 450,150 482,160" class="s2s-attn-line strong" fill="none" marker-end="url(#s2s-attn)" />
-    <path d="M456,108 C462,138 482,148 496,160" class="s2s-attn-line" fill="none" marker-end="url(#s2s-attn)" />
-    <path d="M504,108 C500,138 502,148 512,160" class="s2s-attn-line faint" fill="none" marker-end="url(#s2s-attn)" />
 
-    <!-- Input/output labels -->
-    <text x="122" y="62" class="s2s-label">encoder states</text>
-    <text x="432" y="62" class="s2s-label">encoder states</text>
-    <text x="276" y="224" class="s2s-label">y1, y2, ...</text>
-    <text x="502" y="224" class="s2s-label">y1, y2, ...</text>
+    <!-- decoder + attention fan -->
+    <rect x="419" y="168" width="92" height="40" rx="8" class="s2s-dec" />
+    <text x="465" y="192" class="s2s-cell">{L.decoder}</text>
+    <text x="465" y="230" class="s2s-label">{L.out}</text>
+
+    <path d="M399,86 C405,130 435,150 451,166" class="s2s-attn-line" fill="none" marker-end="url(#s2s-attn)" />
+    <path d="M443,86 C448,128 458,148 461,166" class="s2s-attn-line strong" fill="none" marker-end="url(#s2s-attn)" />
+    <path d="M487,86 C485,128 478,148 473,166" class="s2s-attn-line" fill="none" marker-end="url(#s2s-attn)" />
+    <path d="M531,86 C525,128 500,150 483,166" class="s2s-attn-line faint" fill="none" marker-end="url(#s2s-attn)" />
   </svg>
   <figcaption class="s2s-cap">{L.cap}</figcaption>
 </figure>
@@ -99,20 +108,20 @@ const L = lang === 'en'
   .s2s-enc2 { fill: var(--bg); stroke: var(--accent2); stroke-width: 1.6; }
   .s2s-context { fill: var(--bg); stroke: var(--amber); stroke-width: 1.7; }
   .s2s-dec { fill: var(--bg); stroke: var(--accent); stroke-width: 1.7; }
-  .s2s-line { stroke: var(--muted); stroke-width: 1.5; }
-  .s2s-attn-line { stroke: var(--accent2); stroke-width: 1.4; opacity: 0.65; }
-  .s2s-attn-line.strong { stroke-width: 2.2; opacity: 1; }
-  .s2s-attn-line.faint { opacity: 0.35; }
+  .s2s-line { stroke: var(--muted); stroke-width: 1.4; }
+  .s2s-attn-line { stroke: var(--accent2); stroke-width: 1.4; opacity: 0.6; }
+  .s2s-attn-line.strong { stroke-width: 2.4; opacity: 1; }
+  .s2s-attn-line.faint { opacity: 0.32; }
   .s2s-head { fill: var(--muted); }
   .s2s-head2 { fill: var(--accent2); }
-  .s2s-small, .s2s-tiny, .s2s-cell, .s2s-label, .s2s-memory {
+  .s2s-small, .s2s-tiny, .s2s-cell, .s2s-label {
     font-family: var(--mono);
     text-anchor: middle;
   }
-  .s2s-small { fill: var(--text); font-size: 10.5px; }
-  .s2s-tiny { fill: var(--muted); font-size: 7.5px; }
-  .s2s-cell { fill: var(--text); font-size: 11px; font-weight: 600; }
-  .s2s-label, .s2s-memory { fill: var(--muted); font-size: 9.5px; }
+  .s2s-small { fill: var(--text); font-size: 11px; }
+  .s2s-tiny { fill: var(--muted); font-size: 9px; }
+  .s2s-cell { fill: var(--text); font-size: 11.5px; font-weight: 600; }
+  .s2s-label { fill: var(--muted); font-size: 9.5px; }
   .s2s-cap {
     font-size: 0.78rem;
     color: var(--muted);

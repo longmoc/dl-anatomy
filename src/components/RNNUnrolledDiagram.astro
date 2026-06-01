@@ -8,21 +8,21 @@ const L = lang === 'en'
   ? {
       title: 'RNN unrolled through time',
       input: 'input',
-      state: 'hidden state',
+      state: 'state',
       grad: 'gradient travels back through many steps',
       cap: 'A recurrent model reuses the same cell at every time step. The hidden state carries a compressed summary forward, while gradients must travel backward through the whole temporal chain.',
     }
   : {
       title: 'RNN trải theo thời gian',
       input: 'input',
-      state: 'hidden state',
+      state: 'state',
       grad: 'gradient đi ngược qua nhiều bước',
       cap: 'RNN dùng lại cùng một cell ở mọi bước thời gian. Hidden state mang bản tóm tắt nén đi về phía trước, còn gradient phải đi ngược qua cả chuỗi thời gian.',
     };
 ---
 
 <figure class="rnn-unroll">
-  <svg viewBox="0 0 560 230" role="img" aria-label="RNN unrolled through time" class="rnn-svg">
+  <svg viewBox="0 0 560 240" role="img" aria-label="RNN unrolled through time" class="rnn-svg">
     <defs>
       <marker id="rnn-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
         <path d="M0,0 L10,5 L0,10 z" class="rnn-head" />
@@ -32,36 +32,38 @@ const L = lang === 'en'
       </marker>
     </defs>
 
-    <text x="280" y="24" class="rnn-title">{L.title}</text>
+    <text x="294" y="22" class="rnn-title">{L.title}</text>
+
+    <!-- row labels (left margin, clear of first column) -->
+    <text x="12" y="60" class="rnn-label">{L.input}</text>
+    <text x="12" y="160" class="rnn-label">{L.state}</text>
 
     {['1', '2', '3', '4'].map((t, i) => {
-      const x = 82 + i * 120;
+      const x = 120 + i * 116;
       return (
         <g>
-          <rect x={x - 34} y="82" width="68" height="48" rx="8" class="rnn-cell" />
+          <circle cx={x} cy="56" r="14" class="rnn-input" />
+          <text x={x} y="60" class="rnn-small">x{t}</text>
+          <line x1={x} y1="70" x2={x} y2="80" class="rnn-line" marker-end="url(#rnn-arrow)" />
+
+          <rect x={x - 34} y="80" width="68" height="50" rx="8" class="rnn-cell" />
           <text x={x} y="110" class="rnn-cell-text">RNN</text>
-          <text x={x} y="158" class="rnn-t">t={t}</text>
 
-          <circle cx={x} cy="52" r="15" class="rnn-input" />
-          <text x={x} y="56" class="rnn-small">x{t}</text>
-          <line x1={x} y1="67" x2={x} y2="80" class="rnn-line" marker-end="url(#rnn-arrow)" />
-
-          <circle cx={x} cy="182" r="15" class="rnn-state" />
-          <text x={x} y="186" class="rnn-small">h{t}</text>
-          <line x1={x} y1="132" x2={x} y2="166" class="rnn-line" marker-end="url(#rnn-arrow)" />
+          <line x1={x} y1="130" x2={x} y2="142" class="rnn-line" marker-end="url(#rnn-arrow)" />
+          <circle cx={x} cy="156" r="14" class="rnn-state" />
+          <text x={x} y="160" class="rnn-small">h{t}</text>
         </g>
       );
     })}
 
-    <line x1="116" y1="106" x2="168" y2="106" class="rnn-line" marker-end="url(#rnn-arrow)" />
-    <line x1="236" y1="106" x2="288" y2="106" class="rnn-line" marker-end="url(#rnn-arrow)" />
-    <line x1="356" y1="106" x2="408" y2="106" class="rnn-line" marker-end="url(#rnn-arrow)" />
+    <!-- recurrent forward arrows between cells (hidden state passed forward) -->
+    <line x1="154" y1="105" x2="202" y2="105" class="rnn-line" marker-end="url(#rnn-arrow)" />
+    <line x1="270" y1="105" x2="318" y2="105" class="rnn-line" marker-end="url(#rnn-arrow)" />
+    <line x1="386" y1="105" x2="434" y2="105" class="rnn-line" marker-end="url(#rnn-arrow)" />
 
-    <path d="M442,144 C360,210 200,210 82,144" class="rnn-grad" fill="none" marker-end="url(#rnn-back)" />
-    <text x="280" y="214" class="rnn-grad-text">{L.grad}</text>
-
-    <text x="18" y="55" class="rnn-label">{L.input}</text>
-    <text x="18" y="185" class="rnn-label">{L.state}</text>
+    <!-- gradient back-path, clearly below the state row -->
+    <path d="M468,176 C360,224 228,224 120,176" class="rnn-grad" fill="none" marker-end="url(#rnn-back)" />
+    <text x="294" y="234" class="rnn-grad-text">{L.grad}</text>
   </svg>
   <figcaption class="rnn-cap">{L.cap}</figcaption>
 </figure>
@@ -74,7 +76,7 @@ const L = lang === 'en'
     background: var(--bg2);
     padding: 0.8rem 0 0.25rem;
   }
-  .rnn-svg { display: block; width: 100%; max-width: 620px; height: auto; margin: 0 auto; }
+  .rnn-svg { display: block; width: 100%; max-width: 640px; height: auto; margin: 0 auto; }
   .rnn-title { fill: var(--text); font-family: var(--mono); font-size: 13px; font-weight: 600; text-anchor: middle; }
   .rnn-cell { fill: var(--bg); stroke: var(--accent); stroke-width: 1.8; }
   .rnn-input { fill: var(--bg); stroke: var(--amber); stroke-width: 1.6; }
@@ -83,13 +85,12 @@ const L = lang === 'en'
   .rnn-grad { stroke: var(--danger); stroke-width: 1.5; stroke-dasharray: 5 5; opacity: 0.85; }
   .rnn-head { fill: var(--muted); }
   .rnn-head-back { fill: var(--danger); }
-  .rnn-cell-text, .rnn-small, .rnn-t, .rnn-label, .rnn-grad-text {
+  .rnn-cell-text, .rnn-small, .rnn-label, .rnn-grad-text {
     font-family: var(--mono);
     text-anchor: middle;
   }
   .rnn-cell-text { fill: var(--text); font-size: 12px; font-weight: 600; }
   .rnn-small { fill: var(--text); font-size: 10.5px; }
-  .rnn-t { fill: var(--muted); font-size: 9.5px; }
   .rnn-label { fill: var(--muted); font-size: 10px; text-anchor: start; }
   .rnn-grad-text { fill: var(--danger); font-size: 10px; }
   .rnn-cap {
