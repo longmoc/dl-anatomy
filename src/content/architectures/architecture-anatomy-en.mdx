@@ -80,13 +80,13 @@ The mainstream of modern architectures trends toward *fewer hand-designed assump
 | 2017 | Transformer | Self-attention, no recurrence, parallelizable |
 | 2020+ | ViT, MoE, SSM (Mamba) | Scaling parameters, beyond attention |
 
-## Building blocks that live elsewhere
+## Building blocks outside architecture
 
-Some common building blocks are covered in other categories — they're *techniques*, not *model designs*:
+Some components appear in almost every modern architecture, but they are not complete architectures by themselves. They answer smaller questions: how neurons become nonlinear, how activations are stabilized, or how learning is optimized.
 
-- **Activations** (ReLU, GELU, …) → see the [Activations](/dl-anatomy/activations) category
+- **Activation functions** (ReLU, GELU, sigmoid, …) → see the [Activations](/dl-anatomy/activations) category
+- **Normalization layers** (BatchNorm, LayerNorm, RMSNorm) → see [Normalization Layers](/dl-anatomy/architectures/normalization-layers-en)
 - **Optimizers & LR schedules** → see the [Optimizer Anatomy](/dl-anatomy/training/optimizers-en) series in Training
-- **Normalization** (BatchNorm/LayerNorm/RMSNorm) → covered separately (a component, not an architecture)
 
 <Note type="paper">
 Some models will appear in multiple places under different lenses. A VAE is both representation learning and a generative model; text-to-image is both generative and multimodal. In this series, each article picks one primary lens instead of forcing the taxonomy to be too rigid.
