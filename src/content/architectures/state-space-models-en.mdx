@@ -10,6 +10,7 @@ tags: [ssm, mamba, sequence, linear-attention]
 ---
 
 import Note from '../../components/Note.astro';
+import StateSpaceIntuitionDiagram from '../../components/StateSpaceIntuitionDiagram.astro';
 import SSMDualViewViz from '../../components/SSMDualViewViz.astro';
 import SelectiveScanViz from '../../components/SelectiveScanViz.astro';
 import AttnVsSSMMemoryDiagram from '../../components/AttnVsSSMMemoryDiagram.astro';
@@ -19,6 +20,16 @@ import AttnVsSSMMemoryDiagram from '../../components/AttnVsSSMMemoryDiagram.astr
 The [Sequence Models](/dl-anatomy/architectures/sequence-models-en) article ended at a fork: RNNs/LSTMs keep a **compressed state** but are hard to parallelize across time; Transformers remove recurrence and train in parallel, but standard attention costs $O(n^2)$ and the KV cache grows with context length.
 
 **State Space Models (SSMs)** take a third route: keep the state idea from RNNs, but give that state enough structure to model long sequences and compute efficiently. If an RNN is "free-form state" and a Transformer is "full memory bank," an SSM is "controlled state dynamics."
+
+## What is a state space?
+
+In control theory, a **state** is the current summary of a system, rich enough to predict how the system will evolve when new input arrives. A simple example: for a moving object, position alone is usually not enough; we also need velocity. The pair `[position, velocity]` is a small but informative state.
+
+The **state space** is the set of all possible states the system can occupy; each point in that space is one concrete state. If the state is position plus velocity, the state space is the plane of possible `(position, velocity)` pairs.
+
+In deep learning, the hidden state $h_t$ of an SSM plays a similar role: it does not keep every past token explicitly, but stores a compressed vector containing what the model believes is needed for the next step.
+
+<StateSpaceIntuitionDiagram lang="en" />
 
 ## From dynamical systems to sequence models
 
@@ -37,13 +48,23 @@ Where:
 - $B$ controls how input is written into the state
 - $C$ controls which part of the state is read out
 
+In the full control-theory form, the output can also include a direct input path:
+
+$$
+y(t) = C h(t) + D x(t)
+$$
+
+The term $D x(t)$ lets the input affect the output without passing through state. In this article we ignore $D$ to focus on the part that matters most for sequence modeling: **state dynamics**.
+
 Deep learning data usually arrives as discrete sequences: tokens, audio frames, time-series steps. So the continuous system is **discretized** into:
 
 $$
 h_t = \bar{A} h_{t-1} + \bar{B} x_t, \qquad y_t = C h_t
 $$
 
-The notation $\bar{A}, \bar{B}$ reminds us that these are the discretized versions of $A, B$. This looks very close to an RNN. The crucial difference is that the state update is **linear** in $h_{t-1}$ and $x_t$.
+The notation $\bar{A}, \bar{B}$ reminds us that these are the discretized versions of $A, B$. Discretization depends on the step size $\Delta$: how much continuous time one discrete step represents. Intuitively, a larger $\Delta$ makes state change more strongly between steps; a smaller $\Delta$ makes state evolve more smoothly.
+
+This looks very close to an RNN. The crucial difference is that the state update is **linear** in $h_{t-1}$ and $x_t$.
 
 <Note type="intuition">
 An RNN learns a free nonlinear update: "what should the new state be?" An SSM learns structured dynamics: "how should the state decay, preserve, and write information?" That linear structure is what makes parallel computation possible.
@@ -122,7 +143,7 @@ We do not need the full S4 algebra in this anatomy article. The key takeaway is:
 
 ## Mamba — selective state
 
-Classic SSMs have one major weakness: parameters like $\bar{A}, \bar{B}, C$ are usually fixed after training. That means the layer uses the same dynamics for every token. But in language, code, or audio, not every token matters in the same way.
+Classic SSMs are usually **linear time-invariant (LTI)**: after training, parameters like $\bar{A}, \bar{B}, C$ are fixed over time. That means the layer uses the same dynamics for every token. But in language, code, or audio, not every token matters in the same way.
 
 Attention handles this naturally: token content determines what it attends to. Mamba brings part of that **content dependence** into SSMs.
 
@@ -140,7 +161,7 @@ Intuition: Mamba is not just one fixed filter running across the sequence. Each 
 
 <SelectiveScanViz lang="en" />
 
-The trade-off is that once $B_t, C_t, \Delta_t$ depend on the input, there is no longer one fixed convolution kernel as in classic S4. Mamba therefore uses **selective scan**: a GPU-optimized parallel scan algorithm that keeps cost linear in sequence length while remaining efficient to train.
+The trade-off is that once $B_t, C_t, \Delta_t$ depend on the input, Mamba is no longer LTI and there is no longer one fixed convolution kernel as in classic S4. Mamba therefore uses **selective scan**: a GPU-optimized parallel scan algorithm that keeps cost linear in sequence length while remaining efficient to train.
 
 <Note type="result">
 Mamba matters not just because it "does not use attention." The key is that it turns linear recurrence into a modern block: content-dependent, GPU-friendly, compact at inference, and suited to long sequences.

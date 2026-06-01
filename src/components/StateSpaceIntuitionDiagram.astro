@@ -1,0 +1,87 @@
+---
+interface Props {
+  lang?: 'vi' | 'en';
+}
+const { lang = 'vi' } = Astro.props;
+
+const L = lang === 'en'
+  ? {
+      title: 'State as a compact summary of a system',
+      pos: 'position',
+      vel: 'velocity',
+      input: 'input',
+      now: 'state now',
+      next: 'state next',
+      cap: 'A state is not magic memory. In a physical system, position and velocity can summarize what we need to predict the next moment. In an SSM, the hidden state plays the same role: a compact, sufficient summary that evolves as new input arrives.',
+    }
+  : {
+      title: 'State là bản tóm tắt gọn của hệ',
+      pos: 'vị trí',
+      vel: 'vận tốc',
+      input: 'input',
+      now: 'state hiện tại',
+      next: 'state kế tiếp',
+      cap: 'State không phải bộ nhớ ma thuật. Trong một hệ vật lý, vị trí và vận tốc có thể đủ để dự đoán khoảnh khắc tiếp theo. Trong SSM, hidden state đóng vai trò tương tự: một bản tóm tắt gọn và đủ dùng, tiến hóa khi input mới đi vào.',
+    };
+---
+
+<figure class="ssi">
+  <svg viewBox="0 0 560 220" role="img" aria-label="State space intuition diagram" class="ssi-svg">
+    <defs>
+      <marker id="ssi-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" class="ssi-head" />
+      </marker>
+    </defs>
+
+    <text x="280" y="26" class="ssi-title">{L.title}</text>
+
+    <line x1="56" y1="86" x2="228" y2="86" class="ssi-axis" marker-end="url(#ssi-arrow)" />
+    <circle cx="118" cy="86" r="13" class="ssi-dot" />
+    <line x1="132" y1="86" x2="184" y2="86" class="ssi-vel" marker-end="url(#ssi-arrow)" />
+    <text x="118" y="122" class="ssi-label">{L.pos}</text>
+    <text x="164" y="72" class="ssi-label">{L.vel}</text>
+
+    <rect x="274" y="52" width="120" height="78" rx="10" class="ssi-state" />
+    <text x="334" y="77" class="ssi-state-title">{L.now}</text>
+    <text x="334" y="100" class="ssi-mono">hₜ = [pₜ, vₜ]</text>
+
+    <rect x="438" y="58" width="72" height="30" rx="7" class="ssi-input" />
+    <text x="474" y="78" class="ssi-label">{L.input} xₜ</text>
+    <line x1="438" y1="92" x2="396" y2="105" class="ssi-line" marker-end="url(#ssi-arrow)" />
+
+    <line x1="394" y1="91" x2="446" y2="130" class="ssi-line" marker-end="url(#ssi-arrow)" />
+    <rect x="446" y="118" width="88" height="48" rx="9" class="ssi-next" />
+    <text x="490" y="139" class="ssi-state-title">{L.next}</text>
+    <text x="490" y="157" class="ssi-mono">hₜ₊₁</text>
+
+    <text x="334" y="164" class="ssi-eq">hₜ₊₁ = A hₜ + B xₜ</text>
+  </svg>
+  <figcaption class="ssi-cap">{L.cap}</figcaption>
+</figure>
+
+<style>
+  .ssi {
+    margin: 1.75rem 0;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg2);
+    padding: 0.8rem 0 0.25rem;
+  }
+  .ssi-svg { display: block; width: 100%; max-width: 640px; height: auto; margin: 0 auto; }
+  .ssi-title { fill: var(--text); font-family: var(--mono); font-size: 13px; font-weight: 600; text-anchor: middle; }
+  .ssi-axis, .ssi-line { stroke: var(--muted); stroke-width: 1.5; }
+  .ssi-vel { stroke: var(--accent2); stroke-width: 2; }
+  .ssi-head { fill: var(--muted); }
+  .ssi-dot { fill: var(--amber); stroke: var(--bg); stroke-width: 2; }
+  .ssi-label { fill: var(--muted); font-family: var(--mono); font-size: 11px; text-anchor: middle; }
+  .ssi-state { fill: var(--bg); stroke: var(--accent); stroke-width: 1.7; }
+  .ssi-input { fill: var(--bg); stroke: var(--amber); stroke-width: 1.5; }
+  .ssi-next { fill: var(--bg); stroke: var(--accent2); stroke-width: 1.7; }
+  .ssi-state-title { fill: var(--text); font-family: var(--mono); font-size: 11.5px; font-weight: 600; text-anchor: middle; }
+  .ssi-mono { fill: var(--text); font-family: var(--mono); font-size: 12px; text-anchor: middle; }
+  .ssi-eq { fill: var(--accent); font-family: var(--mono); font-size: 12.5px; font-weight: 600; text-anchor: middle; }
+  .ssi-cap {
+    font-size: 0.78rem; color: var(--muted); text-align: center;
+    padding: 0.5rem 1rem 0.65rem; font-style: italic; line-height: 1.5;
+  }
+</style>
