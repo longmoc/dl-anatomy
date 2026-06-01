@@ -10,7 +10,6 @@ tags: [ssm, mamba, sequence, linear-attention]
 ---
 
 import Note from '../../components/Note.astro';
-import StateSpaceIntuitionDiagram from '../../components/StateSpaceIntuitionDiagram.astro';
 import SSMDualViewViz from '../../components/SSMDualViewViz.astro';
 import SelectiveScanViz from '../../components/SelectiveScanViz.astro';
 import AttnVsSSMMemoryDiagram from '../../components/AttnVsSSMMemoryDiagram.astro';
@@ -19,19 +18,39 @@ import AttnVsSSMMemoryDiagram from '../../components/AttnVsSSMMemoryDiagram.astr
 
 Bài [Sequence Models](/dl-anatomy/architectures/sequence-models) kết thúc ở một ngã rẽ: RNN/LSTM giữ được **state nén** nhưng khó song song hóa theo thời gian; Transformer bỏ recurrence để train song song, nhưng attention chuẩn tốn $O(n^2)$ và KV-cache tăng theo độ dài context.
 
-**State Space Models (SSM)** đi theo hướng thứ ba: giữ lại ý tưởng state của RNN, nhưng làm state đó đủ có cấu trúc để vừa mô hình hóa chuỗi dài, vừa tính toán hiệu quả. Nếu RNN là "state tự do", Transformer là "memory bank đầy đủ", thì SSM là "state động lực học có kiểm soát".
+**State Space Models (SSM)** đi theo hướng thứ ba: giữ lại ý tưởng state, nhưng tổ chức nó thành một hệ tuyến tính có cấu trúc. Mục tiêu không phải "quay lại RNN" theo nghĩa cũ, mà là có một block sequence modeling vừa có memory gọn khi inference, vừa train được hiệu quả trên chuỗi dài.
 
-## State space là gì?
+## Vấn đề: nhớ rõ hay nhớ gọn?
 
-Trong control theory, **state** là bản tóm tắt hiện tại của một hệ, đủ để dự đoán hệ sẽ tiến hóa thế nào khi có input mới. Ví dụ đơn giản: với một vật đang di chuyển, chỉ biết vị trí hiện tại thường chưa đủ; cần cả vận tốc. Cặp `[vị trí, vận tốc]` là một state nhỏ nhưng giàu thông tin.
+Transformer giữ quá khứ như một **memory bank**: mỗi token để lại key/value riêng trong KV-cache. Khi token hiện tại cần thông tin, nó có thể attention trực tiếp tới từng token cũ. Đây là một cơ chế truy xuất rất mạnh, nhưng bộ nhớ tăng theo độ dài context.
 
-**State space** là tập tất cả các trạng thái khả dĩ mà hệ có thể nằm trong; mỗi điểm trong không gian đó là một state cụ thể. Nếu state gồm vị trí và vận tốc, thì state space là mặt phẳng các cặp `(vị trí, vận tốc)` có thể xảy ra.
+RNN thì ngược lại: quá khứ được nén vào một state cố định. Inference rất gọn, nhưng training khó song song hóa vì bước $t$ phụ thuộc vào state của bước $t-1$.
 
-Trong deep learning, hidden state $h_t$ của SSM đóng vai trò tương tự: nó không giữ toàn bộ quá khứ từng token một, mà giữ một vector nén chứa những gì model cho là cần để xử lý bước tiếp theo.
+SSM thử giữ lợi thế của cả hai:
 
-<StateSpaceIntuitionDiagram />
+- state cố định như RNN khi inference
+- tính toán song song như convolution khi training
+- cấu trúc tuyến tính đủ chặt để kernel dài có thể được tính hiệu quả
 
-## Từ hệ động lực học đến sequence model
+<AttnVsSSMMemoryDiagram />
+
+<Note type="intuition">
+Nên hiểu "state" trong SSM như một **bộ nhớ nén có cấu trúc**, không phải một kho lưu từng token. Điểm mạnh của nó là chi phí gọn; điểm yếu là không thể truy xuất chính xác mọi chi tiết xa như attention.
+</Note>
+
+## Ba góc nhìn của SSM
+
+Một SSM hiện đại có ba cách nhìn:
+
+| Góc nhìn | Vai trò |
+|---|---|
+| Continuous view | mô hình hóa hệ động lực học theo thời gian liên tục |
+| Recurrent view | chạy từng bước với state cố định, hợp inference/streaming |
+| Convolution view | áp một kernel dài lên toàn chuỗi, hợp training song song |
+
+Đây là insight trung tâm: SSM không chỉ là "RNN tuyến tính". Nó là một layer có thể đổi cách tính tùy giai đoạn.
+
+## Continuous view — từ hệ động lực học
 
 SSM đến từ control theory. Ta bắt đầu với một hệ liên tục theo thời gian:
 
@@ -54,25 +73,39 @@ $$
 y(t) = C h(t) + D x(t)
 $$
 
-Hạng tử $D x(t)$ là đường input đi thẳng ra output, không qua state. Trong bài này ta bỏ qua $D$ để tập trung vào phần quan trọng nhất với sequence modeling: **state dynamics**.
+Hạng tử $D x(t)$ là đường input đi thẳng ra output, không qua state. Trong deep learning SSM, nó thường có thể xem như một skip connection dễ tính, nên bài này bỏ qua $D$ để tập trung vào phần quan trọng nhất: **state dynamics**.
 
-Dữ liệu deep learning thường là chuỗi rời rạc: token, frame âm thanh, timestep time-series. Vì vậy hệ liên tục được **discretize** thành:
+## Discretization — từ liên tục sang token
+
+Dữ liệu trong deep learning thường là chuỗi rời rạc: token, frame âm thanh, timestep time-series. Vì vậy hệ liên tục phải được **discretize** thành:
 
 $$
 h_t = \bar{A} h_{t-1} + \bar{B} x_t, \qquad y_t = C h_t
 $$
 
-Ký hiệu $\bar{A}, \bar{B}$ nhắc rằng đây là phiên bản sau rời rạc hóa của $A, B$. Quá trình discretization phụ thuộc vào bước thời gian $\Delta$: mỗi bước rời rạc tương ứng với một khoảng thời gian bao lâu trong hệ liên tục. Trực giác: $\Delta$ càng lớn, state thay đổi càng mạnh giữa hai bước; $\Delta$ càng nhỏ, state tiến hóa mượt hơn.
+Ký hiệu $\bar{A}, \bar{B}$ nhắc rằng đây là phiên bản sau rời rạc hóa của $A, B$. Quá trình này phụ thuộc vào bước thời gian $\Delta$: mỗi bước rời rạc tương ứng với một khoảng thời gian bao lâu trong hệ liên tục.
 
-Nhìn công thức này, SSM rất giống RNN. Điểm khác biệt then chốt: cập nhật state là **tuyến tính** theo $h_{t-1}$ và $x_t$.
+Trực giác: $\Delta$ càng lớn, state thay đổi càng mạnh giữa hai bước; $\Delta$ càng nhỏ, state tiến hóa mượt hơn. Đây là lý do $\Delta$ trở nên rất quan trọng trong Mamba: model có thể học tốc độ cập nhật khác nhau cho từng token.
 
 <Note type="intuition">
-RNN học một hàm cập nhật phi tuyến tự do: "state mới là gì?". SSM học một hệ động lực học có cấu trúc: "state nên suy giảm, giữ lại và ghi thêm thông tin theo quy luật nào?". Chính cấu trúc tuyến tính này mở ra cách tính song song.
+Nếu RNN học một hàm cập nhật phi tuyến tự do, SSM học một hệ động lực học có cấu trúc: state nên suy giảm, giữ lại và ghi thêm thông tin theo quy luật nào. Chính cấu trúc tuyến tính này mở ra cách tính song song.
 </Note>
 
-## Vì sao tuyến tính lại quan trọng
+## Recurrent view — inference như RNN
 
-Với recurrence tuyến tính, ta có thể unroll vài bước để thấy pattern:
+Nhìn công thức rời rạc, SSM rất giống RNN:
+
+$$
+h_t = \bar{A} h_{t-1} + \bar{B} x_t
+$$
+
+Ở inference, ta chỉ cần giữ state hiện tại $h_t$. Token mới đến, update state, đọc output, rồi bỏ token cũ đi. Bộ nhớ không tăng theo độ dài context như KV-cache.
+
+Điểm khác RNN cổ điển là update ở đây tuyến tính theo state và input. Phi tuyến thường nằm ở các projection/gating quanh block, không chen trực tiếp vào recurrence lõi.
+
+## Convolution view — training song song
+
+Với recurrence tuyến tính, ta có thể unroll vài bước:
 
 $$
 h_1 = \bar{B} x_1
@@ -98,12 +131,12 @@ $$
 y = x * \bar{K}, \qquad \bar{K} = (C\bar{B},\; C\bar{A}\bar{B},\; C\bar{A}^2\bar{B},\; \dots)
 $$
 
-Đây là điểm đẹp nhất của SSM: cùng một mô hình có hai cách nhìn.
+Đây là điểm đẹp nhất của SSM: cùng một mô hình có hai lịch trình tính.
 
-| Cách nhìn | Dùng khi | Ý nghĩa |
+| Cách tính | Dùng khi | Ý nghĩa |
 |---|---|---|
-| Convolution / kernel | Training | xử lý cả chuỗi song song, giống một convolution 1D rất dài |
-| Recurrence / state update | Inference | chạy từng token với state cố định, không cần giữ toàn bộ quá khứ |
+| Convolution / kernel | Training | xử lý cả chuỗi song song |
+| Recurrence / state update | Inference | chạy từng token với state cố định |
 
 Với S4 và các SSM có cấu trúc, kernel có thể được tính và áp dụng rất hiệu quả, thường gần tuyến tính theo độ dài chuỗi trong implementation hiện đại. Với Mamba, selective scan được thiết kế để chạy tuyến tính theo sequence length.
 
@@ -111,27 +144,23 @@ Với S4 và các SSM có cấu trúc, kernel có thể được tính và áp d
 
 ## SSM khác RNN và Transformer ở đâu?
 
-RNN, Transformer và SSM đều là cách trả lời câu hỏi: **token hiện tại nên dùng quá khứ như thế nào?**
+RNN, Transformer và SSM đều trả lời cùng một câu hỏi: **token hiện tại nên dùng quá khứ như thế nào?**
 
 | Kiến trúc | Bộ nhớ quá khứ | Chi phí theo độ dài | Điểm mạnh | Điểm yếu |
 |---|---|---|---|---|
-| RNN/LSTM | state cố định | $O(n)$ nhưng tuần tự | infer gọn, hợp chuỗi streaming | train khó song song, phụ thuộc dài khó |
+| RNN/LSTM | state cố định | $O(n)$ nhưng tuần tự | infer gọn, hợp streaming | train khó song song, phụ thuộc dài khó |
 | Transformer | KV-cache / attention đến mọi token | $O(n^2)$ cho attention chuẩn | truy xuất nội dung rất linh hoạt | bộ nhớ và compute tăng nhanh |
 | SSM/Mamba | state cố định có cấu trúc | tuyến tính hoặc gần tuyến tính theo chuỗi | chuỗi dài, streaming, inference gọn | state nén có thể mất chi tiết cần truy xuất chính xác |
-
-Attention giữ một memory bank rõ ràng: mỗi token quá khứ để lại key/value riêng. SSM không giữ mọi token; nó nén quá khứ vào state. Vì vậy SSM thường rất hấp dẫn cho audio, genomics, time-series, long-context và các workload cần streaming.
-
-<AttnVsSSMMemoryDiagram />
 
 <Note type="warning">
 State cố định không phải "miễn phí". Nó là một bottleneck có chủ đích. Nếu task cần truy xuất chính xác một chi tiết xa trong quá khứ, attention vẫn có lợi thế tự nhiên vì nó có thể nhìn trực tiếp từng token cũ.
 </Note>
 
-## S4 — làm state dài trở nên train được
+## S4 — chọn $A$ để nhớ dài
 
-Nếu chỉ viết công thức tuyến tính phía trên, câu hỏi lớn vẫn còn: làm sao chọn $A$ để state vừa ổn định, vừa nhớ được dependency dài?
+Nếu chỉ viết công thức tuyến tính, câu hỏi lớn vẫn còn: làm sao chọn $A$ để state vừa ổn định, vừa nhớ được dependency dài?
 
-**S4 (Structured State Space Sequence Model)** giải quyết bằng cách đặt cấu trúc đặc biệt lên ma trận state. Thay vì học một ma trận $A$ tùy ý, S4 dùng các tham số hóa có tính ổn định và tính toán hiệu quả, liên quan đến HiPPO — một cách nén lịch sử liên tục vào state sao cho giữ được thông tin dài hạn.
+Ma trận $A$ quyết định state suy giảm và giữ lịch sử như thế nào. Nếu $A$ được chọn kém, state có thể quên quá nhanh, hoặc bất ổn. **S4 (Structured State Space Sequence Model)** giải quyết bằng cách đặt cấu trúc đặc biệt lên ma trận state, liên quan đến HiPPO — một cách nén lịch sử liên tục vào state sao cho giữ được thông tin dài hạn.
 
 Điều quan trọng ở mức architecture:
 
@@ -141,19 +170,21 @@ Nếu chỉ viết công thức tuyến tính phía trên, câu hỏi lớn vẫ
 
 Ta không cần đi sâu vào đại số của S4 ở bài anatomy này. Chỉ cần nhớ: **S4 là bước chứng minh rằng state-space layer có thể trở thành một block sequence modeling nghiêm túc, không chỉ là ý tưởng từ control theory.**
 
-## Mamba — selective state
+## Mamba — từ LTI sang selective state
 
 SSM cổ điển thường là **linear time-invariant (LTI)**: sau khi học xong, các tham số như $\bar{A}, \bar{B}, C$ cố định theo thời gian. Điều đó nghĩa là layer dùng cùng một dynamics cho mọi token. Nhưng trong ngôn ngữ, code hay audio, không phải token nào cũng quan trọng như nhau.
 
-Attention xử lý chuyện này rất tự nhiên: nội dung của token quyết định nó attention đến đâu. Mamba đưa một phần tính **content-dependent** đó vào SSM.
+Đây là điểm yếu lớn của SSM cố định: nó nén quá khứ hiệu quả, nhưng khó quyết định theo nội dung rằng token nào nên được giữ, token nào nên bị bỏ qua.
 
-Trong Mamba, các tham số đọc/ghi state phụ thuộc vào input:
+### Selective parameters
+
+Mamba đưa tính **content-dependent** vào SSM. Các tham số đọc/ghi state phụ thuộc vào input:
 
 $$
 \Delta_t = \Delta(x_t), \qquad B_t = B(x_t), \qquad C_t = C(x_t)
 $$
 
-- $\Delta_t$ điều khiển bước rời rạc hóa: state nên thay đổi nhanh hay chậm ở token này
+- $\Delta_t$ điều khiển tốc độ cập nhật state ở token này
 - $B_t$ điều khiển token hiện tại được ghi vào state thế nào
 - $C_t$ điều khiển model đọc phần nào từ state để tạo output
 
@@ -161,10 +192,14 @@ Trực giác: Mamba không chỉ có một bộ lọc cố định chạy qua ch
 
 <SelectiveScanViz />
 
-Đổi lại, khi $B_t, C_t, \Delta_t$ phụ thuộc vào input, Mamba không còn là LTI và cũng không còn một convolution kernel cố định như S4 cổ điển. Mamba vì vậy dùng **selective scan**: một thuật toán scan song song được tối ưu cho GPU, giữ chi phí tuyến tính theo độ dài chuỗi nhưng vẫn train hiệu quả.
+### Selective scan
+
+Khi $B_t, C_t, \Delta_t$ phụ thuộc vào input, Mamba không còn là LTI và cũng không còn một convolution kernel cố định như S4 cổ điển. Cái giá là convolution view đơn giản bị phá vỡ.
+
+Mamba bù lại bằng **selective scan**: một thuật toán scan song song được tối ưu cho GPU. Nó giữ ý tưởng recurrence có state, nhưng triển khai theo kiểu hardware-aware: tránh ghi quá nhiều intermediate state ra memory chậm, dùng kernel fusion và recomputation để training vẫn hiệu quả.
 
 <Note type="result">
-Mamba quan trọng không chỉ vì "không dùng attention". Điểm chính là nó biến recurrence tuyến tính thành một block hiện đại: content-dependent, chạy tốt trên GPU, infer gọn, và hợp với chuỗi dài.
+Mamba quan trọng không chỉ vì "không dùng attention". Điểm chính là nó biến recurrence tuyến tính thành một block hiện đại: content-dependent, GPU-friendly, infer gọn, và hợp với chuỗi dài.
 </Note>
 
 ## Mamba block trong neural network
@@ -185,6 +220,18 @@ Trong model thực tế, Mamba không đứng một mình như một phương tr
 | Mamba block | selective scan | state cố định |
 
 Nếu Transformer hỏi "token này nên nhìn token nào?", Mamba hỏi "token này nên cập nhật state như thế nào?".
+
+## Giới hạn: có state không có nghĩa là state-tracking hoàn hảo
+
+Vì SSM có state, rất dễ nghĩ rằng nó sẽ giỏi mọi bài toán "theo dõi trạng thái" hơn Transformer. Nhưng đây là một điểm cần thận trọng.
+
+Paper *The Illusion of State in State-Space Models* chỉ ra rằng với một số bài toán state-tracking hình thức — ví dụ theo dõi permutation hoặc các cập nhật trạng thái rời rạc yêu cầu tính toán chính xác — các SSM tuyến tính và Mamba-style bounded-depth không tự động có expressive power giống RNN đơn giản. Nói cách khác, "có hidden state" không đồng nghĩa với "giải mọi bài toán stateful".
+
+Điều này không phủ nhận giá trị của SSM/Mamba. Nó chỉ nhắc ta đọc đúng trade-off:
+
+- SSM rất mạnh khi cần xử lý chuỗi dài với memory/inference gọn.
+- Attention vẫn mạnh khi cần truy xuất nội dung chính xác.
+- RNN vẫn có bias tự nhiên cho một số cập nhật trạng thái tuần tự cứng.
 
 ## Vị trí hiện tại của SSM
 
@@ -226,3 +273,4 @@ Bài tiếp theo quay lại nhánh attention: [Transformer & Attention](/dl-anat
 | Gu et al. (2021) | Efficiently Modeling Long Sequences with Structured State Spaces (S4) |
 | Gu & Dao (2023) | Mamba: Linear-Time Sequence Modeling with Selective State Spaces |
 | Dao & Gu (2024) | Transformers are SSMs: Generalized Models and Efficient Algorithms Through Structured State Space Duality |
+| Merrill et al. (2024) | The Illusion of State in State-Space Models |

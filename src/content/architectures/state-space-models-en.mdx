@@ -10,7 +10,6 @@ tags: [ssm, mamba, sequence, linear-attention]
 ---
 
 import Note from '../../components/Note.astro';
-import StateSpaceIntuitionDiagram from '../../components/StateSpaceIntuitionDiagram.astro';
 import SSMDualViewViz from '../../components/SSMDualViewViz.astro';
 import SelectiveScanViz from '../../components/SelectiveScanViz.astro';
 import AttnVsSSMMemoryDiagram from '../../components/AttnVsSSMMemoryDiagram.astro';
@@ -19,19 +18,39 @@ import AttnVsSSMMemoryDiagram from '../../components/AttnVsSSMMemoryDiagram.astr
 
 The [Sequence Models](/dl-anatomy/architectures/sequence-models-en) article ended at a fork: RNNs/LSTMs keep a **compressed state** but are hard to parallelize across time; Transformers remove recurrence and train in parallel, but standard attention costs $O(n^2)$ and the KV cache grows with context length.
 
-**State Space Models (SSMs)** take a third route: keep the state idea from RNNs, but give that state enough structure to model long sequences and compute efficiently. If an RNN is "free-form state" and a Transformer is "full memory bank," an SSM is "controlled state dynamics."
+**State Space Models (SSMs)** take a third route: keep the idea of state, but organize it as a structured linear system. The goal is not to "return to RNNs" in the old sense, but to build a sequence modeling block with compact inference memory and efficient training on long sequences.
 
-## What is a state space?
+## The problem: precise memory or compact memory?
 
-In control theory, a **state** is the current summary of a system, rich enough to predict how the system will evolve when new input arrives. A simple example: for a moving object, position alone is usually not enough; we also need velocity. The pair `[position, velocity]` is a small but informative state.
+A Transformer stores the past as a **memory bank**: every token leaves its own key/value entry in the KV cache. When the current token needs information, it can attend directly to old tokens. This is a powerful retrieval mechanism, but memory grows with context length.
 
-The **state space** is the set of all possible states the system can occupy; each point in that space is one concrete state. If the state is position plus velocity, the state space is the plane of possible `(position, velocity)` pairs.
+An RNN does the opposite: the past is compressed into a fixed state. Inference is compact, but training is hard to parallelize because step $t$ depends on the state from step $t-1$.
 
-In deep learning, the hidden state $h_t$ of an SSM plays a similar role: it does not keep every past token explicitly, but stores a compressed vector containing what the model believes is needed for the next step.
+SSMs try to keep the best of both:
 
-<StateSpaceIntuitionDiagram lang="en" />
+- fixed state like an RNN at inference time
+- parallel computation like convolution at training time
+- enough linear structure to compute long kernels efficiently
 
-## From dynamical systems to sequence models
+<AttnVsSSMMemoryDiagram lang="en" />
+
+<Note type="intuition">
+It is better to read "state" in an SSM as a **structured compressed memory**, not as a store of every token. Its strength is compact cost; its weakness is that it cannot retrieve every distant detail as explicitly as attention.
+</Note>
+
+## Three views of an SSM
+
+A modern SSM has three views:
+
+| View | Role |
+|---|---|
+| Continuous view | models a dynamical system in continuous time |
+| Recurrent view | runs one step at a time with fixed state, useful for inference/streaming |
+| Convolution view | applies a long kernel over the whole sequence, useful for parallel training |
+
+This is the central insight: an SSM is not just a "linear RNN." It is a layer whose computation schedule can change depending on the stage.
+
+## Continuous view — from dynamical systems
 
 SSMs come from control theory. We start with a continuous-time system:
 
@@ -54,25 +73,39 @@ $$
 y(t) = C h(t) + D x(t)
 $$
 
-The term $D x(t)$ lets the input affect the output without passing through state. In this article we ignore $D$ to focus on the part that matters most for sequence modeling: **state dynamics**.
+The term $D x(t)$ lets the input affect the output without passing through state. In deep learning SSMs, this is often treated like an easily computed skip connection, so this article ignores $D$ and focuses on the important part: **state dynamics**.
 
-Deep learning data usually arrives as discrete sequences: tokens, audio frames, time-series steps. So the continuous system is **discretized** into:
+## Discretization — from continuous time to tokens
+
+Deep learning data usually arrives as discrete sequences: tokens, audio frames, time-series steps. So the continuous system must be **discretized** into:
 
 $$
 h_t = \bar{A} h_{t-1} + \bar{B} x_t, \qquad y_t = C h_t
 $$
 
-The notation $\bar{A}, \bar{B}$ reminds us that these are the discretized versions of $A, B$. Discretization depends on the step size $\Delta$: how much continuous time one discrete step represents. Intuitively, a larger $\Delta$ makes state change more strongly between steps; a smaller $\Delta$ makes state evolve more smoothly.
+The notation $\bar{A}, \bar{B}$ reminds us that these are the discretized versions of $A, B$. Discretization depends on the step size $\Delta$: how much continuous time one discrete step represents.
 
-This looks very close to an RNN. The crucial difference is that the state update is **linear** in $h_{t-1}$ and $x_t$.
+Intuitively, a larger $\Delta$ makes state change more strongly between steps; a smaller $\Delta$ makes state evolve more smoothly. This is why $\Delta$ becomes important in Mamba: the model can learn different update speeds for different tokens.
 
 <Note type="intuition">
-An RNN learns a free nonlinear update: "what should the new state be?" An SSM learns structured dynamics: "how should the state decay, preserve, and write information?" That linear structure is what makes parallel computation possible.
+If an RNN learns a free nonlinear update, an SSM learns structured dynamics: how state should decay, preserve, and write information. That linear structure is what makes parallel computation possible.
 </Note>
 
-## Why linearity matters
+## Recurrent view — inference like an RNN
 
-With a linear recurrence, we can unroll a few steps and see the pattern:
+The discrete equation looks very close to an RNN:
+
+$$
+h_t = \bar{A} h_{t-1} + \bar{B} x_t
+$$
+
+At inference time, we only need to keep the current state $h_t$. A new token arrives, the state updates, the output is read, and the old token can be discarded. Memory does not grow with context length as it does with a KV cache.
+
+The difference from a classic RNN is that the core state update is linear in the state and input. Nonlinearities usually live in projections and gates around the block, not directly inside the core recurrence.
+
+## Convolution view — parallel training
+
+With a linear recurrence, we can unroll a few steps:
 
 $$
 h_1 = \bar{B} x_1
@@ -98,12 +131,12 @@ $$
 y = x * \bar{K}, \qquad \bar{K} = (C\bar{B},\; C\bar{A}\bar{B},\; C\bar{A}^2\bar{B},\; \dots)
 $$
 
-This is the most elegant part of SSMs: the same model has two views.
+This is the most elegant part of SSMs: the same model has two computation schedules.
 
-| View | Used when | Meaning |
+| Schedule | Used when | Meaning |
 |---|---|---|
-| Convolution / kernel | Training | process the whole sequence in parallel, like a very long 1D convolution |
-| Recurrence / state update | Inference | run token by token with a fixed state, without storing the full past |
+| Convolution / kernel | Training | process the whole sequence in parallel |
+| Recurrence / state update | Inference | run token by token with fixed state |
 
 With S4 and other structured SSMs, the kernel can be computed and applied very efficiently, often near-linear in sequence length in modern implementations. With Mamba, selective scan is designed to run linearly in sequence length.
 
@@ -111,7 +144,7 @@ With S4 and other structured SSMs, the kernel can be computed and applied very e
 
 ## How are SSMs different from RNNs and Transformers?
 
-RNNs, Transformers, and SSMs are all answers to the same question: **how should the current token use the past?**
+RNNs, Transformers, and SSMs all answer the same question: **how should the current token use the past?**
 
 | Architecture | Past memory | Cost with sequence length | Strength | Weakness |
 |---|---|---|---|---|
@@ -119,49 +152,51 @@ RNNs, Transformers, and SSMs are all answers to the same question: **how should 
 | Transformer | KV cache / attention to every token | $O(n^2)$ for standard attention | flexible content lookup | memory and compute grow quickly |
 | SSM/Mamba | structured fixed state | linear or near-linear in sequence length | long sequences, streaming, compact inference | compressed state may lose details that need exact lookup |
 
-Attention keeps an explicit memory bank: every past token leaves its own key/value. An SSM does not keep every token; it compresses the past into state. That makes SSMs attractive for audio, genomics, time-series, long-context workloads, and streaming.
-
-<AttnVsSSMMemoryDiagram lang="en" />
-
 <Note type="warning">
 A fixed state is not "free." It is an intentional bottleneck. If a task needs exact retrieval of a distant detail, attention still has a natural advantage because it can look directly at old tokens.
 </Note>
 
-## S4 — making long state trainable
+## S4 — choosing $A$ for long memory
 
-If we only write the linear formula above, the big question remains: how should we choose $A$ so the state is stable and still remembers long dependencies?
+If we only write the linear formula, the big question remains: how should we choose $A$ so the state is stable and still remembers long dependencies?
 
-**S4 (Structured State Space Sequence Model)** answers this by imposing special structure on the state matrix. Instead of learning an arbitrary $A$, S4 uses stable and efficient parameterizations related to HiPPO, a way to compress continuous history into state while preserving long-range information.
+Matrix $A$ controls how state decays and preserves history. If $A$ is chosen poorly, state may forget too quickly or become unstable. **S4 (Structured State Space Sequence Model)** answers this by imposing special structure on the state matrix, related to HiPPO, a way to compress continuous history into state while preserving long-range information.
 
 At the architecture level, the important points are:
 
 - S4 shows that an SSM is not just a simple linear RNN.
-- The state can be designed to preserve long history in a disciplined way.
+- State can be designed to preserve long history in a disciplined way.
 - With the right structure, SSMs can compete on very long sequences where standard attention is expensive.
 
 We do not need the full S4 algebra in this anatomy article. The key takeaway is: **S4 proved that a state-space layer could become a serious sequence modeling block, not just an idea borrowed from control theory.**
 
-## Mamba — selective state
+## Mamba — from LTI to selective state
 
 Classic SSMs are usually **linear time-invariant (LTI)**: after training, parameters like $\bar{A}, \bar{B}, C$ are fixed over time. That means the layer uses the same dynamics for every token. But in language, code, or audio, not every token matters in the same way.
 
-Attention handles this naturally: token content determines what it attends to. Mamba brings part of that **content dependence** into SSMs.
+This is the weakness of fixed SSMs: they compress the past efficiently, but struggle to decide by content which token should be retained and which should be ignored.
 
-In Mamba, the parameters that read from and write to state depend on the input:
+### Selective Parameters
+
+Mamba brings **content dependence** into SSMs. The parameters that read from and write to state depend on the input:
 
 $$
 \Delta_t = \Delta(x_t), \qquad B_t = B(x_t), \qquad C_t = C(x_t)
 $$
 
-- $\Delta_t$ controls the discretization step: how quickly the state should change at this token
+- $\Delta_t$ controls how quickly the state updates at this token
 - $B_t$ controls how the current token is written into state
-- $C_t$ controls which part of the state is read to produce output
+- $C_t$ controls which part of state is read to produce output
 
 Intuition: Mamba is not just one fixed filter running across the sequence. Each token helps decide **what to write, what to keep, and what to read**.
 
 <SelectiveScanViz lang="en" />
 
-The trade-off is that once $B_t, C_t, \Delta_t$ depend on the input, Mamba is no longer LTI and there is no longer one fixed convolution kernel as in classic S4. Mamba therefore uses **selective scan**: a GPU-optimized parallel scan algorithm that keeps cost linear in sequence length while remaining efficient to train.
+### Selective Scan
+
+Once $B_t, C_t, \Delta_t$ depend on the input, Mamba is no longer LTI and there is no longer one fixed convolution kernel as in classic S4. The simple convolution view breaks.
+
+Mamba compensates with **selective scan**: a GPU-optimized parallel scan algorithm. It keeps the idea of recurrence with state, but implements it in a hardware-aware way: avoiding excessive writes of intermediate states to slow memory, using kernel fusion and recomputation so training remains efficient.
 
 <Note type="result">
 Mamba matters not just because it "does not use attention." The key is that it turns linear recurrence into a modern block: content-dependent, GPU-friendly, compact at inference, and suited to long sequences.
@@ -185,6 +220,18 @@ This makes Mamba closer to how we think about Transformer blocks: not just one c
 | Mamba block | selective scan | fixed state |
 
 If a Transformer asks "which token should this token look at?", Mamba asks "how should this token update the state?"
+
+## Limitation: state does not mean perfect state tracking
+
+Because SSMs have state, it is tempting to assume they are automatically better than Transformers at every "stateful" task. That needs care.
+
+The paper *The Illusion of State in State-Space Models* shows that for some formal state-tracking tasks — such as tracking permutations or exact discrete state updates — linear and Mamba-style bounded-depth SSMs do not automatically have the same expressive power as simple RNNs. In other words, "having hidden state" is not the same as "solving every stateful problem."
+
+This does not undermine SSM/Mamba. It clarifies the trade-off:
+
+- SSMs are strong when long sequences need compact memory and inference.
+- Attention remains strong when exact content retrieval matters.
+- RNNs still have a natural bias for some hard sequential state updates.
 
 ## Where SSMs stand today
 
@@ -217,7 +264,7 @@ Instead of treating history as one clean line of progress, it is better to see s
 
 These families do not replace one another cleanly. They are different trade-offs among **memory**, **parallelism**, **retrieval ability**, and **inference cost**.
 
-The next article returns to the attention branch: [Transformer & Attention](/dl-anatomy/architectures/transformer-en), where past memory is not compressed into a fixed state but opened up into direct relations between every pair of tokens.
+The next article returns to the attention branch: [Transformer & Attention](/dl-anatomy/architectures/transformer-en), where past memory is not compressed into fixed state but opened up into direct relations between every pair of tokens.
 
 ## References
 
@@ -226,3 +273,4 @@ The next article returns to the attention branch: [Transformer & Attention](/dl-
 | Gu et al. (2021) | Efficiently Modeling Long Sequences with Structured State Spaces (S4) |
 | Gu & Dao (2023) | Mamba: Linear-Time Sequence Modeling with Selective State Spaces |
 | Dao & Gu (2024) | Transformers are SSMs: Generalized Models and Efficient Algorithms Through Structured State Space Duality |
+| Merrill et al. (2024) | The Illusion of State in State-Space Models |
