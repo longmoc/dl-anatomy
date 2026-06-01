@@ -1,0 +1,141 @@
+---
+interface Props {
+  lang?: 'vi' | 'en';
+}
+const { lang = 'vi' } = Astro.props;
+
+const ui = lang === 'en'
+  ? {
+      fixed: 'Fixed SSM (S4)',
+      selective: 'Selective (Mamba)',
+      writeLbl: 'write strength per token  (B·Δ)',
+      keeps: 'state keeps:',
+      uniform: 'state decays uniformly — every token treated the same',
+      caption: 'In a fixed SSM the gates are the same for every token (flat bars). In Mamba the gates Δ, B, C are produced by each token, so content-rich tokens write more and are kept, while filler tokens are largely skipped — content-dependent memory.',
+    }
+  : {
+      fixed: 'SSM cố định (S4)',
+      selective: 'Selective (Mamba)',
+      writeLbl: 'độ ghi vào state mỗi token  (B·Δ)',
+      keeps: 'state giữ lại:',
+      uniform: 'state suy giảm đều — mọi token như nhau',
+      caption: 'SSM cố định dùng gate giống nhau cho mọi token (các cột bằng nhau). Mamba để mỗi token tự sinh Δ, B, C, nên token giàu thông tin ghi mạnh và được giữ, còn token đệm gần như bị bỏ qua — bộ nhớ phụ thuộc nội dung.',
+    };
+---
+
+<div class="ssz" data-lang={lang}>
+  <canvas class="ssz-canvas"></canvas>
+  <div class="ssz-controls">
+    <button class="ssz-mode" data-mode="fixed">{ui.fixed}</button>
+    <button class="ssz-mode ssz-active" data-mode="sel">{ui.selective}</button>
+  </div>
+  <p class="ssz-caption">{ui.caption}</p>
+</div>
+
+<script>
+document.querySelectorAll('.ssz').forEach(root => {
+  const canvas = root.querySelector('.ssz-canvas') as HTMLCanvasElement;
+  const ctx    = canvas.getContext('2d')!;
+  const isEn   = (root as HTMLElement).dataset.lang === 'en';
+  const cv = (n: string) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+  const tokens = ['the', 'river', 'is', 'very', 'long'];
+  const content = [0.12, 0.92, 0.18, 0.5, 0.85];   // "info content" per token
+  let mode: 'fixed' | 'sel' = 'sel';
+
+  let W = 0, H = 0;
+  const PT = 22, PB = 40;
+
+  function draw() {
+    const rect = canvas.getBoundingClientRect();
+    W = rect.width; H = rect.height;
+    if (!W || !H) return;
+    const dpr = window.devicePixelRatio || 1;
+    if (canvas.width !== W * dpr) { canvas.width = W * dpr; canvas.height = H * dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const bg = cv('--bg'), muted = cv('--muted'), accent = cv('--accent'), accent2 = cv('--accent2'), text = cv('--text'), border = cv('--border'), amber = cv('--amber');
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+
+    const n = tokens.length;
+    const PL = 16, PR = 16;
+    const gw = W - PL - PR;
+    const colW = gw / n;
+    const cx = (i: number) => PL + (i + 0.5) * colW;
+
+    // header label
+    ctx.font = '10px var(--mono, monospace)'; ctx.fillStyle = muted; ctx.textAlign = 'left';
+    ctx.fillText(isEn ? 'write strength per token  (B·Δ)' : 'độ ghi vào state mỗi token  (B·Δ)', PL, PT - 8);
+
+    const tokY = PT + 6;          // token box top
+    const tokH = 26;
+    const barBase = H - PB;       // bars grow up to here
+    const barMax = barBase - (tokY + tokH + 10);
+
+    const keptIdx: number[] = [];
+
+    for (let i = 0; i < n; i++) {
+      // token box
+      const bx = cx(i) - colW / 2 + 6;
+      const bw = colW - 12;
+      ctx.fillStyle = bg; ctx.strokeStyle = border; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.roundRect(bx, tokY, bw, tokH, 6); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = text; ctx.font = '11px var(--mono, monospace)'; ctx.textAlign = 'center';
+      ctx.fillText(tokens[i], cx(i), tokY + 17);
+
+      // write strength
+      const strength = mode === 'sel' ? content[i] : 0.5;
+      const h = strength * barMax;
+      ctx.fillStyle = mode === 'sel' ? accent2 : accent;
+      ctx.globalAlpha = mode === 'sel' ? (0.35 + 0.6 * strength) : 0.6;
+      ctx.fillRect(cx(i) - 9, barBase - h, 18, h);
+      ctx.globalAlpha = 1;
+
+      if (mode === 'sel' && content[i] >= 0.6) keptIdx.push(i);
+    }
+
+    // baseline
+    ctx.strokeStyle = border; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(PL, barBase); ctx.lineTo(W - PR, barBase); ctx.stroke();
+
+    // readout
+    ctx.font = '10.5px var(--mono, monospace)'; ctx.textAlign = 'center';
+    if (mode === 'sel') {
+      const kept = keptIdx.map(i => tokens[i]).join(', ');
+      ctx.fillStyle = accent2;
+      ctx.fillText(`${isEn ? 'state keeps:' : 'state giữ lại:'}  ${kept}`, W / 2, barBase + 26);
+    } else {
+      ctx.fillStyle = muted;
+      ctx.fillText(isEn ? 'state decays uniformly — every token treated the same'
+                        : 'state suy giảm đều — mọi token như nhau', W / 2, barBase + 26);
+    }
+  }
+
+  root.querySelectorAll('.ssz-mode').forEach(btn => {
+    btn.addEventListener('click', () => {
+      root.querySelectorAll('.ssz-mode').forEach(b => b.classList.remove('ssz-active'));
+      btn.classList.add('ssz-active');
+      mode = (btn as HTMLElement).dataset.mode as 'fixed' | 'sel';
+      draw();
+    });
+  });
+
+  const ro = new ResizeObserver(draw);
+  ro.observe(canvas);
+  draw();
+});
+</script>
+
+<style>
+  .ssz { margin: 1.75rem 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--bg2); }
+  .ssz-canvas { width: 100%; height: 200px; display: block; background: var(--bg); }
+  .ssz-controls { display: flex; align-items: center; gap: 0.5rem; padding: 0.55rem 0.9rem; border-top: 1px solid var(--border); }
+  .ssz-mode {
+    font-family: var(--mono); font-size: 0.75rem; padding: 0.2em 0.7em;
+    border: 1px solid var(--border); border-radius: 4px; background: var(--bg);
+    color: var(--muted); cursor: pointer; transition: color 0.12s, border-color 0.12s, background 0.12s;
+  }
+  .ssz-mode:hover { color: var(--text); border-color: var(--text); }
+  .ssz-mode.ssz-active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .ssz-caption { font-size: 0.78rem; color: var(--muted); text-align: center; padding: 0.1rem 1rem 0.65rem; font-style: italic; line-height: 1.5; }
+</style>

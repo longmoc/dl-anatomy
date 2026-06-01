@@ -10,8 +10,8 @@ tags: [ssm, mamba, sequence, linear-attention]
 ---
 
 import Note from '../../components/Note.astro';
-import SSMTwoViewsDiagram from '../../components/SSMTwoViewsDiagram.astro';
-import SelectiveScanDiagram from '../../components/SelectiveScanDiagram.astro';
+import SSMDualViewViz from '../../components/SSMDualViewViz.astro';
+import SelectiveScanViz from '../../components/SelectiveScanViz.astro';
 import AttnVsSSMMemoryDiagram from '../../components/AttnVsSSMMemoryDiagram.astro';
 
 # State Space Models (Mamba)
@@ -86,7 +86,7 @@ $$
 
 Với S4 và các SSM có cấu trúc, kernel có thể được tính và áp dụng rất hiệu quả, thường gần tuyến tính theo độ dài chuỗi trong implementation hiện đại. Với Mamba, selective scan được thiết kế để chạy tuyến tính theo sequence length.
 
-<SSMTwoViewsDiagram />
+<SSMDualViewViz />
 
 ## SSM khác RNN và Transformer ở đâu?
 
@@ -138,7 +138,7 @@ $$
 
 Trực giác: Mamba không chỉ có một bộ lọc cố định chạy qua chuỗi. Nó để mỗi token quyết định **ghi gì, giữ gì, đọc gì**.
 
-<SelectiveScanDiagram />
+<SelectiveScanViz />
 
 Đổi lại, khi $B_t, C_t, \Delta_t$ phụ thuộc vào input, ta không còn một convolution kernel cố định như S4 cổ điển. Mamba vì vậy dùng **selective scan**: một thuật toán scan song song được tối ưu cho GPU, giữ chi phí tuyến tính theo độ dài chuỗi nhưng vẫn train hiệu quả.
 

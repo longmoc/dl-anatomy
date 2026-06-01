@@ -1,0 +1,205 @@
+---
+interface Props {
+  lang?: 'vi' | 'en';
+}
+const { lang = 'vi' } = Astro.props;
+
+const ui = lang === 'en'
+  ? {
+      rec: '▶ Recurrence (infer)',
+      conv: 'Convolution (train)',
+      decay: 'decay  a',
+      input: 'input  xₜ',
+      output: 'output  yₜ',
+      same: 'same output, two schedules',
+      caption: 'The same SSM, two equivalent views. Recurrence rolls a fixed state one step at a time (yₜ = a·yₜ₋₁ + xₜ) — used at inference. Convolution applies the kernel K = (1, a, a², …) over the whole sequence at once — used at training. The bottom output is identical either way; only the schedule differs.',
+    }
+  : {
+      rec: '▶ Recurrence (infer)',
+      conv: 'Convolution (train)',
+      decay: 'decay  a',
+      input: 'input  xₜ',
+      output: 'output  yₜ',
+      same: 'cùng output, hai lịch trình',
+      caption: 'Cùng một SSM, hai cách nhìn tương đương. Recurrence cuộn một state cố định từng bước (yₜ = a·yₜ₋₁ + xₜ) — dùng khi infer. Convolution áp kernel K = (1, a, a², …) lên cả chuỗi cùng lúc — dùng khi train. Output ở dưới y hệt nhau ở cả hai cách; chỉ khác lịch trình tính.',
+    };
+---
+
+<div class="sdv" data-lang={lang}>
+  <canvas class="sdv-canvas"></canvas>
+  <div class="sdv-controls">
+    <button class="sdv-mode sdv-active" data-mode="rec">{ui.rec}</button>
+    <button class="sdv-mode" data-mode="conv">{ui.conv}</button>
+    <span class="sdv-lbl">{ui.decay}</span>
+    <input type="range" class="sdv-decay" min="50" max="92" value="78" />
+    <span class="sdv-decayval">0.78</span>
+  </div>
+  <p class="sdv-caption">{ui.caption}</p>
+</div>
+
+<script>
+document.querySelectorAll('.sdv').forEach(root => {
+  const canvas = root.querySelector('.sdv-canvas') as HTMLCanvasElement;
+  const ctx    = canvas.getContext('2d')!;
+  const isEn   = (root as HTMLElement).dataset.lang === 'en';
+  const decaySlider = root.querySelector('.sdv-decay') as HTMLInputElement;
+  const decayVal = root.querySelector('.sdv-decayval') as HTMLElement;
+  const cv = (n: string) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+  const N = 12;
+  const x: number[] = Array(N).fill(0);
+  x[2] = 1; x[7] = 1;   // two impulses → decaying tails
+
+  let mode: 'rec' | 'conv' = 'rec';
+  let a = 0.78;
+  let cursor = 0;        // recurrence animation position (0..N)
+  let lastT = 0;
+
+  function outputs(): number[] {
+    // recurrence h_t = a h_{t-1} + x_t ; y_t = h_t  (== conv with kernel a^k)
+    const y: number[] = []; let h = 0;
+    for (let t = 0; t < N; t++) { h = a * h + x[t]; y.push(h); }
+    return y;
+  }
+
+  let W = 0, H = 0;
+  const PL = 16, PR = 16, PT = 26, PB = 16;
+
+  function draw() {
+    const rect = canvas.getBoundingClientRect();
+    W = rect.width; H = rect.height;
+    if (!W || !H) return;
+    const dpr = window.devicePixelRatio || 1;
+    if (canvas.width !== W * dpr) { canvas.width = W * dpr; canvas.height = H * dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const bg = cv('--bg'), muted = cv('--muted'), amber = cv('--amber'), accent = cv('--accent'), accent2 = cv('--accent2'), text = cv('--text'), border = cv('--border');
+
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+
+    const gw = W - PL - PR;
+    const colW = gw / N;
+    const cx = (t: number) => PL + (t + 0.5) * colW;
+
+    // three bands: input (top), middle (state/kernel), output (bottom)
+    const inputY = PT + 6;        // baseline for input bars (grow up from here)
+    const midY = PT + 70;         // middle reference
+    const outBase = H - PB - 4;   // output baseline
+    const barMaxIn = 30;
+    const barMaxOut = 56;
+
+    const y = outputs();
+    const ymax = Math.max(...y, 1e-6);
+
+    // labels
+    ctx.font = '10px var(--mono, monospace)';
+    ctx.fillStyle = muted; ctx.textAlign = 'left';
+    ctx.fillText(isEn ? 'input  xₜ' : 'input  xₜ', PL, PT - 12);
+    ctx.textAlign = 'left';
+    ctx.fillText(isEn ? 'output  yₜ' : 'output  yₜ', PL, outBase + 14 > H - 2 ? H - 4 : outBase + 14);
+
+    // input impulses (amber, from inputY downward small)
+    for (let t = 0; t < N; t++) {
+      if (x[t] > 0) {
+        ctx.fillStyle = amber;
+        ctx.fillRect(cx(t) - 3, inputY, 6, barMaxIn);
+        ctx.beginPath(); ctx.arc(cx(t), inputY, 3.5, 0, 2*Math.PI); ctx.fill();
+      } else {
+        ctx.fillStyle = border;
+        ctx.fillRect(cx(t) - 1, inputY, 2, 6);
+      }
+    }
+
+    // middle: mode-specific
+    if (mode === 'conv') {
+      // show kernel K = a^k as a decaying mini-bar set near middle, and "parallel" highlight
+      ctx.fillStyle = muted; ctx.font = '10px var(--mono, monospace)'; ctx.textAlign = 'left';
+      ctx.fillText('K = (1, a, a², …)', PL, midY - 14);
+      const kx = PL, kBase = midY + 24, kColW = 13;
+      for (let k = 0; k < 10; k++) {
+        const v = Math.pow(a, k);
+        ctx.fillStyle = accent;
+        ctx.globalAlpha = 0.85;
+        ctx.fillRect(kx + k * kColW, kBase - v * 30, kColW - 3, v * 30);
+      }
+      ctx.globalAlpha = 1;
+      // all columns lit (parallel)
+      ctx.fillStyle = accent2; ctx.globalAlpha = 0.10;
+      ctx.fillRect(PL, outBase - barMaxOut - 4, gw, barMaxOut + 8);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = accent; ctx.textAlign = 'right'; ctx.font = '10px var(--mono, monospace)';
+      ctx.fillText(isEn ? 'all yₜ at once (parallel)' : 'mọi yₜ cùng lúc (song song)', W - PR, midY - 14);
+    } else {
+      // recurrence: rolling state cursor
+      const cpos = Math.min(Math.floor(cursor), N - 1);
+      // state value bar at cursor
+      ctx.fillStyle = muted; ctx.font = '10px var(--mono, monospace)'; ctx.textAlign = 'left';
+      ctx.fillText(isEn ? 'state h rolls →' : 'state h cuộn →', PL, midY - 14);
+      // moving state box
+      const sx = cx(cpos);
+      ctx.strokeStyle = accent; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.roundRect(sx - 16, midY - 2, 32, 28, 6); ctx.stroke();
+      ctx.fillStyle = accent; ctx.textAlign = 'center'; ctx.font = '11px var(--mono, monospace)';
+      ctx.fillText('h', sx, midY + 16);
+      // cursor vertical guide
+      ctx.strokeStyle = muted; ctx.setLineDash([3,4]); ctx.globalAlpha = 0.4;
+      ctx.beginPath(); ctx.moveTo(sx, PT); ctx.lineTo(sx, outBase); ctx.stroke();
+      ctx.setLineDash([]); ctx.globalAlpha = 1;
+    }
+
+    // output bars (bottom) — identical in both modes; in rec mode fill up to cursor
+    for (let t = 0; t < N; t++) {
+      const h = (y[t] / ymax) * barMaxOut;
+      const lit = mode === 'conv' || t <= Math.floor(cursor);
+      ctx.fillStyle = accent2;
+      ctx.globalAlpha = lit ? 0.95 : 0.18;
+      ctx.fillRect(cx(t) - 5, outBase - h, 10, h);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  function loop(t: number) {
+    if (mode !== 'rec') return;
+    if (t - lastT > 360) {
+      cursor += 1;
+      if (cursor > N + 2) cursor = 0;
+      lastT = t;
+      draw();
+    }
+    requestAnimationFrame(loop);
+  }
+
+  root.querySelectorAll('.sdv-mode').forEach(btn => {
+    btn.addEventListener('click', () => {
+      root.querySelectorAll('.sdv-mode').forEach(b => b.classList.remove('sdv-active'));
+      btn.classList.add('sdv-active');
+      mode = (btn as HTMLElement).dataset.mode as 'rec' | 'conv';
+      if (mode === 'rec') { cursor = 0; lastT = 0; requestAnimationFrame(loop); }
+      draw();
+    });
+  });
+  decaySlider.addEventListener('input', () => { a = decaySlider.valueAsNumber / 100; decayVal.textContent = a.toFixed(2); draw(); });
+
+  const ro = new ResizeObserver(draw);
+  ro.observe(canvas);
+  draw();
+  requestAnimationFrame(loop);
+});
+</script>
+
+<style>
+  .sdv { margin: 1.75rem 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--bg2); }
+  .sdv-canvas { width: 100%; height: 190px; display: block; background: var(--bg); }
+  .sdv-controls { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; padding: 0.55rem 0.9rem; border-top: 1px solid var(--border); }
+  .sdv-mode {
+    font-family: var(--mono); font-size: 0.74rem; padding: 0.2em 0.7em;
+    border: 1px solid var(--border); border-radius: 4px; background: var(--bg);
+    color: var(--muted); cursor: pointer; transition: color 0.12s, border-color 0.12s, background 0.12s;
+  }
+  .sdv-mode:hover { color: var(--text); border-color: var(--text); }
+  .sdv-mode.sdv-active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .sdv-lbl { font-family: var(--mono); font-size: 0.75rem; color: var(--muted); }
+  .sdv-decay { flex: 1; min-width: 80px; max-width: 160px; }
+  .sdv-decayval { font-family: var(--mono); font-size: 0.75rem; color: var(--accent); min-width: 30px; }
+  .sdv-caption { font-size: 0.78rem; color: var(--muted); text-align: center; padding: 0.1rem 1rem 0.65rem; font-style: italic; line-height: 1.5; }
+</style>

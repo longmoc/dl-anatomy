@@ -10,8 +10,8 @@ tags: [ssm, mamba, sequence, linear-attention]
 ---
 
 import Note from '../../components/Note.astro';
-import SSMTwoViewsDiagram from '../../components/SSMTwoViewsDiagram.astro';
-import SelectiveScanDiagram from '../../components/SelectiveScanDiagram.astro';
+import SSMDualViewViz from '../../components/SSMDualViewViz.astro';
+import SelectiveScanViz from '../../components/SelectiveScanViz.astro';
 import AttnVsSSMMemoryDiagram from '../../components/AttnVsSSMMemoryDiagram.astro';
 
 # State Space Models (Mamba)
@@ -86,7 +86,7 @@ This is the most elegant part of SSMs: the same model has two views.
 
 With S4 and other structured SSMs, the kernel can be computed and applied very efficiently, often near-linear in sequence length in modern implementations. With Mamba, selective scan is designed to run linearly in sequence length.
 
-<SSMTwoViewsDiagram lang="en" />
+<SSMDualViewViz lang="en" />
 
 ## How are SSMs different from RNNs and Transformers?
 
@@ -138,7 +138,7 @@ $$
 
 Intuition: Mamba is not just one fixed filter running across the sequence. Each token helps decide **what to write, what to keep, and what to read**.
 
-<SelectiveScanDiagram lang="en" />
+<SelectiveScanViz lang="en" />
 
 The trade-off is that once $B_t, C_t, \Delta_t$ depend on the input, there is no longer one fixed convolution kernel as in classic S4. Mamba therefore uses **selective scan**: a GPU-optimized parallel scan algorithm that keeps cost linear in sequence length while remaining efficient to train.
 
