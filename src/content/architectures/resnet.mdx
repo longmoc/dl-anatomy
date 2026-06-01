@@ -31,26 +31,26 @@ $$
 y = F(x) + x
 $$
 
-Khi backprop, đạo hàm của output theo input có thêm số hạng $+1$:
+Khi backprop, Jacobian của output theo input có thêm nhánh identity:
 
 $$
-\frac{\partial y}{\partial x} = \frac{\partial F(x)}{\partial x} + 1
+\frac{\partial y}{\partial x} = \frac{\partial F(x)}{\partial x} + I
 $$
 
 Do đó gradient của loss $L$ truyền về $x$ là:
 
 $$
-\frac{\partial L}{\partial x} = \frac{\partial L}{\partial y}\left( \frac{\partial F(x)}{\partial x} + 1 \right)
+\frac{\partial L}{\partial x} = \frac{\partial L}{\partial y}\left( \frac{\partial F(x)}{\partial x} + I \right)
 $$
 
-Số hạng $+1$ tạo một đường truyền gradient trực tiếp qua nhánh identity — $\frac{\partial L}{\partial y}\cdot 1$. Nó không đảm bảo gradient luôn hoàn hảo, nhưng làm tín hiệu backward dễ truyền qua nhiều block hơn rất nhiều so với một stack thuần không có skip connection. Cùng với BatchNorm và thiết kế block phù hợp, residual connection giúp ResNet train được cả những mạng rất sâu — thậm chí **trên 1000 layer** trong thí nghiệm.
+Số hạng $I$ tạo một đường truyền gradient trực tiếp qua nhánh identity — $\frac{\partial L}{\partial y} I$. Nó không đảm bảo gradient luôn hoàn hảo, nhưng làm tín hiệu backward dễ truyền qua nhiều block hơn rất nhiều so với một stack thuần không có skip connection. Cùng với BatchNorm và thiết kế block phù hợp, residual connection giúp ResNet train được cả những mạng rất sâu — thậm chí **trên 1000 layer** trong thí nghiệm.
 
 <ResidualBlockDiagram />
 
 <ResidualGradientViz />
 
 <Note type="result">
-Skip connection còn giúp **dễ học identity**: nếu một block không cần thiết, nó chỉ việc đẩy $F(x) \to 0$ là có ngay $y = x$. Về mặt biểu diễn, mạng sâu ít nhất có thể mô phỏng mạng nông nếu các block thừa học gần identity — và residual connection làm nghiệm identity này **dễ đạt hơn nhiều**, nên giảm mạnh degradation problem trong thực nghiệm.
+Skip connection còn giúp **dễ học identity**: nếu một block không cần thiết, nó chỉ việc đẩy $F(x) \to 0$ để phép cộng trở về gần identity. Trong ResNet v1 vẫn còn ReLU sau Add, nên nói chính xác là identity được giữ sạch nhất ở pre-activation v2; nhưng so với một stack convolution thuần, nghiệm "không làm gì thêm" đã dễ đạt hơn rất nhiều. Về mặt biểu diễn, mạng sâu ít nhất có thể mô phỏng mạng nông nếu các block thừa học gần identity — và residual connection làm nghiệm này **dễ đạt hơn nhiều**, nên giảm mạnh degradation problem trong thực nghiệm.
 </Note>
 
 ## Giải phẫu residual block
@@ -79,6 +79,8 @@ Dùng trong **ResNet-50 / 101 / 152** — kẹp một conv $3\times3$ giữa hai
 ```
 x → [1×1 conv (giảm) → 3×3 conv → 1×1 conv (nở)] → (+x) → ReLU
 ```
+
+Sơ đồ trên lược BN/ReLU để tập trung vào cấu trúc kênh. Trong ResNet v1, mỗi convolution bên trong bottleneck thường đi cùng BN và ReLU, riêng convolution cuối có BN trước khi cộng với shortcut.
 
 Conv $1\times1$ đầu **giảm** số kênh, conv $3\times3$ xử lý không gian trên ít kênh hơn (rẻ hơn nhiều), conv $1\times1$ cuối **mở rộng** kênh trở lại. Cắt FLOPs đáng kể mà vẫn giữ độ biểu đạt — chính là ý tưởng $1\times1$ conv mượn từ Inception (xem [Convolutional Networks](/dl-anatomy/architectures/cnn)).
 

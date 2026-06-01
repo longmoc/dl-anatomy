@@ -31,26 +31,26 @@ $$
 y = F(x) + x
 $$
 
-During backprop, the derivative of the output w.r.t. the input gains a $+1$ term:
+During backprop, the Jacobian of the output w.r.t. the input gains an identity branch:
 
 $$
-\frac{\partial y}{\partial x} = \frac{\partial F(x)}{\partial x} + 1
+\frac{\partial y}{\partial x} = \frac{\partial F(x)}{\partial x} + I
 $$
 
 So the gradient of the loss $L$ flowing back to $x$ is:
 
 $$
-\frac{\partial L}{\partial x} = \frac{\partial L}{\partial y}\left( \frac{\partial F(x)}{\partial x} + 1 \right)
+\frac{\partial L}{\partial x} = \frac{\partial L}{\partial y}\left( \frac{\partial F(x)}{\partial x} + I \right)
 $$
 
-The $+1$ creates a direct gradient path through the identity branch — $\frac{\partial L}{\partial y}\cdot 1$. It doesn't guarantee gradients are always perfect, but it makes the backward signal far easier to propagate through many blocks than in a plain stack with no skip connections. Together with BatchNorm and a suitable block design, residual connections let ResNet train very deep networks — **over 1000 layers** in experiments.
+The $I$ term creates a direct gradient path through the identity branch — $\frac{\partial L}{\partial y} I$. It doesn't guarantee gradients are always perfect, but it makes the backward signal far easier to propagate through many blocks than in a plain stack with no skip connections. Together with BatchNorm and a suitable block design, residual connections let ResNet train very deep networks — **over 1000 layers** in experiments.
 
 <ResidualBlockDiagram lang="en" />
 
 <ResidualGradientViz lang="en" />
 
 <Note type="result">
-Skip connections also make the **identity easy to learn**: if a block isn't needed, it just drives $F(x) \to 0$ and you get $y = x$. Representationally, a deep net can at least mimic a shallower one if the extra blocks learn near-identity — and residual connections make that identity solution **much easier to reach**, sharply reducing the degradation problem in practice.
+Skip connections also make the **identity easy to learn**: if a block isn't needed, it can drive $F(x) \to 0$ so the addition returns close to identity. In ResNet v1 there is still a ReLU after the Add, so the cleanest identity path is really in pre-activation v2; but compared with a plain convolutional stack, the "do nothing extra" solution is much easier to reach. Representationally, a deep net can at least mimic a shallower one if the extra blocks learn near-identity — and residual connections make that solution **much easier to reach**, sharply reducing the degradation problem in practice.
 </Note>
 
 ## Anatomy of a residual block
@@ -79,6 +79,8 @@ Used in **ResNet-50 / 101 / 152** — a $3\times3$ conv sandwiched between two $
 ```
 x → [1×1 conv (reduce) → 3×3 conv → 1×1 conv (expand)] → (+x) → ReLU
 ```
+
+The diagram omits BN/ReLU to keep the channel structure visible. In ResNet v1, each convolution inside the bottleneck is usually paired with BN and ReLU, except the final convolution, which has BN before adding the shortcut.
 
 The first $1\times1$ conv **reduces** channels, the $3\times3$ conv processes space on fewer channels (much cheaper), and the last $1\times1$ conv **expands** channels back. It cuts FLOPs substantially while keeping expressiveness — exactly the $1\times1$ idea borrowed from Inception (see [Convolutional Networks](/dl-anatomy/architectures/cnn-en)).
 
