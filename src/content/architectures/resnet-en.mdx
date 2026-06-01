@@ -1,6 +1,6 @@
 ---
 title: "ResNet & Modern CNN"
-description: "The depth problem, residual connections that unlocked 1000+ layer networks, the bottleneck block, and the modern CNN family up to ConvNeXt."
+description: "The degradation problem, residual learning, basic/bottleneck blocks, projection shortcuts, pre-activation, and the modern CNN family up to ConvNeXt."
 lang: en
 category: architectures
 order: 2
@@ -15,80 +15,151 @@ import ResidualBlockDiagram from '../../components/ResidualBlockDiagram.astro';
 
 # ResNet & Modern CNN
 
-The [Convolutional Networks](/dl-anatomy/architectures/cnn-en) article ended on a paradox: deeper is better — up to a point, after which deeper becomes *worse*. This article explains why, and how residual connections resolved it.
+The [Convolutional Networks](/dl-anatomy/architectures/cnn-en) article ended on a paradox: in terms of representation, a deeper network should **not** be worse than a shallower one — the extra layers could just learn the identity, so at worst it ties. But in practice, when a CNN gets too deep, *training error rises too*. This is the **degradation problem**: the issue isn't overfitting, it's that deep nets become **hard to optimize**.
 
-## The depth problem
+## Why very deep CNNs failed
 
-Intuition says: a deeper network is more powerful (at least no worse — extra layers could learn the identity). But experiments showed that stacking too many layers makes **both training and test error rise**.
+This is *not* overfitting — overfitting means good train, bad test; here both are bad. The core issue is **optimization degradation**: a deeper network can represent more in theory, but is harder to train in practice.
 
-This is *not* overfitting (overfitting means good train, bad test). It's **degradation**: deep nets are simply **harder to optimize**. The core cause is the **vanishing gradient** — as the gradient flows backward through each layer it's multiplied by some factor; if that factor is $< 1$, it decays exponentially toward the early layers, which then barely receive any learning signal.
+Vanishing/exploding gradients are part of this intuition — gradients propagating back through many layers are multiplied repeatedly and tend to shrink to zero or blow up — but they're **not** the only explanation. What ResNet does more deeply is change the *learning problem*: from directly learning a mapping $H(x)$ to learning the **residual** $F(x) = H(x) - x$, which makes the optimization landscape easier to traverse.
 
-## Residual connections — a highway for gradients
+## Residual learning
 
-**He et al. (2015)** solved it with a small but profound change: instead of learning the desired mapping $H(x)$ directly, a layer learns the **residual** $F(x) = H(x) - x$, then adds back the input:
+**He et al. (2015)** made a small but profound change: instead of learning $H(x)$ directly, each block learns the residual $F(x)$ and adds back the input:
 
 $$
 y = F(x) + x
 $$
 
-The derivative during backprop:
+During backprop, the derivative of the output w.r.t. the input gains a $+1$ term:
 
 $$
-\frac{\partial y}{\partial x} = \frac{\partial F}{\partial x} + 1
+\frac{\partial y}{\partial x} = \frac{\partial F(x)}{\partial x} + 1
 $$
 
-The $+1$ term is the key: however small $\frac{\partial F}{\partial x}$ becomes, the gradient still has a "highway" straight through the identity branch, undiminished. This let ResNet train networks of **over 1000 layers**.
+So the gradient of the loss $L$ flowing back to $x$ is:
+
+$$
+\frac{\partial L}{\partial x} = \frac{\partial L}{\partial y}\left( \frac{\partial F(x)}{\partial x} + 1 \right)
+$$
+
+The $+1$ is the key: however small $\frac{\partial F}{\partial x}$ becomes, the gradient still has a "highway" $\frac{\partial L}{\partial y}\cdot 1$ straight through the identity branch, undiminished. This let ResNet train networks of **over 1000 layers**.
 
 <ResidualBlockDiagram lang="en" />
 
 <ResidualGradientViz lang="en" />
 
 <Note type="result">
-Skip connections also make it **easy to learn the identity**: if a layer isn't needed, it just drives $F(x) \to 0$ and you immediately get $y = x$. A deep net is therefore never worse than its shallower counterpart — degradation disappears.
+Skip connections also make the **identity easy to learn**: if a block isn't needed, it just drives $F(x) \to 0$ and you get $y = x$. Representationally, a deep net can at least mimic a shallower one if the extra blocks learn near-identity — and residual connections make that identity solution **much easier to reach**, sharply reducing the degradation problem in practice.
 </Note>
 
-## The actual ResNet block
+## Anatomy of a residual block
 
-A basic **residual block** has two $3\times3$ convs, each followed by normalization and ReLU, then adds the input:
+### Terminology
+
+These terms get used loosely; to be precise:
+
+- **Skip / shortcut connection**: a path that bypasses a few layers.
+- **Identity shortcut**: a shortcut that carries $x$ unchanged (no parameters).
+- **Projection shortcut**: a shortcut with a projection (usually a $1\times1$ conv) when shapes don't match.
+- **Residual block**: a block that learns $F(x)$ and adds it to the shortcut.
+
+### Basic block
+
+Used in **ResNet-18 / ResNet-34** — two $3\times3$ convs:
 
 ```
-x → [Conv 3×3 → BN → ReLU → Conv 3×3 → BN] → (+x) → ReLU → y
+x → [3×3 conv → BN → ReLU → 3×3 conv → BN] → (+x) → ReLU
 ```
 
-For very deep networks (ResNet-50/101/152), a **bottleneck block** saves computation — sandwiching a $3\times3$ conv between two $1\times1$ convs:
+### Bottleneck block
+
+Used in **ResNet-50 / 101 / 152** — a $3\times3$ conv sandwiched between two $1\times1$ convs:
 
 ```
-1×1 (reduce) → 3×3 → 1×1 (expand)
+x → [1×1 conv (reduce) → 3×3 conv → 1×1 conv (expand)] → (+x) → ReLU
 ```
 
-A $1\times1$ conv doesn't look at space (it only mixes channels), so it reduces the channel count before the expensive $3\times3$ conv, then restores it — cutting FLOPs substantially while keeping expressiveness.
+The first $1\times1$ conv **reduces** channels, the $3\times3$ conv processes space on fewer channels (much cheaper), and the last $1\times1$ conv **expands** channels back. It cuts FLOPs substantially while keeping expressiveness — exactly the $1\times1$ idea borrowed from Inception (see [Convolutional Networks](/dl-anatomy/architectures/cnn-en)).
+
+### When shapes don't match
+
+The addition $F(x) + x$ only works when both sides have the **same shape**. When a block changes stage — more channels or lower resolution (stride 2) — the skip branch must use a **projection shortcut**:
+
+$$
+y = F(x) + W_s\, x
+$$
+
+where $W_s$ is usually a $1\times1$ conv, with stride to match dimensions.
+
+## ResNet v1 vs pre-activation (v2)
+
+The original ResNet (v1) places activation **after** the addition:
+
+```
+Conv → BN → ReLU → Conv → BN → Add → ReLU
+```
+
+**Pre-activation ResNet (v2)** — *Identity Mappings in Deep Residual Networks* — moves BN/ReLU **before** the convolutions:
+
+```
+BN → ReLU → Conv → BN → ReLU → Conv → Add
+```
+
+This keeps the identity branch "clean" (no activation wedged in after the Add), so the forward signal and backward gradient pass through the skip path more directly — making extremely deep nets easier to train and slightly better at generalizing.
 
 <Note type="warning">
-**BatchNorm** in the block above is an important component in its own right (it stabilizes activation distributions and allows larger learning rates) — it's a *normalization technique*, not an architectural design, so it will be covered in a separate article on normalization.
+**BatchNorm** in the blocks above is an important component in its own right (it stabilizes activation distributions and allows larger learning rates) — it's a *normalization technique*, not an architectural design, so it will be covered in a separate article on normalization.
 </Note>
+
+## How ResNet changed the way we think about layers
+
+Before ResNet, we thought each stack of layers had to learn a brand-new mapping $H(x)$. ResNet reframed it: each block only needs to learn a **small update** $F(x)$ to the current representation.
+
+$$
+\text{new representation} = \text{old representation} + \text{learned update}
+$$
+
+This "refine gradually rather than replace wholesale" mindset reappears everywhere: the residual path in **Transformers**, U-Net, neural ODEs, and even adapters / LoRA (learning a small update to existing weights).
 
 ## The modern CNN family
 
-After ResNet, residual connections became the default, and architectures kept refining:
+After ResNet, residual connections became the default, and CNNs evolved along a few main directions:
 
-| Year | Network | Key idea |
-|---|---|---|
-| 2016 | DenseNet | Each layer connects to *every* later layer → maximal feature reuse, fewer parameters |
-| 2019 | EfficientNet | **Compound scaling** — balance depth/width/resolution with a single coefficient |
-| 2022 | ConvNeXt | A CNN "modernized" with Transformer design choices (large kernels, LayerNorm, GELU) → competitive with ViT |
+**1. Better connectivity**
+- **DenseNet (2016)**: connect each layer to *every* later layer → maximal feature reuse, fewer parameters for the same accuracy.
 
-Separately, **Efficient CNNs** (MobileNet) use depthwise-separable convolutions to cut FLOPs for mobile devices.
+**2. Efficient convolution**
+- **MobileNet (2017)**: depthwise-separable convolutions → big FLOP cuts for mobile devices.
+- **ShuffleNet**: channel shuffle to make group convolutions more efficient.
 
-## Residual connections everywhere
+**3. Scaling strategy**
+- **EfficientNet (2019)**: **compound scaling** — balance depth/width/resolution with a single coefficient instead of scaling one dimension.
 
-The "add the input to the output" idea goes far beyond CNNs: it's a core component of the **Transformer block** (see [Transformer & Attention](/dl-anatomy/architectures/transformer-en)), of the LSTM (the cell-state path), and of nearly every modern deep architecture. The same insight: for a gradient to survive many layers, give it a path where information **adds** rather than repeatedly **multiplies**.
+**4. Modernized ConvNet**
+- **ConvNeXt (2022)**: modernizes ResNet with many design choices from Vision Transformers — macro design, large-kernel depthwise convs, LayerNorm, GELU, inverted bottleneck → competitive with ViT on vision.
+
+## Residual beyond CNNs
+
+The idea of creating a **shorter path for information and gradients** shows up in many places:
+
+- **Residual path** in the Transformer block (standard in every LLM)
+- **Skip connections** in U-Net (segmentation, diffusion)
+- **Cell state** in the LSTM
+
+They aren't mechanically identical — the LSTM cell state uses multiplicative gates, not a pure additive identity — but they serve the same intuition: help information and gradients travel through many steps **more easily**.
+
+<Note type="result">
+ResNet made **depth practical**, and more importantly turned residual learning into a **universal design pattern**: learn a small update to the current representation rather than replacing it wholesale.
+</Note>
 
 ## References
 
 | Paper | |
 |---|---|
-| He et al. (2015) | Deep Residual Learning for Image Recognition (ResNet) |
+| He et al. (2015) | Deep Residual Learning for Image Recognition (ResNet v1) |
+| He et al. (2016) | Identity Mappings in Deep Residual Networks (pre-activation, v2) |
 | Huang et al. (2016) | Densely Connected Convolutional Networks (DenseNet) |
-| Howard et al. (2017) | MobileNets |
+| Howard et al. (2017) | MobileNets: Efficient CNNs for Mobile Vision |
 | Tan & Le (2019) | EfficientNet: Rethinking Model Scaling |
 | Liu et al. (2022) | A ConvNet for the 2020s (ConvNeXt) |

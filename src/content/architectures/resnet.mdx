@@ -1,6 +1,6 @@
 ---
 title: "ResNet & Modern CNN"
-description: "Bài toán độ sâu, residual connection mở khóa mạng 1000+ layer, bottleneck block, và họ CNN hiện đại đến ConvNeXt."
+description: "Degradation problem, residual learning, basic/bottleneck block, projection shortcut, pre-activation, và họ CNN hiện đại đến ConvNeXt."
 lang: vi
 category: architectures
 order: 2
@@ -15,80 +15,151 @@ import ResidualBlockDiagram from '../../components/ResidualBlockDiagram.astro';
 
 # ResNet & Modern CNN
 
-Bài [Convolutional Networks](/dl-anatomy/architectures/cnn) kết thúc ở một nghịch lý: càng sâu càng tốt — cho đến một ngưỡng, sau đó sâu hơn lại *tệ hơn*. Bài này giải thích vì sao, và residual connection đã hóa giải thế nào.
+Bài [Convolutional Networks](/dl-anatomy/architectures/cnn) kết thúc ở một nghịch lý: về mặt biểu diễn, mạng sâu hơn đáng lẽ **không nên** tệ hơn mạng nông — các layer thêm vào chỉ cần học identity là tệ nhất cũng bằng. Nhưng trong thực nghiệm, khi CNN quá sâu, *training error cũng tăng*. Đây là **degradation problem**: vấn đề không nằm ở overfitting, mà ở chỗ mạng sâu trở nên **khó tối ưu**.
 
-## Bài toán độ sâu
+## Vì sao CNN quá sâu thất bại
 
-Trực giác nói: mạng sâu hơn = mạnh hơn (ít nhất không tệ hơn — layer thừa có thể học identity). Nhưng thực nghiệm cho thấy khi xếp quá nhiều layer, **cả training error lẫn test error đều tăng**.
+Đây *không phải* overfit — overfit thì train tốt, test tệ; ở đây cả hai đều tệ. Vấn đề chính là **optimization degradation**: mạng sâu hơn về lý thuyết biểu diễn được nhiều hơn, nhưng thực tế lại khó luyện hơn.
 
-Đây *không phải* overfit (overfit thì train tốt, test tệ). Đây là **degradation**: mạng sâu đơn giản là **khó tối ưu hơn**. Nguyên nhân cốt lõi là **vanishing gradient** — gradient lan ngược qua mỗi layer bị nhân với một thừa số; nếu thừa số $< 1$, nó suy giảm theo hàm mũ về phía các layer đầu, khiến chúng gần như không nhận được tín hiệu học.
+Vanishing/exploding gradient là một phần của trực giác này — gradient lan ngược qua nhiều layer bị nhân liên tiếp, dễ teo về 0 hoặc nổ — nhưng **không phải** lời giải thích duy nhất. Điều ResNet làm sâu sắc hơn: nó đổi *bài toán học*, từ học trực tiếp ánh xạ $H(x)$ sang học **phần dư** $F(x) = H(x) - x$, khiến optimization landscape dễ đi hơn.
 
-## Residual connection — đường cao tốc cho gradient
+## Residual learning
 
-**He et al. (2015)** giải bằng một thay đổi nhỏ mà sâu sắc: thay vì học trực tiếp ánh xạ mong muốn $H(x)$, layer học **phần dư** $F(x) = H(x) - x$, rồi cộng lại đầu vào:
+**He et al. (2015)** thay đổi nhỏ mà sâu sắc: thay vì học thẳng $H(x)$, mỗi block học phần dư $F(x)$ rồi cộng lại đầu vào:
 
 $$
 y = F(x) + x
 $$
 
-Đạo hàm khi backprop:
+Khi backprop, đạo hàm của output theo input có thêm số hạng $+1$:
 
 $$
-\frac{\partial y}{\partial x} = \frac{\partial F}{\partial x} + 1
+\frac{\partial y}{\partial x} = \frac{\partial F(x)}{\partial x} + 1
 $$
 
-Số hạng $+1$ là chìa khóa: dù $\frac{\partial F}{\partial x}$ nhỏ đến đâu, gradient vẫn có một "đường cao tốc" đi thẳng qua nhánh identity, không bị suy giảm. Nhờ đó ResNet train được mạng **hơn 1000 layer**.
+Do đó gradient của loss $L$ truyền về $x$ là:
+
+$$
+\frac{\partial L}{\partial x} = \frac{\partial L}{\partial y}\left( \frac{\partial F(x)}{\partial x} + 1 \right)
+$$
+
+Số hạng $+1$ là chìa khóa: dù $\frac{\partial F}{\partial x}$ nhỏ đến đâu, gradient vẫn có một "đường cao tốc" $\frac{\partial L}{\partial y}\cdot 1$ đi thẳng qua nhánh identity, không bị suy giảm. Nhờ đó ResNet train được mạng **hơn 1000 layer**.
 
 <ResidualBlockDiagram />
 
 <ResidualGradientViz />
 
 <Note type="result">
-Skip connection còn giúp mô hình **dễ học identity**: nếu một layer không cần thiết, nó chỉ việc đẩy $F(x) \to 0$ là có ngay $y = x$. Mạng sâu vì thế không bao giờ tệ hơn mạng nông tương ứng — degradation biến mất.
+Skip connection còn giúp **dễ học identity**: nếu một block không cần thiết, nó chỉ việc đẩy $F(x) \to 0$ là có ngay $y = x$. Về mặt biểu diễn, mạng sâu ít nhất có thể mô phỏng mạng nông nếu các block thừa học gần identity — và residual connection làm nghiệm identity này **dễ đạt hơn nhiều**, nên giảm mạnh degradation problem trong thực nghiệm.
 </Note>
 
-## ResNet block thực tế
+## Giải phẫu residual block
 
-Một **residual block** cơ bản gồm hai conv $3\times3$, mỗi conv theo sau bởi normalization và ReLU, rồi cộng input:
+### Thuật ngữ
+
+Bài hay dùng lẫn nhiều tên; phân biệt cho rõ:
+
+- **Skip / shortcut connection**: đường nối bỏ qua một vài layer.
+- **Identity shortcut**: shortcut truyền $x$ nguyên vẹn (không tham số).
+- **Projection shortcut**: shortcut dùng phép chiếu (thường conv $1\times1$) khi shape không khớp.
+- **Residual block**: block học $F(x)$ rồi cộng với shortcut.
+
+### Basic block
+
+Dùng trong **ResNet-18 / ResNet-34** — hai conv $3\times3$:
 
 ```
-x → [Conv 3×3 → BN → ReLU → Conv 3×3 → BN] → (+x) → ReLU → y
+x → [3×3 conv → BN → ReLU → 3×3 conv → BN] → (+x) → ReLU
 ```
 
-Với mạng rất sâu (ResNet-50/101/152), người ta dùng **bottleneck block** để tiết kiệm tính toán — kẹp một conv $3\times3$ giữa hai conv $1\times1$:
+### Bottleneck block
+
+Dùng trong **ResNet-50 / 101 / 152** — kẹp một conv $3\times3$ giữa hai conv $1\times1$:
 
 ```
-1×1 (giảm chiều) → 3×3 → 1×1 (nở lại)
+x → [1×1 conv (giảm) → 3×3 conv → 1×1 conv (nở)] → (+x) → ReLU
 ```
 
-Conv $1\times1$ không nhìn không gian (chỉ trộn kênh), nên nó giảm số kênh trước khi làm conv $3\times3$ đắt đỏ, rồi khôi phục lại — cắt FLOPs đáng kể mà vẫn giữ độ biểu đạt.
+Conv $1\times1$ đầu **giảm** số kênh, conv $3\times3$ xử lý không gian trên ít kênh hơn (rẻ hơn nhiều), conv $1\times1$ cuối **mở rộng** kênh trở lại. Cắt FLOPs đáng kể mà vẫn giữ độ biểu đạt — chính là ý tưởng $1\times1$ conv mượn từ Inception (xem [Convolutional Networks](/dl-anatomy/architectures/cnn)).
+
+### Khi shape không khớp
+
+Phép cộng $F(x) + x$ chỉ làm được khi hai vế **cùng shape**. Khi block đổi stage — tăng số kênh hoặc giảm resolution (stride 2) — nhánh skip phải dùng **projection shortcut**:
+
+$$
+y = F(x) + W_s\, x
+$$
+
+trong đó $W_s$ thường là conv $1\times1$, kèm stride để khớp kích thước.
+
+## ResNet v1 vs pre-activation (v2)
+
+ResNet gốc (v1) đặt activation **sau** phép cộng:
+
+```
+Conv → BN → ReLU → Conv → BN → Add → ReLU
+```
+
+**Pre-activation ResNet (v2)** — *Identity Mappings in Deep Residual Networks* — chuyển BN/ReLU lên **trước** convolution:
+
+```
+BN → ReLU → Conv → BN → ReLU → Conv → Add
+```
+
+Thiết kế này giữ nhánh identity "sạch" (không có activation chen vào sau Add), nên tín hiệu forward và gradient backward đi qua skip path trực tiếp hơn — train mạng cực sâu dễ hơn và generalize tốt hơn.
 
 <Note type="warning">
-**BatchNorm** trong block trên là một thành phần quan trọng riêng (ổn định phân phối activation, cho phép LR lớn) — nó là *kỹ thuật chuẩn hóa*, không phải thiết kế kiến trúc, nên sẽ được bàn trong một bài riêng về normalization.
+**BatchNorm** trong các block trên là một thành phần quan trọng riêng (ổn định phân phối activation, cho phép LR lớn) — nó là *kỹ thuật chuẩn hóa*, không phải thiết kế kiến trúc, nên sẽ được bàn trong một bài riêng về normalization.
 </Note>
+
+## ResNet đổi cách nghĩ về layer
+
+Trước ResNet, ta nghĩ mỗi stack layer phải học trực tiếp một ánh xạ mới $H(x)$. ResNet đổi góc nhìn: mỗi block chỉ cần học một **cập nhật nhỏ** $F(x)$ trên representation hiện tại.
+
+$$
+\text{representation mới} = \text{representation cũ} + \text{cập nhật học được}
+$$
+
+Cách nghĩ "tinh chỉnh dần thay vì thay mới hoàn toàn" này xuất hiện lại ở khắp nơi: residual path trong **Transformer**, U-Net, neural ODE, và cả adapter / LoRA (học một cập nhật nhỏ trên trọng số có sẵn).
 
 ## Họ CNN hiện đại
 
-Sau ResNet, residual connection trở thành mặc định, và các kiến trúc tiếp tục tinh chỉnh:
+Sau ResNet, residual connection thành mặc định, và CNN tiến hóa theo vài hướng chính:
 
-| Năm | Mạng | Ý tưởng chính |
-|---|---|---|
-| 2016 | DenseNet | Mỗi layer nối tới *mọi* layer sau → tái dùng feature tối đa, ít tham số |
-| 2019 | EfficientNet | **Compound scaling** — cân bằng depth/width/resolution theo một hệ số duy nhất |
-| 2022 | ConvNeXt | CNN "hiện đại hóa" theo thiết kế Transformer (kernel lớn, LayerNorm, GELU) → cạnh tranh ViT |
+**1. Connectivity tốt hơn**
+- **DenseNet (2016)**: nối mỗi layer với *mọi* layer sau → tái dùng feature tối đa, ít tham số hơn với cùng độ chính xác.
 
-Ngoài ra **Efficient CNN** (MobileNet) dùng depthwise-separable convolution để giảm FLOPs cho thiết bị di động.
+**2. Convolution hiệu quả**
+- **MobileNet (2017)**: depthwise-separable convolution → giảm FLOPs mạnh cho thiết bị di động.
+- **ShuffleNet**: channel shuffle để group convolution hiệu quả hơn.
 
-## Residual ở khắp nơi
+**3. Chiến lược scaling**
+- **EfficientNet (2019)**: **compound scaling** — cân bằng depth/width/resolution theo một hệ số duy nhất, thay vì chỉ tăng một chiều.
 
-Ý tưởng "cộng input vào output" vượt xa CNN: nó là thành phần cốt lõi của **Transformer block** (xem [Transformer & Attention](/dl-anatomy/architectures/transformer)), của LSTM (đường cell state), và gần như mọi kiến trúc sâu hiện đại. Cùng một insight: muốn gradient sống sót qua nhiều layer, hãy cho nó một con đường mà thông tin **cộng** thay vì **nhân** liên tục.
+**4. ConvNet hiện đại hóa**
+- **ConvNeXt (2022)**: hiện đại hóa ResNet bằng nhiều design choice từ Vision Transformer — macro design, depthwise conv kernel lớn, LayerNorm, GELU, inverted bottleneck → cạnh tranh ngang ViT trên vision.
+
+## Residual vượt ra ngoài CNN
+
+Ý tưởng tạo một **đường truyền thông tin/gradient ngắn hơn** xuất hiện ở nhiều nơi:
+
+- **Residual path** trong Transformer block (chuẩn của mọi LLM)
+- **Skip connection** trong U-Net (segmentation, diffusion)
+- **Cell state** trong LSTM
+
+Chúng không giống hệt nhau về cơ chế — ví dụ cell state LSTM dùng cổng nhân chứ không phải cộng identity thuần — nhưng cùng phục vụ một trực giác: giúp thông tin và gradient đi qua nhiều bước **dễ hơn**.
+
+<Note type="result">
+ResNet làm cho **độ sâu trở nên thực dụng**, và quan trọng hơn, biến residual learning thành một **design pattern phổ quát**: học một cập nhật nhỏ trên representation hiện tại thay vì thay mới hoàn toàn.
+</Note>
 
 ## Papers tham khảo
 
 | Paper | |
 |---|---|
-| He et al. (2015) | Deep Residual Learning for Image Recognition (ResNet) |
+| He et al. (2015) | Deep Residual Learning for Image Recognition (ResNet v1) |
+| He et al. (2016) | Identity Mappings in Deep Residual Networks (pre-activation, v2) |
 | Huang et al. (2016) | Densely Connected Convolutional Networks (DenseNet) |
-| Howard et al. (2017) | MobileNets |
+| Howard et al. (2017) | MobileNets: Efficient CNNs for Mobile Vision |
 | Tan & Le (2019) | EfficientNet: Rethinking Model Scaling |
 | Liu et al. (2022) | A ConvNet for the 2020s (ConvNeXt) |
