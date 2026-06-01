@@ -119,7 +119,7 @@ This keeps the identity branch "clean" (no activation wedged in after the Add), 
 | ResNet v2 | Pre-activation | very deep models | BN/ReLU before conv, cleaner identity path |
 
 <Note type="warning">
-**BatchNorm** in the blocks above is an important part of the *block design* — especially when comparing ResNet v1 and pre-activation v2, where BN placement makes a difference. Still, normalization is a topic of its own; this article only notes its role in ResNet, with details left to a separate article on normalization.
+**BatchNorm** in the blocks above is an important part of the *block design* — especially when comparing ResNet v1 and pre-activation v2, where BN placement makes a difference. BatchNorm, LayerNorm, and RMSNorm are covered systematically in [Normalization Layers](/dl-anatomy/architectures/normalization-layers-en).
 </Note>
 
 ## How ResNet changed the way we think about layers

@@ -1,0 +1,208 @@
+---
+title: "Normalization Layers: BatchNorm, LayerNorm & RMSNorm"
+description: "How BatchNorm, LayerNorm, and RMSNorm differ, why they stabilize training, and why CNNs, Transformers, and LLMs use different normalization layers."
+lang: en
+category: architectures
+order: 4
+translation: normalization-layers
+tags: [normalization, batchnorm, layernorm, rmsnorm, transformer, cnn]
+---
+
+import Note from '../../components/Note.astro';
+
+# Normalization Layers: BatchNorm, LayerNorm & RMSNorm
+
+In earlier articles, normalization appeared as a supporting detail: **BatchNorm** in ResNet, **LayerNorm** in ConvNeXt/Transformers, **RMSNorm** in many modern LLMs. But normalization is not just implementation plumbing. It is one reason deep networks train reliably.
+
+The general idea: instead of letting activations drift freely in mean and scale, normalize them into a range that is easier to optimize, then learn scale/shift back if needed.
+
+$$
+\hat{x} = \frac{x - \mu}{\sqrt{\sigma^2 + \epsilon}}
+$$
+
+$$
+y = \gamma \hat{x} + \beta
+$$
+
+Here $\mu, \sigma^2$ are computed over some axis of the tensor, while $\gamma, \beta$ are learned parameters. The difference between BatchNorm, LayerNorm, and RMSNorm is the question:
+
+> Which axis do we normalize over?
+
+## What Problem Does Normalization Solve?
+
+As networks get deeper, activation distributions shift during training. If scale gets too large, gradients can explode; if scale gets too small, gradients can vanish. The optimizer has to learn the task while also chasing changing representation scales.
+
+Normalization helps in three ways:
+
+- **Stabilizes activation and gradient scale**.
+- **Makes the loss landscape easier to optimize**, often allowing larger learning rates.
+- **Reduces sensitivity to initialization**, because downstream layers receive inputs with more predictable statistics.
+
+<Note type="intuition">
+Normalization does not make the model more expressive in a direct sense. It makes the optimization path less rugged, so deep models train faster and more reliably.
+</Note>
+
+A common confusion: normalization is not the same thing as regularization. BatchNorm can have a regularizing effect because it uses batch statistics, but LayerNorm/RMSNorm are mostly optimization-stability mechanisms.
+
+## BatchNorm — Normalize Across the Batch
+
+**Batch Normalization** normalizes each channel using mean/variance computed over the batch and spatial positions. For a CNN tensor, the shape is usually:
+
+```text
+N × C × H × W
+```
+
+BatchNorm computes statistics separately for each channel $C$, averaging over $N, H, W$:
+
+```text
+mean/variance per channel, across batch and spatial positions
+```
+
+This is why BatchNorm fits CNNs:
+
+- feature maps in the same channel often have a consistent meaning across images
+- batches are large enough for stable statistics
+- spatial dimensions provide many samples per channel
+
+In ResNet, BatchNorm is almost part of the block design:
+
+```text
+Conv → BN → ReLU → Conv → BN → Add
+```
+
+BatchNorm helps ResNet use larger learning rates, train deeper stacks, and make optimization smoother.
+
+<Note type="warning">
+BatchNorm depends on batch statistics. If batches are tiny, distributed training is complicated, or inference differs from training, BatchNorm can become a source of noise. This is why Transformers and LLMs usually avoid BatchNorm.
+</Note>
+
+### Train vs Inference
+
+During training, BatchNorm uses the mean/variance of the current batch. During inference, the model no longer has training batches, so BatchNorm uses **running mean/variance** accumulated during training.
+
+That creates an important distinction:
+
+- Training: statistics depend on the current batch.
+- Inference: statistics are fixed.
+
+For vision CNNs, this usually works well. For sequence or autoregressive models, it is much less natural because batch length, padding, causal generation, and distribution shift make batch statistics awkward.
+
+## LayerNorm — Normalize Within Each Token/Sample
+
+**Layer Normalization** does not look across samples in the batch. It normalizes the feature dimension **inside each sample**.
+
+For a Transformer hidden state, the shape is usually:
+
+```text
+B × T × D
+```
+
+LayerNorm computes mean/variance over $D$ for each token:
+
+```text
+mean/variance per token, across hidden dimension
+```
+
+This fits sequence models:
+
+- independent of batch size
+- stable with variable sequence length
+- works naturally for autoregressive token-by-token inference
+- same behavior during training and inference
+
+In Transformers, LayerNorm usually lives next to the residual path. There are two placements:
+
+```text
+Post-norm: x → Sublayer → Add → LayerNorm
+```
+
+```text
+Pre-norm:  x → LayerNorm → Sublayer → Add
+```
+
+Post-norm was used in the original Transformer, but pre-norm is often more stable for very deep models because it keeps the residual path cleaner for gradients.
+
+<Note type="result">
+BatchNorm looks sideways across the batch; LayerNorm looks inward across the feature dimension of each token/sample. That is why BatchNorm fits CNN/vision training, while LayerNorm fits Transformers and sequence modeling.
+</Note>
+
+## RMSNorm — Drop the Mean, Keep the Scale
+
+**RMSNorm** simplifies LayerNorm: it does not subtract the mean, it only normalizes by root mean square.
+
+$$
+\operatorname{RMS}(x) =
+\sqrt{\frac{1}{d}\sum_{i=1}^{d} x_i^2 + \epsilon}
+$$
+
+$$
+y = \gamma \frac{x}{\operatorname{RMS}(x)}
+$$
+
+Compared with LayerNorm, RMSNorm drops the centering term $x - \mu$. It only controls the scale of the hidden vector. This is slightly cheaper and often enough for large Transformer/LLM training.
+
+Why do many LLMs use RMSNorm?
+
+- slightly less compute and communication
+- simpler than LayerNorm
+- stabilizes scale in the residual stream
+- often matches LayerNorm empirically in LLMs
+
+RMSNorm is not "better than LayerNorm" in every setting. It is a tradeoff: fewer operations, fewer assumptions, and good enough for large architectures with strong training recipes.
+
+## Pre-Norm, Post-Norm, and the Residual Stream
+
+Normalization matters most when paired with residual connections. For a generic block:
+
+```text
+x → sublayer → +x
+```
+
+the question is where to put the norm.
+
+**Post-norm**:
+
+```text
+y = Norm(x + Sublayer(x))
+```
+
+Advantage: every block output is normalized. Drawback: gradients pass through a norm after every residual add, which can make very deep models harder to train.
+
+**Pre-norm**:
+
+```text
+y = x + Sublayer(Norm(x))
+```
+
+Advantage: the residual stream has a cleaner identity path; gradients can travel through many blocks more easily. This is why pre-norm became common in large Transformers.
+
+<Note type="intuition">
+ResNet taught us that a clean residual path helps gradients survive many layers. Pre-norm applies the same spirit to Transformers: normalize the sublayer input, but let the additive residual stream remain the highway for information and gradients.
+</Note>
+
+## Quick Comparison
+
+| Norm | Normalizes over | Best fit | Key point |
+|---|---|---|---|
+| BatchNorm | batch + spatial, per channel | CNNs, vision, large batches | train/inference differ, depends on batch stats |
+| LayerNorm | feature dimension inside each sample/token | RNNs, Transformers, sequence | batch-independent, natural for autoregressive inference |
+| RMSNorm | RMS of feature dimension | LLMs, large Transformers | removes mean-centering, cheap and empirically strong |
+
+## Where Does Normalization Live in Architecture?
+
+Normalization is not an architecture family like CNNs or Transformers. It is an **architectural component**: a small block with a large effect on trainability.
+
+In classic CNNs, BatchNorm helps deep convolutional stacks train stably. In ConvNeXt, moving from BatchNorm to LayerNorm is part of modernizing the ConvNet. In Transformers, LayerNorm/RMSNorm is almost infrastructure for the residual stream.
+
+<Note type="result">
+If residual connections create a path for information, normalization keeps the scale of that path in an optimizer-friendly range. These two components often travel together in modern deep architectures.
+</Note>
+
+## References
+
+| Paper | |
+|---|---|
+| Ioffe & Szegedy (2015) | Batch Normalization |
+| Ba et al. (2016) | Layer Normalization |
+| Zhang & Sennrich (2019) | Root Mean Square Layer Normalization |
+| Xiong et al. (2020) | On Layer Normalization in the Transformer Architecture |

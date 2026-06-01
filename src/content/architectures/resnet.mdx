@@ -119,7 +119,7 @@ Thiết kế này giữ nhánh identity "sạch" (không có activation chen và
 | ResNet v2 | Pre-activation | model rất sâu | BN/ReLU trước conv, identity path sạch hơn |
 
 <Note type="warning">
-**BatchNorm** trong các block trên là một thành phần quan trọng của *thiết kế block* — đặc biệt khi so sánh ResNet v1 và pre-activation v2, vị trí đặt BN tạo khác biệt. Tuy vậy, normalization là một chủ đề riêng; bài này chỉ nhắc vai trò của nó trong ResNet, còn chi tiết sẽ bàn trong bài riêng về normalization.
+**BatchNorm** trong các block trên là một thành phần quan trọng của *thiết kế block* — đặc biệt khi so sánh ResNet v1 và pre-activation v2, vị trí đặt BN tạo khác biệt. Chi tiết về BatchNorm, LayerNorm và RMSNorm được hệ thống hóa riêng trong [Normalization Layers](/dl-anatomy/architectures/normalization-layers).
 </Note>
 
 ## ResNet đổi cách nghĩ về layer

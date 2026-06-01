@@ -1,0 +1,208 @@
+---
+title: "Normalization Layers: BatchNorm, LayerNorm & RMSNorm"
+description: "BatchNorm, LayerNorm và RMSNorm khác nhau thế nào, vì sao chúng ổn định training, và vì sao CNN/Transformer/LLM dùng các loại normalization khác nhau."
+lang: vi
+category: architectures
+order: 4
+translation: normalization-layers-en
+tags: [normalization, batchnorm, layernorm, rmsnorm, transformer, cnn]
+---
+
+import Note from '../../components/Note.astro';
+
+# Normalization Layers: BatchNorm, LayerNorm & RMSNorm
+
+Trong các bài trước, normalization xuất hiện như một thành phần phụ: **BatchNorm** trong ResNet, **LayerNorm** trong ConvNeXt/Transformer, **RMSNorm** trong nhiều LLM hiện đại. Nhưng normalization không chỉ là chi tiết implementation. Nó là một trong những lý do mạng sâu có thể train ổn định.
+
+Ý tưởng chung: thay vì để activation ở mỗi layer trôi tự do về scale và mean, ta chuẩn hóa chúng về một khoảng dễ tối ưu hơn, rồi học lại scale/shift nếu cần.
+
+$$
+\hat{x} = \frac{x - \mu}{\sqrt{\sigma^2 + \epsilon}}
+$$
+
+$$
+y = \gamma \hat{x} + \beta
+$$
+
+Trong đó $\mu, \sigma^2$ được tính trên một trục nào đó của tensor, còn $\gamma, \beta$ là tham số học được. Điểm khác nhau giữa BatchNorm, LayerNorm, RMSNorm nằm ở câu hỏi:
+
+> Ta chuẩn hóa **theo trục nào**?
+
+## Normalization giải quyết vấn đề gì?
+
+Khi mạng sâu hơn, phân phối activation ở các layer liên tục thay đổi trong quá trình training. Nếu scale quá lớn, gradient dễ nổ; nếu scale quá nhỏ, gradient dễ teo. Optimizer phải vừa học task, vừa đuổi theo sự thay đổi scale của representation.
+
+Normalization giúp bằng ba cách:
+
+- **Ổn định scale** của activation và gradient.
+- **Làm loss landscape dễ tối ưu hơn**, cho phép dùng learning rate lớn hơn.
+- **Giảm nhạy cảm với initialization**, vì layer sau nhận input có thống kê dễ đoán hơn.
+
+<Note type="intuition">
+Normalization không làm model "thông minh" hơn theo nghĩa tăng expressiveness trực tiếp. Nó làm đường đi tối ưu bớt gồ ghề hơn, để model sâu train được nhanh và ổn định hơn.
+</Note>
+
+Một điểm hay bị nhầm: normalization không chỉ là regularization. BatchNorm có hiệu ứng regularize vì dùng statistics theo batch, nhưng LayerNorm/RMSNorm chủ yếu là cơ chế ổn định optimization.
+
+## BatchNorm — chuẩn hóa theo batch
+
+**Batch Normalization** chuẩn hóa mỗi channel bằng mean/variance tính trên batch và spatial positions. Với CNN input thường có shape:
+
+```text
+N × C × H × W
+```
+
+BatchNorm tính thống kê riêng cho từng channel $C$, lấy trung bình qua $N, H, W$:
+
+```text
+mean/variance per channel, across batch and spatial positions
+```
+
+Đây là lý do BatchNorm hợp với CNN:
+
+- feature map cùng channel thường có ý nghĩa giống nhau trên nhiều ảnh
+- batch đủ lớn cho thống kê ổn định
+- spatial dimension cung cấp thêm nhiều mẫu cho mỗi channel
+
+Trong ResNet, BatchNorm gần như là một phần của block design:
+
+```text
+Conv → BN → ReLU → Conv → BN → Add
+```
+
+BatchNorm giúp ResNet dùng learning rate lớn hơn, train sâu hơn, và làm optimization mượt hơn.
+
+<Note type="warning">
+BatchNorm phụ thuộc vào batch statistics. Nếu batch quá nhỏ, distributed training phức tạp, hoặc inference distribution lệch khỏi training, BatchNorm có thể trở thành nguồn nhiễu. Đây là lý do Transformer và LLM thường tránh BatchNorm.
+</Note>
+
+### Train vs inference
+
+Khi training, BatchNorm dùng mean/variance của batch hiện tại. Khi inference, model không còn batch training nữa, nên BatchNorm dùng **running mean/variance** tích lũy trong quá trình training.
+
+Điều này tạo ra một khác biệt quan trọng:
+
+- Train: statistics phụ thuộc batch hiện tại.
+- Inference: statistics cố định.
+
+Với vision CNN, khác biệt này thường ổn. Với sequence model hoặc autoregressive model, nó khó chịu hơn nhiều vì batch length, padding, causal generation và distribution shift làm statistics kém tự nhiên.
+
+## LayerNorm — chuẩn hóa trong từng token/sample
+
+**Layer Normalization** không nhìn sang các sample khác trong batch. Nó chuẩn hóa toàn bộ feature dimension **bên trong từng sample**.
+
+Với Transformer hidden state thường có shape:
+
+```text
+B × T × D
+```
+
+LayerNorm tính mean/variance trên chiều $D$ cho từng token:
+
+```text
+mean/variance per token, across hidden dimension
+```
+
+Điều này hợp với sequence models:
+
+- không phụ thuộc batch size
+- hoạt động ổn với sequence length thay đổi
+- phù hợp autoregressive inference từng token
+- cùng behavior giữa train và inference
+
+Trong Transformer, LayerNorm thường đi cùng residual path. Có hai cách đặt:
+
+```text
+Post-norm: x → Sublayer → Add → LayerNorm
+```
+
+```text
+Pre-norm:  x → LayerNorm → Sublayer → Add
+```
+
+Post-norm là thiết kế gốc của Transformer, nhưng pre-norm thường ổn định hơn khi model rất sâu vì residual path sạch hơn cho gradient.
+
+<Note type="result">
+BatchNorm nhìn ngang qua batch; LayerNorm nhìn dọc trong feature dimension của từng token/sample. Vì vậy BatchNorm hợp CNN/vision training, còn LayerNorm hợp Transformer và sequence modeling.
+</Note>
+
+## RMSNorm — bỏ mean, chỉ giữ scale
+
+**RMSNorm** đơn giản hóa LayerNorm: không trừ mean, chỉ chuẩn hóa theo root mean square.
+
+$$
+\operatorname{RMS}(x) =
+\sqrt{\frac{1}{d}\sum_{i=1}^{d} x_i^2 + \epsilon}
+$$
+
+$$
+y = \gamma \frac{x}{\operatorname{RMS}(x)}
+$$
+
+So với LayerNorm, RMSNorm bỏ phần centering $x - \mu$. Nó chỉ kiểm soát scale của vector hidden state. Điều này rẻ hơn một chút và thường đủ tốt cho Transformer/LLM lớn.
+
+Tại sao nhiều LLM dùng RMSNorm?
+
+- giảm compute và communication nhẹ
+- đơn giản hơn LayerNorm
+- ổn định scale của residual stream
+- trong thực nghiệm thường không kém LayerNorm ở LLM
+
+RMSNorm không phải "tốt hơn LayerNorm" trong mọi trường hợp. Nó là một tradeoff: ít thao tác hơn, ít giả định hơn, đủ ổn cho các kiến trúc lớn có recipe training tốt.
+
+## Pre-norm, post-norm và residual stream
+
+Normalization quan trọng nhất khi đi cùng residual connection. Với một block tổng quát:
+
+```text
+x → sublayer → +x
+```
+
+câu hỏi là đặt norm ở đâu.
+
+**Post-norm**:
+
+```text
+y = Norm(x + Sublayer(x))
+```
+
+Ưu điểm: output mỗi block được chuẩn hóa. Nhược điểm: gradient đi qua norm sau mỗi residual add, dễ khó train khi rất sâu.
+
+**Pre-norm**:
+
+```text
+y = x + Sublayer(Norm(x))
+```
+
+Ưu điểm: residual stream có đường identity sạch hơn; gradient có thể đi qua nhiều block dễ hơn. Đây là lý do pre-norm trở thành lựa chọn phổ biến trong Transformer lớn.
+
+<Note type="intuition">
+ResNet dạy ta rằng residual path sạch giúp gradient sống qua nhiều layer. Pre-norm áp dụng cùng tinh thần đó cho Transformer: normalize input của sublayer, nhưng để đường cộng residual giữ vai trò "xa lộ" cho thông tin và gradient.
+</Note>
+
+## So sánh nhanh
+
+| Norm | Chuẩn hóa trên trục nào | Phù hợp với | Điểm cần nhớ |
+|---|---|---|---|
+| BatchNorm | batch + spatial, theo từng channel | CNN, vision, batch đủ lớn | train/inference khác nhau, phụ thuộc batch stats |
+| LayerNorm | feature dimension trong từng sample/token | RNN, Transformer, sequence | không phụ thuộc batch, ổn với autoregressive inference |
+| RMSNorm | RMS của feature dimension | LLM, Transformer lớn | bỏ mean-centering, rẻ và đủ ổn trong thực nghiệm |
+
+## Normalization nằm ở đâu trong architecture?
+
+Normalization không phải một architecture family như CNN hay Transformer. Nó là một **architectural component**: một khối nhỏ nhưng ảnh hưởng mạnh đến khả năng train.
+
+Trong CNN cổ điển, BatchNorm giúp convolutional stack sâu hơn và ổn định hơn. Trong ConvNeXt, việc chuyển từ BatchNorm sang LayerNorm là một phần của quá trình hiện đại hóa ConvNet. Trong Transformer, LayerNorm/RMSNorm gần như là hạ tầng của residual stream.
+
+<Note type="result">
+Nếu residual connection tạo đường đi cho thông tin, normalization giữ scale của đường đi đó trong vùng dễ tối ưu. Hai thành phần này thường đi cùng nhau trong các kiến trúc sâu hiện đại.
+</Note>
+
+## Papers tham khảo
+
+| Paper | |
+|---|---|
+| Ioffe & Szegedy (2015) | Batch Normalization |
+| Ba et al. (2016) | Layer Normalization |
+| Zhang & Sennrich (2019) | Root Mean Square Layer Normalization |
+| Xiong et al. (2020) | On Layer Normalization in the Transformer Architecture |
