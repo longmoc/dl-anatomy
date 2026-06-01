@@ -50,19 +50,23 @@ Backbone architectures ask "what mechanism moves information through the model?"
 | Generative Models | Autoregressive models, GANs, normalizing flows, diffusion, energy-based models |
 | Multimodal Models | CLIP-style alignment, vision-language models, text-to-image, audio-language, unified multimodal models |
 
-## One unifying thread: message passing
+## One shared question: where does information come from?
 
-Many seemingly distinct architectures are really **message passing over different data structures** — each unit gathers information from its "neighbors" and updates:
+One useful way to read architectures is to ask: at each layer, which other units is a unit allowed to take information from?
 
-| Architecture | Structure | "Neighbors" |
+In a CNN, a pixel or patch mainly sees a local neighborhood. In an RNN, the current timestep sees the previous state. In a GNN, a node sees the nodes connected to it by edges. In a Transformer, each token can see every other token through attention.
+
+In more general language, this is **message passing**: each unit receives "messages" from a set of information sources, aggregates them, and updates its representation. Architectures differ mostly in how they define that source set.
+
+| Architecture | Data structure | Who does each unit look at? |
 |---|---|---|
-| CNN | Grid (image) | Nearby pixels in the kernel |
+| CNN | Image grid | Nearby pixels/patches in the kernel |
 | RNN | Sequence | The previous step's state |
-| GNN | Arbitrary graph | Nodes joined by edges |
-| Transformer | Complete graph | *Every* token (via attention) |
+| GNN | Arbitrary graph | Nodes connected by edges |
+| Transformer | Sequence as a complete graph | *Every* other token through attention |
 
 <Note type="intuition">
-A Transformer can be seen as a **GNN on a complete graph** — every token connects to every other token, and the edge weights are the attention scores. This is why it's the most flexible but also the most expensive ($O(n^2)$).
+Through the message passing lens, a Transformer can be seen as a **GNN on a complete graph**: every token connects to every other token, and the edge weights are the attention scores. This is why it is so flexible but also expensive — if every token talks to every other token, the number of interactions grows as $O(n^2)$.
 </Note>
 
 ## The evolution axis
