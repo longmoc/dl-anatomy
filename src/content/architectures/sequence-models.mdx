@@ -99,6 +99,14 @@ Gate trong LSTM và residual connection trong ResNet chia sẻ cùng một insig
 
 **GRU** là phiên bản gọn hơn: gộp một số gate, không tách riêng cell state $c_t$. Nó thường ít tham số hơn LSTM, dễ train hơn RNN thuần, và đủ tốt trong nhiều bài toán sequence cổ điển.
 
+| | LSTM | GRU |
+|---|---|---|
+| Gate | forget, input, output | update, reset |
+| State | cell $c_t$ + hidden $h_t$ | chỉ $h_t$ |
+| Tham số | nhiều hơn | gọn hơn |
+
+Cả hai cùng một insight cốt lõi — gate tạo đường cập nhật gần như cộng để giữ ký ức lâu hơn — chỉ khác cách tổ chức gate.
+
 ## Seq2Seq — encoder-decoder cho chuỗi sang chuỗi
 
 RNN/LSTM/GRU ban đầu thường dùng cho bài toán một chuỗi vào một nhãn, hoặc dự đoán từng bước. Nhưng nhiều task cần ánh xạ **một chuỗi sang một chuỗi khác**:

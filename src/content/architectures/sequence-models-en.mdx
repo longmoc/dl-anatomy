@@ -99,6 +99,14 @@ LSTM gates and ResNet residual connections share the same insight: for a gradien
 
 **GRU** is a leaner variant: it merges some gates and does not keep a separate cell state $c_t$. It usually has fewer parameters than LSTM, trains much better than a vanilla RNN, and works well on many classical sequence tasks.
 
+| | LSTM | GRU |
+|---|---|---|
+| Gates | forget, input, output | update, reset |
+| State | cell $c_t$ + hidden $h_t$ | only $h_t$ |
+| Parameters | more | fewer |
+
+Both share the same core insight — gates create a near-additive update path to preserve memory longer — they only differ in how the gates are organized.
+
 ## Seq2Seq — Encoder-Decoder for Sequence to Sequence
 
 Early RNN/LSTM/GRU models were often used for mapping one sequence to one label, or predicting step by step. But many tasks require mapping **one sequence to another sequence**:
