@@ -51,7 +51,7 @@ const top = [
   { ax: 435, label: 'Values',  color: amber,   dots: mk(435, tay, tw, th, layC, amber) },
 ];
 // per-head panels
-const hw = 78, hh = 82, hay = 410;
+const hw = 78, hh = 82, hay = 360;
 const head1 = [
   { ax: 65,  label: 'Q', color: accent,  dots: mk(65,  hay, hw, hh, layD, accent) },
   { ax: 160, label: 'K', color: accent2, dots: mk(160, hay, hw, hh, layE, accent2) },
@@ -65,7 +65,7 @@ const head2 = [
 ---
 
 <figure class="mha">
-  <svg viewBox="0 0 720 512" role="img" aria-label="Multi-head attention overview" class="mha-svg">
+  <svg viewBox="0 0 720 466" role="img" aria-label="Multi-head attention overview" class="mha-svg">
     <defs>
       <marker id="mha-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
         <path d="M0,0 L10,5 L0,10 z" class="mha-head" />
@@ -104,11 +104,11 @@ const head2 = [
     </text>
 
     <!-- ===== Head 1 ===== -->
-    <text x="190" y="242" class="mha-htitle">{L.head1}</text>
-    <rect x="40" y="248" width="300" height="178" rx="9" class="mha-dash" />
+    <text x="248" y="242" class="mha-htitle">{L.head1}</text>
+    <rect x="40" y="248" width="300" height="126" rx="9" class="mha-dash" />
     {head1.map(p => (
       <g>
-        <text x={p.ax + hw / 2} y="296" class="mha-sub" style={`fill:${p.color}`}>{p.label}</text>
+        <text x={p.ax + hw / 2} y="268" class="mha-sub" style={`fill:${p.color}`}>{p.label}</text>
         <line x1={p.ax} y1={hay} x2={p.ax} y2={hay - hh} class="mha-axis" />
         <line x1={p.ax} y1={hay} x2={p.ax + hw} y2={hay} class="mha-axis" />
         {p.dots.map(d => (
@@ -121,11 +121,11 @@ const head2 = [
     ))}
 
     <!-- ===== Head 2 ===== -->
-    <text x="530" y="242" class="mha-htitle">{L.head2}</text>
-    <rect x="380" y="248" width="300" height="178" rx="9" class="mha-dash" />
+    <text x="472" y="242" class="mha-htitle">{L.head2}</text>
+    <rect x="380" y="248" width="300" height="126" rx="9" class="mha-dash" />
     {head2.map(p => (
       <g>
-        <text x={p.ax + hw / 2} y="296" class="mha-sub" style={`fill:${p.color}`}>{p.label}</text>
+        <text x={p.ax + hw / 2} y="268" class="mha-sub" style={`fill:${p.color}`}>{p.label}</text>
         <line x1={p.ax} y1={hay} x2={p.ax} y2={hay - hh} class="mha-axis" />
         <line x1={p.ax} y1={hay} x2={p.ax + hw} y2={hay} class="mha-axis" />
         {p.dots.map(d => (
@@ -138,14 +138,14 @@ const head2 = [
     ))}
 
     <!-- ===== concat + output ===== -->
-    <line x1="190" y1="426" x2="305" y2="450" class="mha-line" marker-end="url(#mha-arrow)" />
-    <line x1="530" y1="426" x2="415" y2="450" class="mha-line" marker-end="url(#mha-arrow)" />
-    <rect x="300" y="450" width="120" height="30" rx="8" class="mha-concat" />
-    <text x="360" y="469" class="mha-concat-text">
+    <line x1="190" y1="374" x2="305" y2="398" class="mha-line" marker-end="url(#mha-arrow)" />
+    <line x1="530" y1="374" x2="415" y2="398" class="mha-line" marker-end="url(#mha-arrow)" />
+    <rect x="300" y="398" width="120" height="30" rx="8" class="mha-concat" />
+    <text x="360" y="417" class="mha-concat-text">
       <tspan>{L.concat} → W</tspan><tspan baseline-shift="super" font-size="8">O</tspan>
     </text>
-    <line x1="360" y1="480" x2="360" y2="496" class="mha-line" marker-end="url(#mha-arrow)" />
-    <text x="360" y="508" class="mha-out">{L.output}</text>
+    <line x1="360" y1="428" x2="360" y2="444" class="mha-line" marker-end="url(#mha-arrow)" />
+    <text x="360" y="456" class="mha-out">{L.output}</text>
   </svg>
   <figcaption class="mha-cap">{L.cap}</figcaption>
 </figure>
