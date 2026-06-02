@@ -6,12 +6,10 @@ const { lang = 'vi' } = Astro.props;
 
 const L = lang === 'en'
   ? {
-      step: 'Step 1',
-      cap: 'Step 1 of scaled dot-product attention: multiply Q (T×d) by Kᵀ (d×T) to get the score matrix QKᵀ (T×T) — each cell is how well one query matches one key. The next steps scale by √dₖ, softmax each row, then multiply by V.',
+      cap: 'Scaled dot-product attention: multiply Q (T×d) by Kᵀ (d×T) to get the score matrix QKᵀ (T×T) — each cell is how well one query matches one key. The next steps scale by √dₖ, softmax each row, then multiply by V.',
     }
   : {
-      step: 'Bước 1',
-      cap: 'Bước 1 của scaled dot-product attention: nhân Q (T×d) với Kᵀ (d×T) ra ma trận điểm khớp QKᵀ (T×T) — mỗi ô là độ khớp giữa một query và một key. Các bước sau chia √dₖ, softmax theo hàng, rồi nhân với V.',
+      cap: 'Scaled dot-product attention: nhân Q (T×d) với Kᵀ (d×T) ra ma trận điểm khớp QKᵀ (T×T) — mỗi ô là độ khớp giữa một query và một key. Sau đó chia √dₖ, softmax theo hàng, rồi nhân với V.',
     };
 
 function grid(x, y, w, h, cols, rows) {
@@ -29,9 +27,6 @@ const gR = grid(610, 120, 100, 100, 10, 10); // QKᵀ T×T (square)
     <defs>
       <marker id="sdp-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
         <path d="M0,0 L10,5 L0,10 z" class="sdp-head" />
-      </marker>
-      <marker id="sdp-step" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-        <path d="M0,0 L10,5 L0,10 z" class="sdp-step-head" />
       </marker>
     </defs>
 
