@@ -11,6 +11,7 @@ tags: [transformer, attention, positional-encoding, multi-head]
 
 import Note from '../../components/Note.astro';
 import AttentionViz from '../../components/AttentionViz.astro';
+import MultiHeadDiagram from '../../components/MultiHeadDiagram.astro';
 
 # Transformer & Attention
 
@@ -110,6 +111,8 @@ $$
 Trực giác: mỗi head học một kiểu quan hệ khác nhau. Một head có thể tập trung vào token gần, head khác vào subject-verb agreement, head khác vào dấu câu, coreference hoặc cấu trúc dài hơn. Không nên hiểu quá cứng rằng mỗi head luôn có "vai trò ngôn ngữ học" rõ ràng, nhưng multi-head cho model nhiều subspace để trộn thông tin.
 
 Giống CNN dùng nhiều kernel để nhìn nhiều pattern không gian, Transformer dùng nhiều attention head để nhìn nhiều pattern quan hệ.
+
+<MultiHeadDiagram lang="vi" />
 
 ## Transformer block
 

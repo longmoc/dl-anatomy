@@ -11,6 +11,7 @@ tags: [transformer, attention, positional-encoding, multi-head]
 
 import Note from '../../components/Note.astro';
 import AttentionViz from '../../components/AttentionViz.astro';
+import MultiHeadDiagram from '../../components/MultiHeadDiagram.astro';
 
 # Transformer & Attention
 
@@ -110,6 +111,8 @@ $$
 Intuition: each head can learn a different kind of relation. One head may focus on nearby tokens, another on subject-verb agreement, another on punctuation, coreference, or longer structure. We should not force every head to have a clean linguistic role, but multi-head attention gives the model multiple subspaces for mixing information.
 
 Like a CNN uses many kernels to see many spatial patterns, a Transformer uses many attention heads to see many relational patterns.
+
+<MultiHeadDiagram lang="en" />
 
 ## The Transformer block
 
