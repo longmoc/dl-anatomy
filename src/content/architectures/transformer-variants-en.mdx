@@ -1,6 +1,6 @@
 ---
 title: "Transformer Variants & MoE"
-description: "Encoder-only, decoder-only, ViT, efficient transformers — and Mixture of Experts to scale parameters without scaling compute."
+description: "Encoder-only, decoder-only, encoder-decoder, ViT, efficient attention, and Mixture of Experts: how one Transformer block becomes many model families."
 lang: en
 category: architectures
 order: 6
@@ -13,73 +13,255 @@ import Note from '../../components/Note.astro';
 
 # Transformer Variants & MoE
 
-The [Transformer & Attention](/dl-anatomy/architectures/transformer-en) article covered the *mechanism*. From the same transformer block, the community built a whole family by changing *how* attention is used and *how* it's scaled.
+The [Transformer & Attention](/dl-anatomy/architectures/transformer-en) article established the core: a Transformer block uses self-attention to mix tokens, an FFN to process each token, plus residual paths, normalization, and positional information. From that same block, we get many model families by changing the **mask**, **objective**, **input format**, **attention pattern**, or **how the FFN is scaled**.
 
-## Three ways to use attention
+In other words, "Transformer" is no longer one fixed architecture. It is an **architecture template**: keep the attention + FFN core, then change what information tokens may access, how data becomes tokens, and where compute is allocated.
 
-The core difference between families is **which tokens may attend to which** (the attention mask):
-
-| Variant | Mask | Example | Used for |
-|---|---|---|---|
-| Encoder-only | Bidirectional (sees both sides) | BERT, RoBERTa | Understanding/representation: classification, embeddings, retrieval |
-| Decoder-only | Causal (sees only the past) | GPT, LLaMA | Autoregressive text generation |
-| Encoder-decoder | Bidirectional encoder + causal decoder + cross-attention | T5, BART | Seq2seq: translation, summarization |
+| Design axis | Question | Produces |
+|---|---|---|
+| Attention mask | Which tokens may attend to which? | encoder-only, decoder-only, encoder-decoder |
+| Training objective | What learning signal does the model use? | masked LM, next-token prediction, denoising seq2seq |
+| Input format | What counts as a token? | text Transformers, ViT, multimodal Transformers |
+| Attention pattern/kernel | How do we reduce attention cost? | sparse, local, linear, FlashAttention |
+| FFN routing | Does each token use all parameters or only some? | Mixture of Experts |
 
 <Note type="intuition">
-The same attention block, just a different **mask**, yields three different "personalities". Decoder-only came to dominate the LLM era because a single objective — *predict the next token* — is both simple and scales extremely well, and every task (translation, summarization, QA) can be rewritten as text generation.
+The same attention equation can produce a model that "understands bidirectionally", a model that "generates left to right", or a model that "translates one sequence into another". The big difference is no longer the $QK^\top$ multiplication itself, but **information access** and the **training objective**.
 </Note>
 
-## Vision Transformer (ViT)
+## Three Transformer Families by Mask
 
-**ViT (Dosovitskiy et al., 2020)** applies the transformer to images: cut the image into $16\times16$ **patches**, flatten each into a vector → treat it as a "token". Then it's a standard transformer.
+The first and most important difference is: when computing a token representation, which other tokens is it allowed to see?
 
-The striking part: ViT has almost **none of the CNN's inductive bias** (locality, translation invariance). On small data it loses to CNNs, but on very large data (JFT-300M) it wins — exactly the "fewer assumptions + more data" spirit of the Transformer.
+| Family | Mask | Typical objective | Examples | Good for |
+|---|---|---|---|---|
+| Encoder-only | bidirectional, sees left and right | masked language modeling | BERT, RoBERTa | sentence understanding, embeddings, classification, retrieval |
+| Decoder-only | causal, sees only the past | next-token prediction | GPT, LLaMA | autoregressive text generation, chat, code |
+| Encoder-decoder | bidirectional encoder, causal decoder + cross-attention | seq2seq / denoising | T5, BART | translation, summarization, sequence transformation |
 
-## Efficient Transformers — attacking $O(n^2)$
+### Encoder-only: bidirectional representation learning
 
-Attention costs $O(n^2)$ in sequence length. Several directions reduce it:
+Encoder-only models use **bidirectional self-attention**: each token can see both left and right context. This is a natural fit for tasks where the model should understand the whole input before producing a label or embedding.
 
-- **Sparse/local attention** (Longformer, BigBird): each token attends only to a local window + a few global tokens
-- **Linear attention** (Performer): approximate the softmax to get $O(n)$
-- **FlashAttention**: doesn't change the asymptotic complexity but optimizes GPU memory I/O → much faster in practice, the de facto standard today
+In BERT, for example, the model is trained with **masked language modeling**: hide some tokens and ask the model to reconstruct them from both-sided context. Because tokens can see the future, encoder-only models are not suited for left-to-right autoregressive generation, but they are strong representation learners:
 
-## MoE — scaling parameters without scaling compute
+- sentence and document embeddings
+- classification
+- token classification such as NER
+- reranking and retrieval
+- feature extraction for NLP systems
 
-Most of an LLM's parameters live in the **FFN** (the 2-layer network in each block), not in attention. **Mixture of Experts** exploits this: replace one FFN with $N$ parallel "expert" FFNs + a small **router**; each token passes through only the top-$k$ experts (often $k=1$ or $2$):
+<Note type="intuition">
+Encoder-only is like reading the whole paragraph before answering. It can understand context well, but it is not constrained to write from left to right.
+</Note>
+
+### Decoder-only: generation with a causal mask
+
+Decoder-only models use **causal self-attention**: the current token can see only past tokens and itself. This mask turns the Transformer into an autoregressive model:
 
 $$
-y = \sum_{e \in \text{top-}k} g_e(x)\, \text{FFN}_e(x)
+p(x_1, \dots, x_n) = \prod_{t=1}^{n} p(x_t \mid x_{<t})
 $$
 
-where $g_e(x)$ is the router weight (softmax over router scores, keeping only top-$k$).
+The objective is simple: **predict the next token**. That simplicity is one reason decoder-only became the central backbone of modern LLMs:
+
+- text provides its own supervision, with no manual labels
+- one objective scales well with large datasets
+- many tasks can be rewritten as prompts followed by generated output
+- token-by-token inference matches how the model was trained
+
+The cost appears at inference: to generate the next token efficiently, the model usually stores a **KV-cache** for previous tokens. This avoids recomputing the full past, but memory still grows with context length.
+
+### Encoder-decoder: separate input understanding from output generation
+
+Encoder-decoder Transformers separate two roles:
+
+1. The **encoder** reads the full input with bidirectional attention.
+2. The **decoder** generates output with causal attention.
+3. **Cross-attention** lets decoder queries attend to encoder keys/values.
+
+This architecture is a natural fit for seq2seq tasks: machine translation, summarization, correction, code transformation, or any task where input and output are different sequences. T5 pushed this idea far by casting many NLP tasks into the same "text-to-text" format.
+
+Compared with decoder-only, encoder-decoder has a clearer inductive bias for sequence transformation. Compared with encoder-only, it has an explicit output generation mechanism. But in the instruction-tuned LLM era, decoder-only became dominant because it is simpler: one model, one objective, one text-in/text-out interface.
+
+## ViT: turning images into token sequences
+
+Transformers do not require input tokens to be words. **Vision Transformer (ViT)** asked a bold question: what if an image is also a sequence of tokens?
+
+ViT does this:
+
+1. Cut the image into patches, often $16 \times 16$.
+2. Flatten each patch into a vector.
+3. Project each patch vector into an embedding.
+4. Add positional embeddings.
+5. Feed the patch sequence into a Transformer encoder.
+
+Geometrically, each patch is a token. Architecturally, ViT uses the same self-attention as a text Transformer; only the input tokenization changes.
+
+The striking part is that ViT removes much of the CNN's strong inductive bias:
+
+- CNNs have locality: kernels look at local neighborhoods.
+- CNNs have weight sharing: the same kernel scans the image.
+- CNNs build spatial hierarchy through pooling or stride.
+- ViT asks attention to learn relationships between patches.
+
+Because it has fewer built-in biases, ViT usually needs large datasets or strong pretraining to outperform CNNs. But with enough data and compute, it shows that the Transformer can become a powerful vision backbone.
 
 <Note type="result">
-The key — **decoupling parameter count from compute cost**: total parameters grow $N\times$ (more stored knowledge) but per-token compute stays roughly constant since only $k$ experts are active (sparse activation). Mixtral 8×7B has ~47B parameters but uses only ~13B per token.
+ViT does not prove that convolution is "wrong". It shows that with enough data, scale, and training recipe, many inductive biases can be learned instead of hard-coded. This is also the broader reason Transformers spread beyond NLP.
 </Note>
 
-### The challenge: load balancing
+### From ViT to multimodal Transformers
 
-Left unchecked, the router tends to **funnel most tokens to a few favorite experts** — the rest "die", wasting parameters. Fixes: an **auxiliary load-balancing loss** encouraging even routing, or a per-expert capacity limit (capacity factor).
+Once images can become tokens, the next question is natural: can text tokens, image patches, audio frames, and video patches live in one sequence?
 
-| Model | Total params | Active / token |
-|---|---|---|
-| Switch Transformer | up to ~1.6T | a small fraction |
-| Mixtral 8×7B | ~47B | ~13B (top-2 of 8 experts) |
+This is the bridge to multimodal models. Vision-language systems differ in how they encode each modality and how they let modalities interact:
 
-## The picture
+- encode images separately and align them with text, as in CLIP
+- insert image tokens into a language model as part of context
+- use cross-attention between text and image features
+- use a unified Transformer across multiple modalities
 
-One transformer block → change the **mask** for encoder/decoder/enc-dec → change the **input** (patches) for ViT → optimize **attention** for efficient transformers → multiply the **FFN** for MoE. It's all the same attention core.
+For this article, the key point is simple: the Transformer became a general template because it does not care where tokens come from, as long as data can be converted into vectors with suitable position or structure information.
 
-But even after optimizing masks, kernels, or FFNs, attention keeps one system-level question: for very long context, do we have to keep memory per token? The next article moves to [State Space Models (Mamba)](/dl-anatomy/architectures/state-space-models-en), a branch that returns to **fixed state** and **linear scan** to reduce long-sequence cost.
+## Efficient Transformers: attacking attention cost
+
+Standard self-attention builds interactions between every pair of tokens. With sequence length $n$, the attention score matrix is $n \times n$, so compute and memory grow as $O(n^2)$.
+
+This is manageable for short sequences, but painful for:
+
+- long-context LLMs
+- long documents
+- audio or time-series
+- video, where the number of patches grows quickly
+
+There are several ways to reduce attention cost. They are not the same: some change the operation, while others keep exact attention and optimize the implementation.
+
+| Direction | Idea | Examples | Tradeoff |
+|---|---|---|---|
+| Local/sparse attention | each token attends to a window or sparse pattern | Longformer, BigBird | cheaper, but fewer global interactions |
+| Low-rank/kernel/linear attention | approximate or rewrite softmax attention to be closer to linear | Linformer, Performer | faster, but approximate |
+| Memory-efficient exact attention | keep exact attention, reduce memory reads/writes | FlashAttention | same asymptotic $O(n^2)$, much faster in practice |
+| KV-cache optimization | reduce the keys/values stored during inference | MQA, GQA | saves memory, may affect quality or capacity |
+
+### Sparse and local attention
+
+If every token does not need to see every other token, attention can be restricted to a local region. In long text, many dependencies are local: nearby words often matter most. Longformer uses a local window plus some global tokens. BigBird combines local, random, and global attention to preserve longer-range communication.
+
+Intuitively: instead of a complete graph, we use a structured sparse graph. It is cheaper, but information may need more layers or global tokens to travel far.
+
+### Linear attention
+
+Linear attention tries to avoid constructing the $n \times n$ matrix by transforming the attention formula. Performer is one example: it uses random features to approximate softmax attention. If this works, cost can become close to $O(n)$ in sequence length.
+
+But standard attention is powerful because it lets a token retrieve information directly by content. When we approximate or linearize it, we often trade away some of that flexibility.
+
+### FlashAttention: exact but hardware-aware
+
+FlashAttention does not claim standard attention stops being $O(n^2)$. It says the real GPU bottleneck is not only arithmetic, but also **memory I/O**: reading and writing the huge attention matrix to HBM is expensive.
+
+FlashAttention computes attention in blocks, keeps more intermediate values in faster SRAM, and avoids materializing the full attention matrix. The result is the same exact attention formula, but faster and more memory-efficient training and inference.
+
+<Note type="warning">
+Do not put every "efficient attention" method in the same bucket. Sparse attention changes the access pattern; linear attention changes or approximates the formula; FlashAttention keeps the formula but changes the hardware implementation. They solve the same pain point through different interventions.
+</Note>
+
+## MoE: scaling parameters without scaling compute linearly
+
+In a Transformer block, attention gets most of the attention, but many parameters live in the **feed-forward network (FFN)**. The FFN is applied independently to each token:
+
+$$
+\text{FFN}(x) = W_2 \sigma(W_1 x + b_1) + b_2
+$$
+
+Mixture of Experts (MoE) replaces a single FFN with many parallel FFNs called **experts**. A small **router** decides which expert each token should use.
+
+If there are $N$ experts, each token usually passes through only the top-$k$ experts, with small $k$ such as $1$ or $2$:
+
+$$
+y = \sum_{e \in \text{top-}k} g_e(x)\,\text{FFN}_e(x)
+$$
+
+where $g_e(x)$ is the router weight for expert $e$.
+
+The central idea is **sparse activation**:
+
+- total parameter count can grow a lot because there are many experts
+- per-token compute grows only with the number of selected experts
+- the model gains capacity without using all capacity for every token
+
+<Note type="result">
+MoE does not make models "free". It changes the problem from "one large FFN for every token" to "many FFNs, with each token using only a few". If routing works well, we get more capacity at lower compute/token than a dense model with the same total parameter count.
+</Note>
+
+### What does the router learn?
+
+The router takes a token representation and scores the experts. Intuitively, different tokens may need different processing: code, math, names, syntax, languages, or domain-specific patterns.
+
+But we should not assume each expert always has a clean human-readable role like "math expert" or "Vietnamese expert". Specialization can emerge, but the router is primarily a learned compute allocation mechanism.
+
+### Load balancing: the hard part of MoE
+
+If the router is left unchecked, it may send most tokens to a few favorite experts. Then:
+
+- hot experts become overloaded
+- other experts receive little training
+- batches run inefficiently on hardware
+- total capacity is wasted
+
+This is why MoE often needs an **auxiliary load-balancing loss**, per-expert capacity limits, or carefully designed routing policies. MoE is not just "multiply the FFN and done"; it is also a systems problem.
+
+| Concept | Meaning |
+|---|---|
+| Expert | a separate FFN |
+| Router / gate | module that selects experts for each token |
+| Top-$k$ routing | each token activates only a few experts |
+| Active parameters | parameters actually used by one token |
+| Load balancing | keeping token distribution even enough that experts do not die or overload |
+
+### Dense vs sparse scaling
+
+Dense models use all parameters for every token. If we widen the FFN, compute/token grows with it. MoE grows total parameters by adding experts, but compute/token grows more slowly because each token uses only a few experts.
+
+| Model type | Total parameters | Compute/token | Character |
+|---|---|---|---|
+| Dense Transformer | all parameters active | grows with model size | simpler, stable, easier to implement |
+| MoE Transformer | many experts, few active | lower than dense at the same total parameter count | more capacity, complex routing, harder balancing |
+
+## The Big Picture
+
+Transformer variants are not a random list of models. They are answers to different design questions:
+
+| Question | Typical answer |
+|---|---|
+| Should the model see both directions or only the past? | encoder-only vs decoder-only |
+| Are input and output one sequence or two sequences? | decoder-only vs encoder-decoder |
+| How do non-text data become tokens? | ViT, multimodal tokenization |
+| How should attention handle long sequences? | sparse/local/linear attention, FlashAttention |
+| How do we add capacity without linear compute growth? | MoE |
+
+The common core remains the Transformer block. But each branch changes part of the contract:
+
+- **mask** controls access
+- **objective** controls the learning signal
+- **tokenization** controls what kind of data enters
+- **kernel/pattern** controls attention cost
+- **routing** controls which parameters receive compute
+
+Even after optimizing masks, kernels, and FFNs, attention still leaves one system-level question: for very long context, do we have to keep memory per token? The next article moves to [State Space Models (Mamba)](/dl-anatomy/architectures/state-space-models-en), a branch that returns to **fixed state** and **linear scan** to reduce long-sequence cost.
 
 ## References
 
-| Paper | |
+| Paper | Role |
 |---|---|
-| Devlin et al. (2018) | BERT |
-| Radford et al. (2019) | Language Models are Unsupervised Multitask Learners (GPT-2) |
-| Raffel et al. (2020) | Exploring the Limits of Transfer Learning (T5) |
-| Dosovitskiy et al. (2020) | An Image is Worth 16×16 Words (ViT) |
-| Dao et al. (2022) | FlashAttention |
-| Fedus et al. (2021) | Switch Transformers |
-| Jiang et al. (2024) | Mixtral of Experts |
+| Devlin et al. (2018) | BERT, encoder-only Transformer with masked language modeling |
+| Radford et al. (2019) | GPT-2, decoder-only Transformer scaled by next-token prediction |
+| Raffel et al. (2020) | T5, encoder-decoder under a text-to-text format |
+| Dosovitskiy et al. (2020) | Vision Transformer, images as patch token sequences |
+| Beltagy et al. (2020) | Longformer, local/global attention for long documents |
+| Zaheer et al. (2020) | BigBird, sparse attention with global/random/local patterns |
+| Choromanski et al. (2020) | Performer, linear attention with random features |
+| Dao et al. (2022) | FlashAttention, exact attention optimized for memory I/O |
+| Shazeer et al. (2017) | Sparsely-Gated MoE, foundation for modern MoE |
+| Fedus et al. (2021) | Switch Transformer, top-1 routing at large scale |
+| Jiang et al. (2024) | Mixtral of Experts, practical decoder-only MoE |

@@ -1,6 +1,6 @@
 ---
 title: "Transformer Variants & MoE"
-description: "Encoder-only, decoder-only, ViT, efficient transformer — và Mixture of Experts để scale tham số mà không scale compute."
+description: "Encoder-only, decoder-only, encoder-decoder, ViT, efficient attention và Mixture of Experts: các cách biến cùng một Transformer block thành nhiều họ mô hình khác nhau."
 lang: vi
 category: architectures
 order: 6
@@ -13,73 +13,255 @@ import Note from '../../components/Note.astro';
 
 # Transformer Variants & MoE
 
-Bài [Transformer & Attention](/dl-anatomy/architectures/transformer) mô tả *cơ chế*. Từ cùng một transformer block, cộng đồng tạo ra cả một họ kiến trúc bằng cách thay đổi *cách dùng* attention và *cách scale*.
+Bài [Transformer & Attention](/dl-anatomy/architectures/transformer) đã chốt phần lõi: Transformer block gồm self-attention để trộn token, FFN để xử lý từng token, residual path, normalization và positional information. Từ cùng một block đó, ta có thể tạo ra rất nhiều họ mô hình chỉ bằng cách đổi **mask**, **objective**, **input format**, **attention pattern** hoặc **cách scale FFN**.
 
-## Ba kiểu dùng attention
+Nói cách khác, "Transformer" không còn là một kiến trúc đơn lẻ. Nó là một **template kiến trúc**: giữ lõi attention + FFN, rồi thay đổi hợp đồng mà token được phép nhìn, dữ liệu được biến thành token như thế nào, và compute được phân bổ ở đâu.
 
-Khác biệt cốt lõi giữa các họ là **token nào được nhìn token nào** (attention mask):
-
-| Biến thể | Mask | Ví dụ | Dùng cho |
-|---|---|---|---|
-| Encoder-only | Bidirectional (nhìn cả hai phía) | BERT, RoBERTa | Hiểu/biểu diễn: classification, embedding, retrieval |
-| Decoder-only | Causal (chỉ nhìn quá khứ) | GPT, LLaMA | Sinh văn bản tự hồi quy |
-| Encoder-decoder | Encoder bidirectional + decoder causal + cross-attention | T5, BART | Seq2seq: dịch, tóm tắt |
+| Trục thay đổi | Câu hỏi thiết kế | Sinh ra |
+|---|---|---|
+| Attention mask | Token nào được nhìn token nào? | encoder-only, decoder-only, encoder-decoder |
+| Training objective | Model học bằng tín hiệu nào? | masked LM, next-token prediction, denoising seq2seq |
+| Input format | Dữ liệu nào được coi như token? | text Transformer, ViT, multimodal Transformer |
+| Attention pattern/kernel | Làm sao giảm chi phí attention? | sparse, local, linear, FlashAttention |
+| FFN routing | Mỗi token dùng toàn bộ hay một phần tham số? | Mixture of Experts |
 
 <Note type="intuition">
-Cùng một block attention, chỉ đổi **mask**, ra ba "tính cách" khác nhau. Decoder-only thắng thế trong kỷ nguyên LLM vì một mục tiêu duy nhất — *dự đoán token kế tiếp* — vừa đơn giản vừa scale cực tốt, và mọi task (dịch, tóm tắt, hỏi đáp) đều có thể viết lại thành sinh văn bản.
+Cùng một công thức attention có thể tạo ra model "hiểu hai chiều", model "sinh từng token", hoặc model "dịch từ chuỗi này sang chuỗi khác". Khác biệt lớn không nằm ở phép nhân $QK^\top$ nữa, mà nằm ở **quyền truy cập thông tin** và **objective huấn luyện**.
 </Note>
 
-## Vision Transformer (ViT)
+## Ba họ Transformer theo mask
 
-**ViT (Dosovitskiy et al., 2020)** áp transformer lên ảnh: cắt ảnh thành các **patch** $16\times16$, trải phẳng mỗi patch thành một vector → coi như một "token". Sau đó là transformer chuẩn.
+Khác biệt đầu tiên và quan trọng nhất là: khi tính representation cho một token, nó được phép nhìn những token nào?
 
-Điểm đáng chú ý: ViT gần như **không có inductive bias của CNN** (locality, translation invariance). Với data nhỏ nó thua CNN, nhưng với data cực lớn (JFT-300M) nó vượt — đúng tinh thần "ít giả định + nhiều data" của Transformer.
+| Họ | Mask | Objective điển hình | Ví dụ | Hợp với |
+|---|---|---|---|---|
+| Encoder-only | bidirectional, nhìn cả trái và phải | masked language modeling | BERT, RoBERTa | hiểu câu, embedding, classification, retrieval |
+| Decoder-only | causal, chỉ nhìn quá khứ | next-token prediction | GPT, LLaMA | sinh văn bản tự hồi quy, chat, code |
+| Encoder-decoder | encoder bidirectional, decoder causal + cross-attention | seq2seq / denoising | T5, BART | dịch, tóm tắt, chuyển đổi chuỗi |
 
-## Efficient Transformer — đánh vào $O(n^2)$
+### Encoder-only: học representation hai chiều
 
-Attention tốn $O(n^2)$ theo độ dài chuỗi. Nhiều hướng giảm chi phí:
+Encoder-only dùng **bidirectional self-attention**: mỗi token được nhìn cả bên trái lẫn bên phải. Điều này rất hợp với các bài toán cần hiểu toàn bộ input trước khi đưa ra nhãn hoặc embedding.
 
-- **Sparse/local attention** (Longformer, BigBird): mỗi token chỉ attend một cửa sổ cục bộ + vài token toàn cục
-- **Linear attention** (Performer): xấp xỉ softmax để đưa về $O(n)$
-- **FlashAttention**: không đổi độ phức tạp toán học nhưng tối ưu I/O bộ nhớ GPU → nhanh hơn nhiều trong thực tế, là chuẩn de facto hiện nay
+Ví dụ trong BERT, model được train bằng **masked language modeling**: che một số token, rồi yêu cầu model đoán lại token bị che dựa trên ngữ cảnh hai phía. Vì token được nhìn cả tương lai, encoder-only không phù hợp để sinh văn bản tự hồi quy theo kiểu "token tiếp theo là gì?", nhưng rất mạnh cho representation learning:
 
-## MoE — scale tham số mà không scale compute
+- sentence/document embedding
+- classification
+- token classification như NER
+- reranking và retrieval
+- feature extractor cho hệ thống NLP
 
-Phần lớn tham số của một LLM nằm ở **FFN** (mạng 2 lớp trong mỗi block), không phải ở attention. **Mixture of Experts** khai thác điều này: thay một FFN bằng $N$ "expert" FFN song song + một **router** nhỏ, mỗi token chỉ đi qua top-$k$ expert (thường $k=1$ hoặc $2$):
+<Note type="intuition">
+Encoder-only giống một người được đọc cả đoạn văn rồi mới trả lời câu hỏi. Nó hiểu ngữ cảnh tốt, nhưng không bị ràng buộc phải viết từ trái sang phải.
+</Note>
+
+### Decoder-only: sinh bằng causal mask
+
+Decoder-only dùng **causal self-attention**: token hiện tại chỉ được nhìn token quá khứ và chính nó. Mask này biến Transformer thành một mô hình tự hồi quy:
 
 $$
-y = \sum_{e \in \text{top-}k} g_e(x)\, \text{FFN}_e(x)
+p(x_1, \dots, x_n) = \prod_{t=1}^{n} p(x_t \mid x_{<t})
 $$
 
-trong đó $g_e(x)$ là trọng số router (softmax trên điểm router, chỉ giữ top-$k$).
+Objective rất đơn giản: **dự đoán token kế tiếp**. Chính sự đơn giản này là một lý do decoder-only trở thành backbone trung tâm của LLM hiện đại:
+
+- mọi chuỗi text đều tự tạo supervision được, không cần nhãn thủ công
+- cùng một objective scale tốt với data lớn
+- nhiều task có thể viết lại thành prompt rồi sinh output
+- inference từng token tự nhiên khớp với cách model được train
+
+Đổi lại, decoder-only phải trả giá ở inference: để sinh token mới, model thường giữ **KV-cache** của các token trước. Cache này giúp không phải tính lại toàn bộ quá khứ, nhưng bộ nhớ vẫn tăng theo context length.
+
+### Encoder-decoder: tách hiểu input và sinh output
+
+Encoder-decoder giữ hai vai trò riêng:
+
+1. **Encoder** đọc toàn bộ input bằng bidirectional attention.
+2. **Decoder** sinh output bằng causal attention.
+3. **Cross-attention** cho phép decoder query sang key/value của encoder.
+
+Kiến trúc này rất tự nhiên cho seq2seq: dịch máy, tóm tắt, sửa lỗi, chuyển code, hoặc bất kỳ task nào có input và output là hai chuỗi khác nhau. T5 đẩy ý tưởng này rất xa: viết nhiều task NLP về cùng format "text-to-text".
+
+So với decoder-only, encoder-decoder có inductive bias rõ hơn cho bài toán chuyển đổi chuỗi. So với encoder-only, nó có cơ chế sinh output rõ ràng. Nhưng trong kỷ nguyên instruction-tuned LLM, decoder-only thắng thế vì sự đơn giản: một mô hình, một objective, một interface text-in/text-out.
+
+## ViT: biến ảnh thành chuỗi token
+
+Transformer không bắt buộc input phải là text. **Vision Transformer (ViT)** hỏi một câu rất táo bạo: nếu ảnh cũng được biến thành chuỗi token thì sao?
+
+ViT làm như sau:
+
+1. Cắt ảnh thành các patch, thường là $16 \times 16$.
+2. Flatten mỗi patch thành vector.
+3. Chiếu vector patch thành embedding.
+4. Thêm positional embedding.
+5. Đưa chuỗi patch vào Transformer encoder.
+
+Về mặt hình học, mỗi patch là một token. Về mặt kiến trúc, ViT dùng cùng self-attention như text Transformer, chỉ khác cách tạo token đầu vào.
+
+Điểm đáng chú ý: ViT gần như bỏ đi inductive bias mạnh của CNN:
+
+- CNN có locality: kernel nhìn vùng lân cận.
+- CNN có weight sharing: cùng kernel quét toàn ảnh.
+- CNN tạo hierarchy không gian qua pooling/stride.
+- ViT để attention tự học quan hệ giữa các patch.
+
+Vì ít bias hơn, ViT thường cần data lớn hoặc pretraining tốt để vượt CNN. Nhưng khi có đủ data và compute, nó cho thấy Transformer có thể trở thành một backbone vision rất mạnh.
 
 <Note type="result">
-Mấu chốt — **tách rời số tham số khỏi chi phí tính toán**: tổng tham số tăng $N$ lần (chứa nhiều kiến thức hơn) nhưng compute mỗi token gần như không đổi vì chỉ $k$ expert active (sparse activation). Mixtral 8×7B có ~47B tham số nhưng mỗi token chỉ dùng ~13B.
+ViT không chứng minh rằng convolution "sai". Nó chứng minh rằng nếu ta có đủ data, đủ scale và training recipe tốt, nhiều inductive bias có thể được học thay vì hard-code. Đây cũng là tinh thần chung làm Transformer lan ra khỏi NLP.
 </Note>
 
-### Thách thức: load balancing
+### Từ ViT đến multimodal Transformer
 
-Nếu để router tự do, nó dễ **dồn hầu hết token vào vài expert** ưa thích — các expert còn lại "chết", lãng phí tham số. Giải pháp: thêm **auxiliary load-balancing loss** khuyến khích router phân bố đều, hoặc giới hạn dung lượng mỗi expert (capacity factor).
+Một khi ảnh có thể trở thành token, câu hỏi tiếp theo rất tự nhiên: text token, image patch, audio frame, video patch có thể cùng nằm trong một sequence không?
 
-| Model | Tổng tham số | Active / token |
-|---|---|---|
-| Switch Transformer | tới ~1.6T | một phần nhỏ |
-| Mixtral 8×7B | ~47B | ~13B (top-2 / 8 expert) |
+Đây là cầu nối sang multimodal models. Các hệ vision-language thường khác nhau ở cách encode từng modality và cách cho chúng tương tác:
 
-## Bức tranh
+- encode ảnh riêng rồi align với text như CLIP
+- đưa image tokens vào language model như một phần context
+- dùng cross-attention giữa text và image features
+- dùng unified Transformer cho nhiều modality
 
-Một transformer block → đổi **mask** ra encoder/decoder/enc-dec → đổi **input** (patch) ra ViT → tối ưu **attention** ra efficient transformer → nhân **FFN** ra MoE. Tất cả vẫn là cùng một lõi attention.
+Trong bài này, chỉ cần giữ ý chính: Transformer trở thành một template chung vì nó không quan tâm token đến từ đâu, miễn là ta biến dữ liệu thành một chuỗi vector và cung cấp thông tin vị trí/cấu trúc phù hợp.
 
-Nhưng dù tối ưu mask, kernel hay FFN, attention vẫn mang một câu hỏi hệ thống: nếu context rất dài, ta có bắt buộc phải giữ memory theo từng token không? Bài tiếp theo đi sang [State Space Models (Mamba)](/dl-anatomy/architectures/state-space-models), một nhánh quay lại **state cố định** và **scan tuyến tính** để giảm chi phí sequence dài.
+## Efficient Transformer: đánh vào chi phí attention
+
+Self-attention chuẩn tạo ma trận tương tác giữa mọi cặp token. Với sequence length $n$, attention score có kích thước $n \times n$, nên chi phí compute/memory tăng theo $O(n^2)$.
+
+Điều này không quá tệ với câu ngắn, nhưng trở thành vấn đề lớn với:
+
+- context dài trong LLM
+- document dài
+- audio hoặc time-series dài
+- video, nơi số patch tăng rất nhanh
+
+Có nhiều hướng giảm chi phí attention. Chúng không giống nhau: có hướng thay đổi phép toán, có hướng giữ toán học chính xác nhưng tối ưu implementation.
+
+| Hướng | Ý tưởng | Ví dụ | Đánh đổi |
+|---|---|---|---|
+| Local/sparse attention | mỗi token chỉ nhìn một cửa sổ hoặc một mẫu sparse | Longformer, BigBird | rẻ hơn nhưng ít tương tác toàn cục hơn |
+| Low-rank/kernel/linear attention | xấp xỉ hoặc viết lại softmax attention để gần tuyến tính | Linformer, Performer | nhanh hơn nhưng có approximation |
+| Memory-efficient exact attention | giữ attention đúng, giảm đọc/ghi memory | FlashAttention | không đổi $O(n^2)$ về toán học, nhưng nhanh hơn nhiều trong thực tế |
+| KV-cache optimization | giảm số key/value cần lưu khi inference | MQA, GQA | tiết kiệm memory, có thể đổi chất lượng hoặc capacity |
+
+### Sparse và local attention
+
+Nếu mọi token không cần nhìn mọi token khác, ta có thể giới hạn attention vào một vùng cục bộ. Với văn bản dài, nhiều dependency là local: từ gần nhau thường liên quan mạnh. Longformer dùng local window cộng thêm một số global token. BigBird kết hợp local, random và global attention để giữ khả năng truyền thông tin xa hơn.
+
+Trực giác: thay vì đồ thị đầy đủ, ta dùng một đồ thị sparse có cấu trúc. Rẻ hơn, nhưng model phải đi qua nhiều layer hoặc global token để truyền thông tin xa.
+
+### Linear attention
+
+Linear attention cố gắng tránh tạo ma trận $n \times n$ bằng cách biến đổi công thức attention. Performer là một ví dụ: dùng random feature để xấp xỉ softmax attention. Nếu làm được, chi phí có thể gần $O(n)$ theo sequence length.
+
+Nhưng attention chuẩn mạnh vì nó cho phép token truy xuất trực tiếp theo nội dung. Khi xấp xỉ hoặc tuyến tính hóa, ta thường đánh đổi một phần tính linh hoạt đó.
+
+### FlashAttention: exact nhưng hardware-aware
+
+FlashAttention không nói rằng attention chuẩn hết $O(n^2)$. Nó nói rằng bottleneck thực tế trên GPU không chỉ là số phép nhân, mà còn là **memory I/O**: đọc/ghi ma trận attention khổng lồ ra HBM rất đắt.
+
+FlashAttention tính attention theo block, giữ nhiều intermediate trong SRAM nhanh hơn, và tránh materialize toàn bộ attention matrix. Kết quả: cùng công thức attention chính xác, nhưng training/inference nhanh hơn và tiết kiệm memory hơn.
+
+<Note type="warning">
+Đừng gom mọi "efficient attention" vào một nhóm. Sparse attention đổi pattern truy cập; linear attention đổi hoặc xấp xỉ công thức; FlashAttention giữ công thức nhưng đổi cách triển khai trên phần cứng. Chúng giải cùng một nỗi đau, nhưng bằng các kiểu can thiệp khác nhau.
+</Note>
+
+## MoE: scale tham số mà không scale compute tuyến tính
+
+Trong Transformer block, attention thường được nói nhiều nhất, nhưng phần lớn tham số lại nằm ở **Feed-forward network (FFN)**. FFN áp độc lập lên từng token:
+
+$$
+\text{FFN}(x) = W_2 \sigma(W_1 x + b_1) + b_2
+$$
+
+Mixture of Experts (MoE) thay một FFN duy nhất bằng nhiều FFN song song gọi là **expert**. Một **router** nhỏ quyết định mỗi token nên đi qua expert nào.
+
+Nếu có $N$ expert, mỗi token thường chỉ đi qua top-$k$ expert, với $k$ nhỏ như $1$ hoặc $2$:
+
+$$
+y = \sum_{e \in \text{top-}k} g_e(x)\,\text{FFN}_e(x)
+$$
+
+Trong đó $g_e(x)$ là trọng số router cho expert $e$.
+
+Ý tưởng chính là **sparse activation**:
+
+- tổng số tham số tăng rất lớn vì có nhiều expert
+- compute mỗi token chỉ tăng theo số expert được chọn
+- model có nhiều capacity hơn mà không phải dùng toàn bộ capacity cho mọi token
+
+<Note type="result">
+MoE không làm model "miễn phí". Nó đổi bài toán từ "một FFN lớn cho mọi token" sang "nhiều FFN, mỗi token chỉ dùng vài FFN". Nếu routing tốt, ta có thêm capacity với compute/token thấp hơn dense model cùng tổng tham số.
+</Note>
+
+### Router học gì?
+
+Router nhận representation của token và cho điểm các expert. Trực giác là token khác nhau có thể cần kiểu xử lý khác nhau: code, toán, tên riêng, cú pháp, ngôn ngữ khác nhau, hoặc pattern domain-specific.
+
+Nhưng không nên hiểu quá cứng rằng mỗi expert luôn có một chuyên môn rõ ràng như "expert toán" hay "expert tiếng Việt". Specialization có thể xuất hiện, nhưng router chủ yếu là một cơ chế phân bổ compute học được.
+
+### Load balancing: vấn đề khó của MoE
+
+Nếu để router tự do, nó có thể dồn phần lớn token vào vài expert được ưa thích. Khi đó:
+
+- các expert hot bị quá tải
+- các expert khác ít được train
+- batch chạy kém hiệu quả trên phần cứng
+- capacity tổng bị lãng phí
+
+Vì vậy MoE thường cần **auxiliary load-balancing loss**, giới hạn capacity cho mỗi expert, hoặc routing policy được thiết kế cẩn thận. Đây là lý do MoE không chỉ là "nhân FFN lên là xong"; nó là một bài toán hệ thống.
+
+| Khái niệm | Ý nghĩa |
+|---|---|
+| Expert | một FFN riêng |
+| Router / gate | module chọn expert cho từng token |
+| Top-$k$ routing | mỗi token chỉ kích hoạt vài expert |
+| Active parameters | số tham số thực sự dùng cho một token |
+| Load balancing | giữ token phân bố đủ đều để expert không chết hoặc quá tải |
+
+### Dense vs sparse scaling
+
+Dense model dùng toàn bộ tham số cho mọi token. Nếu tăng width FFN, compute/token tăng theo. MoE tăng tổng tham số bằng cách thêm expert, nhưng compute/token tăng chậm hơn vì mỗi token chỉ dùng vài expert.
+
+| Kiểu model | Tham số tổng | Compute/token | Đặc điểm |
+|---|---|---|---|
+| Dense Transformer | mọi tham số active | tăng cùng kích thước model | đơn giản, ổn định, dễ triển khai hơn |
+| MoE Transformer | nhiều expert, chỉ vài expert active | thấp hơn so với dense cùng tổng tham số | nhiều capacity, routing phức tạp, khó cân bằng |
+
+## Bức tranh chung
+
+Các biến thể Transformer không phải một danh sách model rời rạc. Chúng là các câu trả lời cho những câu hỏi thiết kế khác nhau:
+
+| Câu hỏi | Câu trả lời điển hình |
+|---|---|
+| Model được nhìn hai chiều hay chỉ quá khứ? | encoder-only vs decoder-only |
+| Input và output là một chuỗi hay hai chuỗi? | decoder-only vs encoder-decoder |
+| Dữ liệu không phải text thì token hóa thế nào? | ViT, multimodal tokenization |
+| Sequence quá dài thì attention tính ra sao? | sparse/local/linear attention, FlashAttention |
+| Muốn thêm capacity mà không tăng compute tuyến tính thì sao? | MoE |
+
+Điểm chung: tất cả vẫn xoay quanh cùng một lõi Transformer block. Nhưng mỗi nhánh thay đổi một phần hợp đồng:
+
+- **mask** quyết định quyền nhìn
+- **objective** quyết định tín hiệu học
+- **tokenization** quyết định loại dữ liệu đi vào
+- **kernel/pattern** quyết định chi phí attention
+- **routing** quyết định compute đi qua tham số nào
+
+Sau khi đã tối ưu mask, kernel và FFN, attention vẫn còn một câu hỏi hệ thống: với context rất dài, ta có bắt buộc phải giữ memory theo từng token không? Bài tiếp theo đi sang [State Space Models (Mamba)](/dl-anatomy/architectures/state-space-models), một nhánh quay lại **state cố định** và **scan tuyến tính** để giảm chi phí sequence dài.
 
 ## Papers tham khảo
 
-| Paper | |
+| Paper | Vai trò |
 |---|---|
-| Devlin et al. (2018) | BERT |
-| Radford et al. (2019) | Language Models are Unsupervised Multitask Learners (GPT-2) |
-| Raffel et al. (2020) | Exploring the Limits of Transfer Learning (T5) |
-| Dosovitskiy et al. (2020) | An Image is Worth 16×16 Words (ViT) |
-| Dao et al. (2022) | FlashAttention |
-| Fedus et al. (2021) | Switch Transformers |
-| Jiang et al. (2024) | Mixtral of Experts |
+| Devlin et al. (2018) | BERT, encoder-only Transformer với masked language modeling |
+| Radford et al. (2019) | GPT-2, decoder-only Transformer scale bằng next-token prediction |
+| Raffel et al. (2020) | T5, encoder-decoder dưới format text-to-text |
+| Dosovitskiy et al. (2020) | Vision Transformer, ảnh như chuỗi patch token |
+| Beltagy et al. (2020) | Longformer, local/global attention cho document dài |
+| Zaheer et al. (2020) | BigBird, sparse attention với global/random/local pattern |
+| Choromanski et al. (2020) | Performer, linear attention bằng random features |
+| Dao et al. (2022) | FlashAttention, exact attention tối ưu memory I/O |
+| Shazeer et al. (2017) | Sparsely-Gated MoE, nền tảng MoE hiện đại |
+| Fedus et al. (2021) | Switch Transformer, top-1 routing ở scale lớn |
+| Jiang et al. (2024) | Mixtral of Experts, MoE decoder-only thực dụng |
