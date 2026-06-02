@@ -1,0 +1,126 @@
+---
+interface Props {
+  lang?: 'vi' | 'en';
+}
+const { lang = 'vi' } = Astro.props;
+
+const L = lang === 'en'
+  ? {
+      step: 'Step 1',
+      cap: 'Step 1 of scaled dot-product attention: multiply Q (T×d) by Kᵀ (d×T) to get the score matrix QKᵀ (T×T) — each cell is how well one query matches one key. The next steps scale by √dₖ, softmax each row, then multiply by V.',
+    }
+  : {
+      step: 'Bước 1',
+      cap: 'Bước 1 của scaled dot-product attention: nhân Q (T×d) với Kᵀ (d×T) ra ma trận điểm khớp QKᵀ (T×T) — mỗi ô là độ khớp giữa một query và một key. Các bước sau chia √dₖ, softmax theo hàng, rồi nhân với V.',
+    };
+
+function grid(x, y, w, h, cols, rows) {
+  const vx = Array.from({ length: cols + 1 }, (_, i) => x + (i * w) / cols);
+  const hy = Array.from({ length: rows + 1 }, (_, i) => y + (i * h) / rows);
+  return { x, y, w, h, vx, hy };
+}
+const gQ = grid(265, 90, 70, 170, 5, 10);   // Q  T×d  (tall)
+const gK = grid(400, 135, 150, 80, 10, 5);  // Kᵀ d×T  (wide)
+const gR = grid(610, 120, 100, 100, 10, 10); // QKᵀ T×T (square)
+---
+
+<figure class="sdp">
+  <svg viewBox="0 0 720 300" role="img" aria-label="Scaled dot-product attention — step 1" class="sdp-svg">
+    <defs>
+      <marker id="sdp-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" class="sdp-head" />
+      </marker>
+      <marker id="sdp-step" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" class="sdp-step-head" />
+      </marker>
+    </defs>
+
+    <!-- ============ LEFT: attention pipeline ============ -->
+    <!-- inputs -->
+    <line x1="95"  y1="272" x2="95"  y2="238" class="sdp-line" marker-end="url(#sdp-arrow)" />
+    <line x1="128" y1="272" x2="128" y2="238" class="sdp-line" marker-end="url(#sdp-arrow)" />
+    <line x1="158" y1="272" x2="158" y2="106" class="sdp-line" marker-end="url(#sdp-arrow)" />
+    <text x="95"  y="286" class="sdp-io">Q</text>
+    <text x="128" y="286" class="sdp-io">K</text>
+    <text x="158" y="286" class="sdp-io">V</text>
+
+    <!-- bottom MatMul (Step 1) -->
+    <rect x="70" y="211" width="80" height="26" rx="6" class="sdp-box sdp-matmul" />
+    <text x="110" y="228" class="sdp-blk">MatMul</text>
+    <!-- Scale -->
+    <line x1="110" y1="211" x2="110" y2="196" class="sdp-line" marker-end="url(#sdp-arrow)" />
+    <rect x="79" y="170" width="62" height="24" rx="6" class="sdp-box sdp-scale" />
+    <text x="110" y="186" class="sdp-blk">Scale</text>
+    <!-- Softmax -->
+    <line x1="110" y1="170" x2="110" y2="155" class="sdp-line" marker-end="url(#sdp-arrow)" />
+    <rect x="71" y="127" width="78" height="26" rx="6" class="sdp-box sdp-softmax" />
+    <text x="110" y="144" class="sdp-blk">Softmax</text>
+    <!-- top MatMul -->
+    <line x1="110" y1="127" x2="110" y2="107" class="sdp-line" marker-end="url(#sdp-arrow)" />
+    <rect x="85" y="79" width="80" height="26" rx="6" class="sdp-box sdp-matmul" />
+    <text x="125" y="96" class="sdp-blk">MatMul</text>
+    <!-- output -->
+    <line x1="125" y1="79" x2="125" y2="55" class="sdp-line" marker-end="url(#sdp-arrow)" />
+
+    <!-- Step 1 marker -->
+    <text x="12" y="228" class="sdp-step-lbl">{L.step}</text>
+    <line x1="50" y1="224" x2="69" y2="224" class="sdp-step-line" marker-end="url(#sdp-step)" />
+
+    <!-- divider -->
+    <line x1="205" y1="24" x2="205" y2="290" class="sdp-divider" />
+
+    <!-- ============ RIGHT: matrix shapes ============ -->
+    <!-- Q -->
+    <g>
+      <rect x={gQ.x} y={gQ.y} width={gQ.w} height={gQ.h} class="sdp-mq" />
+      {gQ.vx.map(x => <line x1={x} y1={gQ.y} x2={x} y2={gQ.y + gQ.h} class="sdp-cell" />)}
+      {gQ.hy.map(y => <line x1={gQ.x} y1={y} x2={gQ.x + gQ.w} y2={y} class="sdp-cell" />)}
+      <text x={gQ.x + gQ.w / 2} y="78" class="sdp-mlbl"><tspan font-style="italic">Q</tspan><tspan baseline-shift="sub" font-size="10">T×d</tspan></text>
+    </g>
+
+    <text x="372" y="180" class="sdp-op">×</text>
+
+    <!-- Kᵀ -->
+    <g>
+      <rect x={gK.x} y={gK.y} width={gK.w} height={gK.h} class="sdp-mk" />
+      {gK.vx.map(x => <line x1={x} y1={gK.y} x2={x} y2={gK.y + gK.h} class="sdp-cell" />)}
+      {gK.hy.map(y => <line x1={gK.x} y1={y} x2={gK.x + gK.w} y2={y} class="sdp-cell" />)}
+      <text x={gK.x + gK.w / 2} y="123" class="sdp-mlbl"><tspan font-style="italic">K</tspan><tspan baseline-shift="super" font-size="10">⊤</tspan><tspan baseline-shift="sub" font-size="10">d×T</tspan></text>
+    </g>
+
+    <line x1="565" y1="170" x2="595" y2="170" class="sdp-line" marker-end="url(#sdp-arrow)" />
+
+    <!-- QKᵀ -->
+    <g>
+      <rect x={gR.x} y={gR.y} width={gR.w} height={gR.h} class="sdp-mr" />
+      {gR.vx.map(x => <line x1={x} y1={gR.y} x2={x} y2={gR.y + gR.h} class="sdp-cell" />)}
+      {gR.hy.map(y => <line x1={gR.x} y1={y} x2={gR.x + gR.w} y2={y} class="sdp-cell" />)}
+      <text x={gR.x + gR.w / 2} y="108" class="sdp-mlbl"><tspan>(</tspan><tspan font-style="italic">QK</tspan><tspan baseline-shift="super" font-size="10">⊤</tspan><tspan>)</tspan><tspan baseline-shift="sub" font-size="10">T×T</tspan></text>
+    </g>
+  </svg>
+  <figcaption class="sdp-cap">{L.cap}</figcaption>
+</figure>
+
+<style>
+  .sdp { margin: 1.75rem 0; border: 1px solid var(--border); border-radius: 10px; background: var(--bg2); padding: 0.8rem 0 0.4rem; }
+  .sdp-svg { display: block; width: 100%; max-width: 720px; height: auto; margin: 0 auto; }
+  .sdp-line { stroke: var(--text); stroke-width: 1.6; fill: none; }
+  .sdp-head { fill: var(--text); }
+  .sdp-io { fill: var(--text); font-family: var(--mono); font-size: 12px; text-anchor: middle; }
+  .sdp-box { fill: var(--bg); stroke-width: 1.8; }
+  .sdp-matmul { stroke: var(--accent2); }
+  .sdp-scale { stroke: var(--amber); }
+  .sdp-softmax { stroke: var(--accent); }
+  .sdp-blk { fill: var(--text); font-family: var(--mono); font-size: 11px; text-anchor: middle; }
+  .sdp-step-lbl { fill: var(--danger); font-family: var(--mono); font-size: 11px; font-weight: 600; text-anchor: start; }
+  .sdp-step-line { stroke: var(--danger); stroke-width: 2; }
+  .sdp-step-head { fill: var(--danger); }
+  .sdp-divider { stroke: var(--muted); stroke-width: 2; opacity: 0.5; }
+  .sdp-mq { fill: var(--amber); fill-opacity: 0.5; stroke: var(--text); stroke-width: 1.4; }
+  .sdp-mk { fill: var(--accent); fill-opacity: 0.5; stroke: var(--text); stroke-width: 1.4; }
+  .sdp-mr { fill: var(--accent2); fill-opacity: 0.5; stroke: var(--text); stroke-width: 1.4; }
+  .sdp-cell { stroke: var(--text); stroke-width: 0.6; opacity: 0.3; }
+  .sdp-mlbl { fill: var(--text); font-family: var(--mono); font-size: 15px; text-anchor: middle; }
+  .sdp-op { fill: var(--text); font-family: var(--mono); font-size: 20px; text-anchor: middle; }
+  .sdp-cap { font-size: 0.78rem; color: var(--muted); text-align: center; padding: 0.5rem 1rem 0.6rem; font-style: italic; line-height: 1.5; }
+</style>

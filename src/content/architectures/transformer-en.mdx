@@ -12,6 +12,7 @@ tags: [transformer, attention, positional-encoding, multi-head]
 import Note from '../../components/Note.astro';
 import AttentionViz from '../../components/AttentionViz.astro';
 import MultiHeadDiagram from '../../components/MultiHeadDiagram.astro';
+import ScaledDotProductDiagram from '../../components/ScaledDotProductDiagram.astro';
 
 # Transformer & Attention
 
@@ -45,6 +46,8 @@ $$
 - dividing by $\sqrt{d_k}$ — when $d_k$ is large, dot products have high variance; scaling keeps softmax from saturating too early
 - softmax — turns match scores into weights that sum to 1
 - multiplying by $V$ — takes a weighted sum of the information to read out
+
+<ScaledDotProductDiagram lang="en" />
 
 <Note type="intuition">
 Attention is a "soft dictionary lookup": a query is compared against every key, then values are retrieved weighted by match. Unlike a hard hashtable, there is not just one hit; every key can contribute a share.

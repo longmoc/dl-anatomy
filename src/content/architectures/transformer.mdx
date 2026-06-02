@@ -12,6 +12,7 @@ tags: [transformer, attention, positional-encoding, multi-head]
 import Note from '../../components/Note.astro';
 import AttentionViz from '../../components/AttentionViz.astro';
 import MultiHeadDiagram from '../../components/MultiHeadDiagram.astro';
+import ScaledDotProductDiagram from '../../components/ScaledDotProductDiagram.astro';
 
 # Transformer & Attention
 
@@ -45,6 +46,8 @@ $$
 - chia $\sqrt{d_k}$ — khi $d_k$ lớn, dot product có phương sai lớn; chia để softmax không bão hòa quá sớm
 - softmax — biến điểm khớp thành trọng số tổng bằng 1
 - nhân với $V$ — lấy weighted sum của thông tin cần đọc ra
+
+<ScaledDotProductDiagram lang="vi" />
 
 <Note type="intuition">
 Attention là một dạng "tra cứu mềm" (soft dictionary lookup): query so với mọi key, rồi lấy value theo trọng số khớp. Khác hashtable cứng, không chỉ một key trúng; mọi key có thể đóng góp một phần.
