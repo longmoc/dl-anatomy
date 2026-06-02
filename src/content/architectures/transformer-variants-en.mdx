@@ -10,6 +10,7 @@ tags: [transformer, bert, gpt, vit, moe, scaling]
 ---
 
 import Note from '../../components/Note.astro';
+import AttentionMaskDiagram from '../../components/AttentionMaskDiagram.astro';
 
 # Transformer Variants & MoE
 
@@ -38,6 +39,8 @@ The first and most important difference is: when computing a token representatio
 | Encoder-only | bidirectional, sees left and right | masked language modeling | BERT, RoBERTa | sentence understanding, embeddings, classification, retrieval |
 | Decoder-only | causal, sees only the past | next-token prediction | GPT, LLaMA | autoregressive text generation, chat, code |
 | Encoder-decoder | bidirectional encoder, causal decoder + cross-attention | seq2seq / denoising | T5, BART | translation, summarization, sequence transformation |
+
+<AttentionMaskDiagram lang="en" />
 
 ### Encoder-only: bidirectional representation learning
 

@@ -10,6 +10,7 @@ tags: [transformer, bert, gpt, vit, moe, scaling]
 ---
 
 import Note from '../../components/Note.astro';
+import AttentionMaskDiagram from '../../components/AttentionMaskDiagram.astro';
 
 # Transformer Variants & MoE
 
@@ -38,6 +39,8 @@ Khác biệt đầu tiên và quan trọng nhất là: khi tính representation 
 | Encoder-only | bidirectional, nhìn cả trái và phải | masked language modeling | BERT, RoBERTa | hiểu câu, embedding, classification, retrieval |
 | Decoder-only | causal, chỉ nhìn quá khứ | next-token prediction | GPT, LLaMA | sinh văn bản tự hồi quy, chat, code |
 | Encoder-decoder | encoder bidirectional, decoder causal + cross-attention | seq2seq / denoising | T5, BART | dịch, tóm tắt, chuyển đổi chuỗi |
+
+<AttentionMaskDiagram lang="vi" />
 
 ### Encoder-only: học representation hai chiều
 

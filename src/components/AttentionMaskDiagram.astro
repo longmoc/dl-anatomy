@@ -1,0 +1,136 @@
+---
+interface Props {
+  lang?: 'vi' | 'en';
+}
+const { lang = 'vi' } = Astro.props;
+
+const L = lang === 'en'
+  ? {
+      t1: 'Encoder-only', t2: 'Decoder-only', t3: 'Encoder–decoder',
+      m1: 'bidirectional', m2: 'causal', m3: 'causal self + cross',
+      e1: 'BERT, RoBERTa', e2: 'GPT, LLaMA', e3: 'T5, BART',
+      enc: 'enc', dec: 'dec',
+      cap: 'The three families differ only in the attention mask — for a query token (highlighted), which tokens may it attend to. Encoder-only (BERT): bidirectional, both sides. Decoder-only (GPT): causal, only the past and itself; the red dashed arrow is blocked from seeing future tokens. Encoder–decoder (T5): the decoder does causal self-attention plus cross-attention (amber) over the whole bidirectional encoder.',
+    }
+  : {
+      t1: 'Encoder-only', t2: 'Decoder-only', t3: 'Encoder–decoder',
+      m1: 'bidirectional', m2: 'causal', m3: 'causal self + cross',
+      e1: 'BERT, RoBERTa', e2: 'GPT, LLaMA', e3: 'T5, BART',
+      enc: 'enc', dec: 'dec',
+      cap: 'Ba họ chỉ khác nhau ở attention mask — khi tính cho một token query (tô đậm), nó được attend tới token nào. Encoder-only (BERT): bidirectional, nhìn cả hai phía. Decoder-only (GPT): causal, chỉ nhìn quá khứ và chính nó; mũi tên đỏ gạch = bị chặn nhìn token tương lai. Encoder–decoder (T5): decoder vừa self-attention causal, vừa cross-attention (cam) nhìn toàn bộ encoder bidirectional.',
+    };
+
+const r = 10;
+const arcU = (x1: number, x2: number, y: number) => {
+  const h = 14 + Math.abs(x2 - x1) * 0.30;
+  return `M ${x1},${y - r} Q ${(x1 + x2) / 2},${y - r - h} ${x2},${y - r}`;
+};
+const arcD = (x1: number, x2: number, y: number) => {
+  const h = 14 + Math.abs(x2 - x1) * 0.30;
+  return `M ${x1},${y + r} Q ${(x1 + x2) / 2},${y + r + h} ${x2},${y + r}`;
+};
+
+const p1y = 132, p1 = [74, 108, 142, 176], p1q = 108;   // bidir, query = t2
+const p2y = 132, p2 = [308, 342, 376, 410], p2q = 376;  // causal, query = t3
+const encY = 92, decY = 168, ex = [540, 574, 608, 642], p3q = 608; // enc-dec, dec query = t3
+---
+
+<figure class="amd">
+  <svg viewBox="0 0 720 304" role="img" aria-label="Three Transformer families by attention mask" class="amd-svg">
+    <defs>
+      <marker id="amd-self" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" class="amd-self-h" />
+      </marker>
+      <marker id="amd-cross" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" class="amd-cross-h" />
+      </marker>
+    </defs>
+
+    <!-- dividers -->
+    <line x1="246" y1="44" x2="246" y2="268" class="amd-div" />
+    <line x1="474" y1="44" x2="474" y2="268" class="amd-div" />
+
+    <!-- ===== Panel 1: Encoder-only (bidirectional) ===== -->
+    <text x="125" y="30" class="amd-title">{L.t1}</text>
+    <path d={arcU(p1q, p1[0], p1y)} class="amd-arc" marker-end="url(#amd-self)" />
+    <path d={arcU(p1q, p1[2], p1y)} class="amd-arc" marker-end="url(#amd-self)" />
+    <path d={arcU(p1q, p1[3], p1y)} class="amd-arc" marker-end="url(#amd-self)" />
+    {p1.map((x, i) => (
+      <g>
+        <circle cx={x} cy={p1y} r={r} class={x === p1q ? 'amd-tok amd-q' : 'amd-tok'} />
+        <text x={x} y={p1y + 4} class={x === p1q ? 'amd-num amd-qnum' : 'amd-num'}>{i + 1}</text>
+      </g>
+    ))}
+    <text x="125" y="200" class="amd-mask">{L.m1}</text>
+    <text x="125" y="218" class="amd-ex">{L.e1}</text>
+
+    <!-- ===== Panel 2: Decoder-only (causal) ===== -->
+    <text x="360" y="30" class="amd-title">{L.t2}</text>
+    <path d={arcU(p2q, p2[0], p2y)} class="amd-arc" marker-end="url(#amd-self)" />
+    <path d={arcU(p2q, p2[1], p2y)} class="amd-arc" marker-end="url(#amd-self)" />
+    <path d={arcU(p2q, p2[3], p2y)} class="amd-blocked" />
+    <text x={(p2q + p2[3]) / 2} y={p2y - r - 18} class="amd-x">✕</text>
+    {p2.map((x, i) => (
+      <g>
+        <circle cx={x} cy={p2y} r={r} class={x === p2q ? 'amd-tok amd-q' : 'amd-tok'} />
+        <text x={x} y={p2y + 4} class={x === p2q ? 'amd-num amd-qnum' : 'amd-num'}>{i + 1}</text>
+      </g>
+    ))}
+    <text x="360" y="200" class="amd-mask">{L.m2}</text>
+    <text x="360" y="218" class="amd-ex">{L.e2}</text>
+
+    <!-- ===== Panel 3: Encoder–decoder ===== -->
+    <text x="591" y="30" class="amd-title">{L.t3}</text>
+    <text x="512" y={encY + 4} class="amd-row">{L.enc}</text>
+    <text x="512" y={decY + 4} class="amd-row">{L.dec}</text>
+
+    <!-- cross-attention: decoder query -> all encoder tokens -->
+    {ex.map(x => (
+      <line x1={p3q} y1={decY - r} x2={x} y2={encY + r} class="amd-cross" marker-end="url(#amd-cross)" />
+    ))}
+    <!-- causal self-attention among decoder tokens -->
+    <path d={arcD(p3q, ex[0], decY)} class="amd-arc" marker-end="url(#amd-self)" />
+    <path d={arcD(p3q, ex[1], decY)} class="amd-arc" marker-end="url(#amd-self)" />
+    <path d={arcD(p3q, ex[3], decY)} class="amd-blocked" />
+
+    <!-- encoder row -->
+    {ex.map((x, i) => (
+      <g>
+        <circle cx={x} cy={encY} r={r} class="amd-tok amd-enc" />
+        <text x={x} y={encY + 4} class="amd-num">{i + 1}</text>
+      </g>
+    ))}
+    <!-- decoder row -->
+    {ex.map((x, i) => (
+      <g>
+        <circle cx={x} cy={decY} r={r} class={x === p3q ? 'amd-tok amd-q' : 'amd-tok'} />
+        <text x={x} y={decY + 4} class={x === p3q ? 'amd-num amd-qnum' : 'amd-num'}>{i + 1}</text>
+      </g>
+    ))}
+    <text x="591" y="232" class="amd-mask">{L.m3}</text>
+    <text x="591" y="250" class="amd-ex">{L.e3}</text>
+  </svg>
+  <figcaption class="amd-cap">{L.cap}</figcaption>
+</figure>
+
+<style>
+  .amd { margin: 1.75rem 0; border: 1px solid var(--border); border-radius: 10px; background: var(--bg2); padding: 0.8rem 0 0.4rem; }
+  .amd-svg { display: block; width: 100%; max-width: 700px; height: auto; margin: 0 auto; }
+  .amd-div { stroke: var(--border); stroke-width: 1.2; stroke-dasharray: 4 4; }
+  .amd-title { fill: var(--text); font-family: var(--mono); font-size: 13px; font-weight: 600; text-anchor: middle; }
+  .amd-tok { fill: var(--bg); stroke: var(--muted); stroke-width: 1.5; }
+  .amd-enc { stroke: var(--accent2); }
+  .amd-q { fill: var(--accent2); stroke: var(--accent2); stroke-width: 2; }
+  .amd-num { fill: var(--text); font-family: var(--mono); font-size: 10px; text-anchor: middle; }
+  .amd-qnum { fill: var(--bg); font-weight: 600; }
+  .amd-arc { fill: none; stroke: var(--accent); stroke-width: 1.6; }
+  .amd-self-h { fill: var(--accent); }
+  .amd-blocked { fill: none; stroke: var(--danger); stroke-width: 1.5; stroke-dasharray: 4 3; }
+  .amd-x { fill: var(--danger); font-family: var(--mono); font-size: 12px; font-weight: 700; text-anchor: middle; }
+  .amd-cross { stroke: var(--amber); stroke-width: 1.5; fill: none; }
+  .amd-cross-h { fill: var(--amber); }
+  .amd-row { fill: var(--muted); font-family: var(--mono); font-size: 10px; text-anchor: end; }
+  .amd-mask { fill: var(--accent); font-family: var(--mono); font-size: 11.5px; font-weight: 600; text-anchor: middle; }
+  .amd-ex { fill: var(--muted); font-family: var(--mono); font-size: 10.5px; text-anchor: middle; }
+  .amd-cap { font-size: 0.78rem; color: var(--muted); text-align: center; padding: 0.5rem 1rem 0.6rem; font-style: italic; line-height: 1.5; }
+</style>
