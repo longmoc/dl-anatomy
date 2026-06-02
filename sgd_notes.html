@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SGD — Stochastic Gradient Descent</title>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
+<style>
+  :root {
+    --bg: #ffffff;
+    --bg2: #f7f6f2;
+    --bg3: #f0efe9;
+    --border: rgba(0,0,0,0.1);
+    --text: #1a1a18;
+    --muted: #6b6b66;
+    --accent: #534AB7;
+    --accent2: #0F6E56;
+    --amber: #BA7517;
+    --mono: 'JetBrains Mono', 'Fira Code', monospace;
+    --sans: system-ui, -apple-system, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f0f0e;
+      --bg2: #181816;
+      --bg3: #1e1e1c;
+      --border: rgba(255,255,255,0.08);
+      --text: #e0dfd8;
+      --muted: #888880;
+      --accent: #AFA9EC;
+      --accent2: #5DCAA5;
+      --amber: #EF9F27;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.75;
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 48px 24px 80px;
+  }
+  h1 {
+    font-size: 2rem;
+    font-weight: 600;
+    letter-spacing: -0.5px;
+    margin-bottom: 6px;
+    color: var(--accent);
+  }
+  .subtitle {
+    color: var(--muted);
+    font-size: 0.9rem;
+    margin-bottom: 40px;
+    font-family: var(--mono);
+  }
+  h2 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 40px 0 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+  h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 24px 0 8px;
+    color: var(--accent2);
+  }
+  p { margin-bottom: 14px; }
+  code {
+    font-family: var(--mono);
+    font-size: 0.85em;
+    background: var(--bg3);
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+  }
+
+  /* MathJax overrides */
+  mjx-container { overflow-x: auto; }
+
+  /* Widget container */
+  .widget {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin: 24px 0;
+  }
+  canvas#c {
+    width: 100%;
+    height: 300px;
+    display: block;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+  }
+
+  /* Controls */
+  .controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin: 14px 0;
+  }
+  .ctrl-card {
+    background: var(--bg3);
+    border-radius: 8px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+  }
+  .ctrl-label {
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 6px;
+    font-family: var(--mono);
+  }
+  .ctrl-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  input[type=range] {
+    flex: 1;
+    accent-color: var(--accent);
+    height: 4px;
+    cursor: pointer;
+  }
+  .ctrl-val {
+    font-size: 13px;
+    font-weight: 600;
+    min-width: 40px;
+    text-align: right;
+    font-family: var(--mono);
+    color: var(--accent);
+  }
+
+  /* Stats */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin: 12px 0;
+  }
+  .stat {
+    background: var(--bg3);
+    border-radius: 8px;
+    padding: 10px 12px;
+    text-align: center;
+    border: 1px solid var(--border);
+  }
+  .stat-label { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+  .stat-val { font-size: 20px; font-weight: 600; font-family: var(--mono); color: var(--text); }
+
+  /* Buttons */
+  .btn-row { display: flex; gap: 8px; margin-top: 8px; }
+  button {
+    flex: 1;
+    padding: 8px 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 13px;
+    font-family: var(--sans);
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  button:hover { background: var(--bg3); }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button.primary:hover { opacity: 0.9; }
+
+  /* Table */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+    margin: 16px 0;
+  }
+  th {
+    text-align: left;
+    padding: 8px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    font-family: var(--mono);
+  }
+  td {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--bg2); }
+
+  /* Callout */
+  .callout {
+    border-left: 3px solid var(--accent);
+    background: var(--bg2);
+    padding: 12px 16px;
+    border-radius: 0 8px 8px 0;
+    margin: 16px 0;
+    font-size: 0.95rem;
+  }
+  .callout.green { border-color: var(--accent2); }
+  .callout.amber { border-color: var(--amber); }
+
+  /* Formula block */
+  .formula {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin: 14px 0;
+    overflow-x: auto;
+    text-align: center;
+  }
+
+  hr { border: none; border-top: 1px solid var(--border); margin: 32px 0; }
+</style>
+</head>
+<body>
+
+<h1>SGD</h1>
+<p class="subtitle">Stochastic Gradient Descent — nền tảng của mọi optimizer</p>
+
+<!-- ===== WIDGET ===== -->
+<div class="widget">
+  <canvas id="c"></canvas>
+  <div class="controls">
+    <div class="ctrl-card">
+      <div class="ctrl-label">Learning rate η</div>
+      <div class="ctrl-row">
+        <input type="range" min="1" max="30" value="8" id="lr" step="1">
+        <span class="ctrl-val" id="lr-v">0.08</span>
+      </div>
+    </div>
+    <div class="ctrl-card">
+      <div class="ctrl-label">Batch size</div>
+      <div class="ctrl-row">
+        <input type="range" min="1" max="5" value="2" id="bs" step="1">
+        <span class="ctrl-val" id="bs-v">32</span>
+      </div>
+    </div>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="stat-label">Step</div><div class="stat-val" id="step-v">0</div></div>
+    <div class="stat"><div class="stat-label">Loss</div><div class="stat-val" id="loss-v">—</div></div>
+    <div class="stat"><div class="stat-label">θ</div><div class="stat-val" id="theta-v">—</div></div>
+  </div>
+  <div class="btn-row">
+    <button class="primary" id="btn-run" onclick="toggleRun()">Chạy SGD</button>
+    <button onclick="reset()">Reset</button>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const batchSizes = [1,4,16,32,128];
+let batchIdx = 1, running = false, step = 0, raf = null;
+let theta = 2.8, trail = [];
+const noiseScale = [0.8,0.4,0.15,0.05,0.01];
+
+function loss(x) {
+  return 0.4*(x-0.3)*(x-0.3)*(x+2.2)*(x+2.2)*0.18
+       + 0.3*Math.sin(3.5*x)*Math.exp(-0.2*x*x) + 0.05;
+}
+function dloss(x) {
+  const h = 0.0001;
+  return (loss(x+h)-loss(x-h))/(2*h);
+}
+function getSize() {
+  return { W: canvas.parentElement.clientWidth - 40, H: 300 };
+}
+function toCx(x,W) { return (x+3.5)/7*(W-60)+30; }
+function toCy(y,H) { return H-30-(y-0)/(1.2-0)*(H-60); }
+
+function draw() {
+  const {W,H} = getSize();
+  const dpr = window.devicePixelRatio||1;
+  canvas.width = W*dpr; canvas.height = H*dpr;
+  canvas.style.width = W+'px'; canvas.style.height = H+'px';
+  ctx.scale(dpr,dpr);
+
+  const dark = matchMedia('(prefers-color-scheme:dark)').matches;
+  const curveCol = dark ? '#AFA9EC' : '#534AB7';
+  const trailCol = dark ? '#5DCAA5' : '#0F6E56';
+  const ballCol  = dark ? '#EF9F27' : '#BA7517';
+  const gridCol  = dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+  const axisCol  = dark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)';
+  const mutedCol = dark ? '#888880' : '#6b6b66';
+
+  ctx.clearRect(0,0,W,H);
+
+  ctx.strokeStyle = gridCol; ctx.lineWidth = 0.5;
+  for (let y=0; y<=1.2; y+=0.3) {
+    const cy = toCy(y,H);
+    ctx.beginPath(); ctx.moveTo(30,cy); ctx.lineTo(W-30,cy); ctx.stroke();
+  }
+
+  ctx.strokeStyle = axisCol; ctx.lineWidth = 1;
+  const cy0 = toCy(0,H);
+  ctx.beginPath(); ctx.moveTo(30,cy0); ctx.lineTo(W-30,cy0); ctx.stroke();
+
+  ctx.strokeStyle = curveCol; ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  let first = true;
+  for (let i=0; i<=500; i++) {
+    const x = -3.5+7*i/500, y = loss(x);
+    if (y>1.35) { first=true; continue; }
+    const cx = toCx(x,W), cy = toCy(y,H);
+    first ? ctx.moveTo(cx,cy) : ctx.lineTo(cx,cy);
+    first = false;
+  }
+  ctx.stroke();
+
+  if (trail.length>1) {
+    ctx.strokeStyle = trailCol; ctx.lineWidth=1.5;
+    ctx.setLineDash([3,3]);
+    ctx.beginPath();
+    trail.forEach((pt,i) => {
+      const cx=toCx(pt.x,W), cy=toCy(pt.y,H);
+      i===0 ? ctx.moveTo(cx,cy) : ctx.lineTo(cx,cy);
+    });
+    ctx.stroke(); ctx.setLineDash([]);
+  }
+
+  const bx=toCx(theta,W), by=toCy(loss(theta),H);
+  ctx.beginPath(); ctx.arc(bx,by,7,0,Math.PI*2);
+  ctx.fillStyle=ballCol; ctx.fill();
+
+  const mx=toCx(0.3,W);
+  ctx.strokeStyle=mutedCol; ctx.lineWidth=0.5;
+  ctx.setLineDash([2,2]);
+  ctx.beginPath(); ctx.moveTo(mx,H-20); ctx.lineTo(mx,toCy(loss(0.3),H)+8); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle=mutedCol; ctx.font=`11px monospace`;
+  ctx.textAlign='center'; ctx.fillText('θ*',mx,H-6);
+
+  ctx.fillStyle=mutedCol; ctx.font=`11px monospace`;
+  ctx.textAlign='left'; ctx.fillText('L(θ)',4,toCy(1.05,H));
+}
+
+function step_sgd() {
+  const noise = noiseScale[batchIdx]*(Math.random()-0.5)*2;
+  const g = dloss(theta)+noise;
+  const lr_val = parseFloat(document.getElementById('lr').value)/100;
+  theta -= lr_val*g;
+  theta = Math.max(-3.4,Math.min(3.4,theta));
+  step++;
+  trail.push({x:theta,y:loss(theta)});
+  if (trail.length>80) trail.shift();
+  document.getElementById('step-v').textContent=step;
+  document.getElementById('loss-v').textContent=loss(theta).toFixed(3);
+  document.getElementById('theta-v').textContent=theta.toFixed(3);
+  draw();
+}
+
+function toggleRun() {
+  running=!running;
+  document.getElementById('btn-run').textContent=running?'Dừng':'Chạy SGD';
+  if (running) loop(); else cancelAnimationFrame(raf);
+}
+let lastT=0;
+function loop(t=0) {
+  if (!running) return;
+  if (t-lastT>120) { step_sgd(); lastT=t; }
+  raf=requestAnimationFrame(loop);
+}
+function reset() {
+  running=false; cancelAnimationFrame(raf);
+  document.getElementById('btn-run').textContent='Chạy SGD';
+  theta=2.8; step=0; trail=[];
+  document.getElementById('step-v').textContent='0';
+  document.getElementById('loss-v').textContent='—';
+  document.getElementById('theta-v').textContent='—';
+  draw();
+}
+document.getElementById('lr').oninput=function(){
+  document.getElementById('lr-v').textContent=(this.value/100).toFixed(2);
+};
+document.getElementById('bs').oninput=function(){
+  batchIdx=this.value-1;
+  document.getElementById('bs-v').textContent=batchSizes[batchIdx];
+};
+draw();
+window.addEventListener('resize',draw);
+</script>
+
+<!-- ===== NỘI DUNG ===== -->
+
+<h2>SGD là gì về mặt toán học</h2>
+
+<p>Bài toán training là tìm \(\theta\) để minimize:</p>
+
+<div class="formula">
+  \[\mathcal{L}(\theta) = \frac{1}{n}\sum_{i=1}^n \ell(f_\theta(x_i), y_i)\]
+</div>
+
+<p>Với \(n\) lớn (hàng triệu samples), tính gradient trên toàn bộ data mỗi bước rất tốn kém. SGD giải quyết bằng cách dùng một minibatch \(B\) ngẫu nhiên:</p>
+
+<div class="formula">
+  \[\theta_{t+1} = \theta_t - \eta \cdot \underbrace{\frac{1}{|B|}\sum_{i \in B} \nabla_\theta \ell_i(\theta_t)}_{\tilde{g}_t \approx \nabla\mathcal{L}(\theta_t)}\]
+</div>
+
+<div class="callout">
+  Gradient thực tế dùng là <strong>ước lượng ngẫu nhiên</strong> của true gradient — đây là nguồn gốc của mọi tính chất thú vị của SGD.
+</div>
+
+<h2>Ba chế độ tùy batch size</h2>
+
+<p>Kéo slider <strong>Batch size</strong> trong widget để cảm nhận trực tiếp:</p>
+
+<table>
+  <thead>
+    <tr><th>Batch size</th><th>Noise</th><th>Đặc điểm thực tế</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>B = 1</code> (SGD thuần)</td>
+      <td>Rất lớn</td>
+      <td>Mỗi step dùng 1 sample. Gradient noise lớn — quả bóng nhảy loạn. Thoát local minima tốt nhưng unstable.</td>
+    </tr>
+    <tr>
+      <td><code>B = 32–256</code> (mini-batch)</td>
+      <td>Vừa</td>
+      <td>Điểm ngọt. Đủ noise để regularize và thoát saddle point, đủ signal để đi đúng hướng. Default của hầu hết deep learning.</td>
+    </tr>
+    <tr>
+      <td><code>B = n</code> (full batch GD)</td>
+      <td>Không có</td>
+      <td>Gradient chính xác, hội tụ mượt. Nhưng không scale được, dễ kẹt tại sharp minima, generalize kém hơn.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>Learning rate ảnh hưởng gì</h2>
+
+<p>Kéo slider <strong>Learning rate η</strong> từ nhỏ đến lớn:</p>
+
+<table>
+  <thead>
+    <tr><th>LR</th><th>Hành vi</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Quá nhỏ (&lt; 0.01)</td>
+      <td>Từng bước đi rất nhỏ, hội tụ cực chậm, dễ kẹt tại điểm đang đứng.</td>
+    </tr>
+    <tr>
+      <td>Vừa (0.05–0.15)</td>
+      <td>Di chuyển ổn định về phía minimum. Noise giúp thoát khỏi các hố cạn.</td>
+    </tr>
+    <tr>
+      <td>Quá lớn (&gt; 0.25)</td>
+      <td>Nhảy vượt qua minimum, dao động qua lại, thậm chí diverge — loss tăng vô tận.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>Điều kiện hội tụ — Robbins-Monro</h3>
+
+<p>Về mặt lý thuyết, để SGD hội tụ, learning rate cần thỏa mãn:</p>
+
+<div class="formula">
+  \[\sum_{t=1}^\infty \eta_t = \infty \quad \text{và} \quad \sum_{t=1}^\infty \eta_t^2 < \infty\]
+</div>
+
+<div class="callout amber">
+  Điều kiện thứ nhất đảm bảo các bước đủ lớn để đến được minimum. Điều kiện thứ hai đảm bảo các bước đủ nhỏ để dừng lại được. Trong thực tế, <strong>LR decay schedule</strong> chính là cách đảm bảo hai điều này.
+</div>
+
+<h2>Noise có cấu trúc — không phải random thuần túy</h2>
+
+<p>Gradient thực tế của SGD là:</p>
+
+<div class="formula">
+  \[\tilde{g}_t = \nabla\mathcal{L}(\theta_t) + \epsilon_t\]
+</div>
+
+<p>Với phương sai của noise:</p>
+
+<div class="formula">
+  \[\text{Cov}(\epsilon_t) = \frac{1}{|B|}\Sigma(\theta_t)\]
+</div>
+
+<p>Trong đó \(\Sigma(\theta_t) = \text{Cov}_{i \sim \text{data}}[\nabla\ell_i(\theta_t)]\) là <strong>gradient covariance matrix</strong> — phụ thuộc vào vị trí \(\theta_t\), không phải hằng số.</p>
+
+<div class="callout green">
+  <strong>Hệ quả quan trọng:</strong> Noise lớn ở vùng loss cao (các gradient \(\nabla\ell_i\) phân tán), noise nhỏ ở vùng loss thấp (các gradient đồng thuận). SGD tự nhiên ổn định hơn khi gần minimum.
+</div>
+
+<h2>SGD ≈ Langevin Dynamics</h2>
+
+<p>Khi learning rate nhỏ và step liên tục, SGD xấp xỉ một <strong>Stochastic Differential Equation</strong>:</p>
+
+<div class="formula">
+  \[d\theta = -\nabla\mathcal{L}(\theta)\,dt + \sqrt{\eta \cdot \Sigma(\theta)}\,dW_t\]
+</div>
+
+<p>Đây là phương trình <strong>Langevin dynamics</strong> trong vật lý thống kê. Nhiệt độ hiệu dụng của hệ:</p>
+
+<div class="formula">
+  \[T_{\text{eff}} \propto \frac{\eta}{|B|}\]
+</div>
+
+<p>Stationary distribution (phân phối dừng) của hệ này:</p>
+
+<div class="formula">
+  \[p(\theta) \propto \exp\left(-\frac{\mathcal{L}(\theta)}{T_{\text{eff}}}\right)\]
+</div>
+
+<div class="callout">
+  Đây chính xác là <strong>Gibbs distribution</strong> trong vật lý thống kê — và là <strong>Bayesian posterior</strong> với prior uniform. SGD không chỉ tìm một điểm \(\theta^*\) mà về mặt lý thuyết đang <em>sample từ posterior</em> của \(\theta\).
+</div>
+
+<h2>Implicit regularizer</h2>
+
+<p>Kỳ vọng loss sau một SGD step với noise \(\epsilon\):</p>
+
+<div class="formula">
+  \[\mathbb{E}[\mathcal{L}(\theta_{t+1})] \approx \mathcal{L}(\theta_t) - \eta\|\nabla\mathcal{L}\|^2 + \underbrace{\frac{\eta^2}{2}\text{tr}(H\Sigma)}_{\text{noise penalty}}\]
+</div>
+
+<p>Term \(\frac{\eta^2}{2}\text{tr}(H\Sigma)\) là <strong>implicit regularizer</strong>: lớn khi \(H\) lớn (sharp region) → SGD bị phạt khi ở vùng sharp. Không cần thêm \(\lambda\|\theta\|^2\) vào loss, SGD tự động phạt vùng curvature cao.</p>
+
+<h2>Linear scaling rule</h2>
+
+<p>Từ \(T_{\text{eff}} \propto \frac{\eta}{|B|}\), có hệ quả thực tế:</p>
+
+<div class="callout green">
+  Tăng batch size \(k\) lần <strong>≡</strong> giảm nhiệt độ \(k\) lần. Để bù lại, cần tăng learning rate \(k\) lần — <strong>linear scaling rule</strong>. Đây là lý do khi train trên nhiều GPU (batch lớn hơn), người ta scale LR theo số GPU.
+</div>
+
+<h2>Tại sao SGD vẫn được dùng (vs Adam)</h2>
+
+<table>
+  <thead>
+    <tr><th>Tiêu chí</th><th>SGD + momentum</th><th>Adam</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Loại noise</td>
+      <td>Isotropic — tác động đều mọi hướng</td>
+      <td>Anisotropic — scale riêng từng chiều</td>
+    </tr>
+    <tr>
+      <td>Minima tìm được</td>
+      <td>Flat minima — generalize tốt hơn trên vision</td>
+      <td>Đôi khi sharp minima — generalize kém hơn</td>
+    </tr>
+    <tr>
+      <td>Tuning</td>
+      <td>Cần tune LR cẩn thận hơn</td>
+      <td>Ít nhạy cảm với LR hơn, dễ dùng</td>
+    </tr>
+    <tr>
+      <td>Dùng ở đâu</td>
+      <td>ResNet, nhiều SOTA vision models</td>
+      <td>LLM, NLP, default cho hầu hết tasks</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr>
+
+<h2>Papers tham khảo</h2>
+<table>
+  <thead><tr><th>Paper</th><th>Link</th></tr></thead>
+  <tbody>
+    <tr><td>Smith &amp; Le (2018) — Bayesian Perspective on SGD</td><td><a href="https://arxiv.org/abs/1710.06451">arxiv/1710.06451</a></td></tr>
+    <tr><td>Keskar et al. (2017) — Sharp/Flat Minima</td><td><a href="https://arxiv.org/abs/1609.04836">arxiv/1609.04836</a></td></tr>
+    <tr><td>Zhu et al. (2019) — Anisotropic Noise in SGD</td><td><a href="https://arxiv.org/abs/1901.09491">arxiv/1901.09491</a></td></tr>
+    <tr><td>Blanc et al. (2020) — Implicit Regularization</td><td><a href="https://arxiv.org/abs/1903.12580">arxiv/1903.12580</a></td></tr>
+  </tbody>
+</table>
+
+</body>
+</html>

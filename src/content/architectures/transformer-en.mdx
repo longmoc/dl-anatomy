@@ -13,7 +13,7 @@ import Note from '../../components/Note.astro';
 import AttentionViz from '../../components/AttentionViz.astro';
 import MultiHeadDiagram from '../../components/MultiHeadDiagram.astro';
 import ScaledDotProductDiagram from '../../components/ScaledDotProductDiagram.astro';
-import FFNDiagram from '../../components/FFNDiagram.astro';
+import TransformerBlockDiagram from '../../components/TransformerBlockDiagram.astro';
 
 # Transformer & Attention
 
@@ -125,17 +125,7 @@ Attention is only half the block. A standard Transformer block has two main part
 1. **Multi-head attention** — mixes information between tokens
 2. **Feed-forward network (FFN)** — transforms each token representation independently
 
-```text
-x
-|--> Multi-head attention --> Add/Norm
-|                              |
-+------------------------------+
-                               |
-                               v
-                         Feed-forward network --> Add/Norm
-                               |                    |
-                               +--------------------+
-```
+<TransformerBlockDiagram lang="en" />
 
 The FFN is usually a two-layer MLP applied separately to each token:
 
@@ -144,8 +134,6 @@ $$
 $$
 
 If attention asks "which token should this token read from?", the FFN asks "after information has been mixed, how should each token transform its own representation?"
-
-<FFNDiagram lang="en" />
 
 Residual connections help information and gradients pass through many blocks, in the same spirit as [ResNet & Residual Learning](/dl-anatomy/architectures/resnet-en). Normalization, usually LayerNorm or RMSNorm in modern Transformers, keeps activation scale stable; see [Normalization Layers](/dl-anatomy/architectures/normalization-layers-en).
 
