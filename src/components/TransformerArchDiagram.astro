@@ -35,6 +35,8 @@ const texts: Txt[] = [];
 const plus: Plus[] = [];
 const conts: Cont[] = [];
 const cross: { d: string }[] = [];
+const peSym: { x: number; y: number }[] = [];
+const links: Arrow[] = [];
 
 function stack(cx: number, top: number, w: number, gap: number, specs: { cls: string; label?: string; lines?: string[]; h: number }[]) {
   const bs: Box[] = [];
@@ -70,7 +72,11 @@ if (variant === 'encoder' || variant === 'decoder') {
   const pcy = blk.bottom + 28;
   plus.push({ cx, cy: pcy });
   arrows.push({ x1: cx, y1: pcy - 11, x2: cx, y2: blk.bottom + 2 });
-  const peX = isDec ? cx + 90 : cx - 90;
+  const sgn = isDec ? 1 : -1;
+  const symX = cx + sgn * 46;
+  peSym.push({ x: symX, y: pcy });
+  links.push({ x1: cx + sgn * 11, y1: pcy, x2: symX - sgn * 11, y2: pcy });
+  const peX = cx + sgn * 64;
   const peCls = isDec ? 'ta-pe-l' : 'ta-pe-r';
   texts.push({ x: peX, y: pcy - 3, t: T.pe[0], cls: peCls }, { x: peX, y: pcy + 11, t: T.pe[1], cls: peCls });
 
@@ -128,7 +134,11 @@ if (variant === 'encoder' || variant === 'decoder') {
     boxes.push({ x: cx - 65, y: embY, w: 130, h: 30, cls: 'emb', label: isDec ? T.outEmb : T.inEmb });
     arrows.push({ x1: cx, y1: embY, x2: cx, y2: pcy + 13 });
     arrows.push({ x1: cx, y1: embY + 60, x2: cx, y2: embY + 32 });
-    const peX = isDec ? cx + 78 : cx - 78;
+    const sgn = isDec ? 1 : -1;
+    const symX = cx + sgn * 44;
+    peSym.push({ x: symX, y: pcy });
+    links.push({ x1: cx + sgn * 11, y1: pcy, x2: symX - sgn * 11, y2: pcy });
+    const peX = cx + sgn * 62;
     const peCls = isDec ? 'ta-pe-l' : 'ta-pe-r';
     texts.push({ x: peX, y: pcy - 3, t: T.pe[0], cls: peCls }, { x: peX, y: pcy + 11, t: T.pe[1], cls: peCls });
   }
@@ -166,7 +176,15 @@ const cap = variant === 'encoder' ? T.capEnc : variant === 'decoder' ? T.capDec 
 
     {conts.map(c => <rect x={c.x} y={c.y} width={c.w} height={c.h} rx="12" class="ta-cont" />)}
     {arrows.map(a => <line x1={a.x1} y1={a.y1} x2={a.x2} y2={a.y2} class="ta-line" marker-end="url(#ta-arrow)" />)}
+    {links.map(a => <line x1={a.x1} y1={a.y1} x2={a.x2} y2={a.y2} class="ta-link" />)}
     {cross.map(c => <path d={c.d} class="ta-cross" marker-end="url(#ta-kvh)" />)}
+
+    {peSym.map(s => (
+      <g>
+        <circle cx={s.x} cy={s.y} r="11" class="ta-plus" />
+        <path d={`M ${s.x - 7},${s.y} q 3.5,-7 7,0 q 3.5,7 7,0`} class="ta-sine" />
+      </g>
+    ))}
 
     {boxes.map(b => (
       <g>
@@ -194,6 +212,8 @@ const cap = variant === 'encoder' ? T.capEnc : variant === 'decoder' ? T.capDec 
   .ta { margin: 1.75rem 0; border: 1px solid var(--border); border-radius: 10px; background: var(--bg2); padding: 0.8rem 0 0.4rem; }
   .ta-svg { display: block; width: 100%; height: auto; margin: 0 auto; }
   .ta-line { stroke: var(--text); stroke-width: 1.7; fill: none; }
+  .ta-link { stroke: var(--text); stroke-width: 1.5; fill: none; }
+  .ta-sine { stroke: var(--text); stroke-width: 1.4; fill: none; }
   .ta-head { fill: var(--text); }
   .ta-cont { fill: none; stroke: var(--border); stroke-width: 1.4; stroke-dasharray: 5 4; }
   .ta-box { fill: var(--bg); stroke-width: 2; }
