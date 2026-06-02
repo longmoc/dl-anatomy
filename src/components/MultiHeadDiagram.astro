@@ -6,120 +6,164 @@ const { lang = 'vi' } = Astro.props;
 
 const L = lang === 'en'
   ? {
-      embed: 'shared token embeddings',
-      head1: 'Head 1 — one relation',
-      head2: 'Head 2 — a different relation',
-      concat: 'concat → Wᴼ',
+      orig: 'Original embeddings (shared)',
+      head1: 'Head 1',
+      head2: 'Head 2',
+      concat: 'concat',
       output: 'output',
-      cap: 'Each head applies its own learned projections Wᵢ^Q, Wᵢ^K, Wᵢ^V to the shared embeddings, placing the same tokens in a different subspace — so each head can attend along a different relation. The head outputs are concatenated and mixed by Wᴼ.',
+      cap: 'Each head has its own projections Wᵢ^Q, Wᵢ^K, Wᵢ^V, turning the shared embeddings into its own Q/K/V spaces — and because the projections differ, each head arranges the same tokens differently and captures a different relation. The head outputs are concatenated and mixed by Wᴼ.',
     }
   : {
-      embed: 'embedding token (dùng chung)',
-      head1: 'Head 1 — một quan hệ',
-      head2: 'Head 2 — quan hệ khác',
-      concat: 'concat → Wᴼ',
+      orig: 'Embedding gốc (dùng chung)',
+      head1: 'Head 1',
+      head2: 'Head 2',
+      concat: 'concat',
       output: 'output',
-      cap: 'Mỗi head áp các projection học được Wᵢ^Q, Wᵢ^K, Wᵢ^V lên cùng bộ embedding, đặt các token vào một subspace khác nhau — nên mỗi head có thể attention theo một quan hệ khác. Output các head được nối lại và trộn bởi Wᴼ.',
+      cap: 'Mỗi head có bộ projection riêng Wᵢ^Q, Wᵢ^K, Wᵢ^V, biến cùng một bộ embedding thành các không gian Q/K/V riêng — vì projection khác nhau nên mỗi head sắp xếp cùng các token một kiểu khác, bắt một quan hệ khác. Output các head được concat rồi trộn bởi Wᴼ.',
     };
 
-const tokens = ['the', 'cat', 'sat', 'mat'];
-// dot positions per head (absolute SVG coords) — same tokens, different arrangement
+// layouts: same 4 tokens placed differently (fractions of plot area)
+const layA = [['the',.22,.32],['cat',.55,.70],['sat',.42,.18],['mat',.78,.52]];
+const layB = [['the',.28,.62],['cat',.62,.42],['sat',.46,.84],['mat',.72,.24]];
+const layC = [['the',.32,.24],['cat',.50,.72],['sat',.74,.54],['mat',.20,.48]];
+const layD = [['the',.60,.30],['cat',.28,.60],['sat',.76,.72],['mat',.46,.38]];
+const layE = [['the',.50,.78],['cat',.70,.48],['sat',.24,.40],['mat',.56,.20]];
+const layF = [['the',.40,.50],['cat',.68,.72],['sat',.30,.26],['mat',.74,.36]];
+
+const accent = 'var(--accent)';
+const accent2 = 'var(--accent2)';
+const amber = 'var(--amber)';
+
+function mk(ax, ay, w, h, lay, color) {
+  return lay.map(([t, fx, fy]) => {
+    const x = ax + fx * w;
+    const y = ay - fy * h;
+    const left = fx > 0.62;
+    return { t, x, y, color, lx: left ? x - 6 : x + 6, anchor: left ? 'end' : 'start', ly: y + 3 };
+  });
+}
+
+// top "original embeddings" panels
+const tw = 92, th = 78, tay = 150;
+const top = [
+  { ax: 205, label: 'Queries', color: accent,  dots: mk(205, tay, tw, th, layA, accent) },
+  { ax: 320, label: 'Keys',    color: accent2, dots: mk(320, tay, tw, th, layB, accent2) },
+  { ax: 435, label: 'Values',  color: amber,   dots: mk(435, tay, tw, th, layC, amber) },
+];
+// per-head panels
+const hw = 78, hh = 82, hay = 410;
 const head1 = [
-  { t: 'the', x: 95,  y: 232 },
-  { t: 'cat', x: 150, y: 192 },
-  { t: 'sat', x: 120, y: 244 },
-  { t: 'mat', x: 188, y: 206 },
+  { ax: 65,  label: 'Q', color: accent,  dots: mk(65,  hay, hw, hh, layD, accent) },
+  { ax: 160, label: 'K', color: accent2, dots: mk(160, hay, hw, hh, layE, accent2) },
+  { ax: 255, label: 'V', color: amber,   dots: mk(255, hay, hw, hh, layF, amber) },
 ];
 const head2 = [
-  { t: 'the', x: 360, y: 202 },
-  { t: 'cat', x: 472, y: 236 },
-  { t: 'sat', x: 402, y: 182 },
-  { t: 'mat', x: 448, y: 214 },
+  { ax: 405, label: 'Q', color: accent,  dots: mk(405, hay, hw, hh, layC, accent) },
+  { ax: 500, label: 'K', color: accent2, dots: mk(500, hay, hw, hh, layA, accent2) },
+  { ax: 595, label: 'V', color: amber,   dots: mk(595, hay, hw, hh, layB, amber) },
 ];
 ---
 
 <figure class="mha">
-  <svg viewBox="0 0 560 336" role="img" aria-label="Multi-head attention overview" class="mha-svg">
+  <svg viewBox="0 0 720 512" role="img" aria-label="Multi-head attention overview" class="mha-svg">
     <defs>
       <marker id="mha-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
         <path d="M0,0 L10,5 L0,10 z" class="mha-head" />
       </marker>
     </defs>
 
-    <!-- shared embeddings -->
-    <rect x="166" y="18" width="228" height="40" rx="9" class="mha-embed-box" />
-    {tokens.map((t,i) => (
+    <!-- ===== Original embeddings ===== -->
+    <text x="360" y="22" class="mha-title">{L.orig}</text>
+    <rect x="170" y="32" width="380" height="122" rx="9" class="mha-dash" />
+    {top.map(p => (
       <g>
-        <circle cx={196 + i*50} cy="38" r="5" class="mha-edot" />
-        <text x={196 + i*50} y="42" class="mha-chip">{t}</text>
+        <text x={p.ax + tw / 2} y="58" class="mha-sub" style={`fill:${p.color}`}>{p.label}</text>
+        <line x1={p.ax} y1={tay} x2={p.ax} y2={tay - th} class="mha-axis" />
+        <line x1={p.ax} y1={tay} x2={p.ax + tw} y2={tay} class="mha-axis" />
+        {p.dots.map(d => (
+          <g>
+            <circle cx={d.x} cy={d.y} r="4.5" style={`fill:${d.color}`} />
+            <text x={d.lx} y={d.ly} class="mha-dlbl" style={`text-anchor:${d.anchor}`}>{d.t}</text>
+          </g>
+        ))}
       </g>
     ))}
-    <text x="280" y="12" class="mha-lbl">{L.embed}</text>
 
-    <!-- projection arrows to heads -->
-    <line x1="240" y1="58" x2="150" y2="146" class="mha-line" marker-end="url(#mha-arrow)" />
-    <line x1="320" y1="58" x2="410" y2="146" class="mha-line" marker-end="url(#mha-arrow)" />
-    <text x="178" y="104" class="mha-proj">
+    <!-- ===== projection arrows (labels kept off the lines) ===== -->
+    <line x1="300" y1="154" x2="190" y2="248" class="mha-line" marker-end="url(#mha-arrow)" />
+    <line x1="430" y1="154" x2="530" y2="248" class="mha-line" marker-end="url(#mha-arrow)" />
+    <text x="150" y="198" class="mha-proj">
       <tspan>W</tspan><tspan baseline-shift="sub" font-size="8">1</tspan><tspan baseline-shift="super" font-size="8">Q</tspan>
-      <tspan dx="3">W</tspan><tspan baseline-shift="sub" font-size="8">1</tspan><tspan baseline-shift="super" font-size="8">K</tspan>
-      <tspan dx="3">W</tspan><tspan baseline-shift="sub" font-size="8">1</tspan><tspan baseline-shift="super" font-size="8">V</tspan>
+      <tspan dx="2">W</tspan><tspan baseline-shift="sub" font-size="8">1</tspan><tspan baseline-shift="super" font-size="8">K</tspan>
+      <tspan dx="2">W</tspan><tspan baseline-shift="sub" font-size="8">1</tspan><tspan baseline-shift="super" font-size="8">V</tspan>
     </text>
-    <text x="382" y="104" class="mha-proj">
+    <text x="580" y="198" class="mha-proj">
       <tspan>W</tspan><tspan baseline-shift="sub" font-size="8">2</tspan><tspan baseline-shift="super" font-size="8">Q</tspan>
-      <tspan dx="3">W</tspan><tspan baseline-shift="sub" font-size="8">2</tspan><tspan baseline-shift="super" font-size="8">K</tspan>
-      <tspan dx="3">W</tspan><tspan baseline-shift="sub" font-size="8">2</tspan><tspan baseline-shift="super" font-size="8">V</tspan>
+      <tspan dx="2">W</tspan><tspan baseline-shift="sub" font-size="8">2</tspan><tspan baseline-shift="super" font-size="8">K</tspan>
+      <tspan dx="2">W</tspan><tspan baseline-shift="sub" font-size="8">2</tspan><tspan baseline-shift="super" font-size="8">V</tspan>
     </text>
 
-    <!-- Head 1 -->
-    <text x="150" y="142" class="mha-htitle">{L.head1}</text>
-    <rect x="30" y="148" width="240" height="120" rx="9" class="mha-headbox" />
-    <line x1="60" y1="166" x2="60" y2="256" class="mha-axis" />
-    <line x1="60" y1="256" x2="252" y2="256" class="mha-axis" />
-    {head1.map(d => (
+    <!-- ===== Head 1 ===== -->
+    <text x="190" y="242" class="mha-htitle">{L.head1}</text>
+    <rect x="40" y="248" width="300" height="178" rx="9" class="mha-dash" />
+    {head1.map(p => (
       <g>
-        <circle cx={d.x} cy={d.y} r="5" class="mha-dot1" />
-        <text x={d.x + 9} y={d.y + 4} class="mha-dlbl">{d.t}</text>
+        <text x={p.ax + hw / 2} y="296" class="mha-sub" style={`fill:${p.color}`}>{p.label}</text>
+        <line x1={p.ax} y1={hay} x2={p.ax} y2={hay - hh} class="mha-axis" />
+        <line x1={p.ax} y1={hay} x2={p.ax + hw} y2={hay} class="mha-axis" />
+        {p.dots.map(d => (
+          <g>
+            <circle cx={d.x} cy={d.y} r="4.5" style={`fill:${d.color}`} />
+            <text x={d.lx} y={d.ly} class="mha-dlbl" style={`text-anchor:${d.anchor}`}>{d.t}</text>
+          </g>
+        ))}
       </g>
     ))}
 
-    <!-- Head 2 -->
-    <text x="410" y="142" class="mha-htitle">{L.head2}</text>
-    <rect x="290" y="148" width="240" height="120" rx="9" class="mha-headbox" />
-    <line x1="320" y1="166" x2="320" y2="256" class="mha-axis" />
-    <line x1="320" y1="256" x2="512" y2="256" class="mha-axis" />
-    {head2.map(d => (
+    <!-- ===== Head 2 ===== -->
+    <text x="530" y="242" class="mha-htitle">{L.head2}</text>
+    <rect x="380" y="248" width="300" height="178" rx="9" class="mha-dash" />
+    {head2.map(p => (
       <g>
-        <circle cx={d.x} cy={d.y} r="5" class="mha-dot2" />
-        <text x={d.x + 9} y={d.y + 4} class="mha-dlbl">{d.t}</text>
+        <text x={p.ax + hw / 2} y="296" class="mha-sub" style={`fill:${p.color}`}>{p.label}</text>
+        <line x1={p.ax} y1={hay} x2={p.ax} y2={hay - hh} class="mha-axis" />
+        <line x1={p.ax} y1={hay} x2={p.ax + hw} y2={hay} class="mha-axis" />
+        {p.dots.map(d => (
+          <g>
+            <circle cx={d.x} cy={d.y} r="4.5" style={`fill:${d.color}`} />
+            <text x={d.lx} y={d.ly} class="mha-dlbl" style={`text-anchor:${d.anchor}`}>{d.t}</text>
+          </g>
+        ))}
       </g>
     ))}
 
-    <!-- concat + output -->
-    <line x1="150" y1="268" x2="252" y2="290" class="mha-line" marker-end="url(#mha-arrow)" />
-    <line x1="410" y1="268" x2="308" y2="290" class="mha-line" marker-end="url(#mha-arrow)" />
-    <rect x="208" y="292" width="144" height="28" rx="8" class="mha-concat" />
-    <text x="280" y="310" class="mha-concat-text">{L.concat}</text>
+    <!-- ===== concat + output ===== -->
+    <line x1="190" y1="426" x2="305" y2="450" class="mha-line" marker-end="url(#mha-arrow)" />
+    <line x1="530" y1="426" x2="415" y2="450" class="mha-line" marker-end="url(#mha-arrow)" />
+    <rect x="300" y="450" width="120" height="30" rx="8" class="mha-concat" />
+    <text x="360" y="469" class="mha-concat-text">
+      <tspan>{L.concat} → W</tspan><tspan baseline-shift="super" font-size="8">O</tspan>
+    </text>
+    <line x1="360" y1="480" x2="360" y2="496" class="mha-line" marker-end="url(#mha-arrow)" />
+    <text x="360" y="508" class="mha-out">{L.output}</text>
   </svg>
   <figcaption class="mha-cap">{L.cap}</figcaption>
 </figure>
 
 <style>
-  .mha { margin: 1.75rem 0; border: 1px solid var(--border); border-radius: 10px; background: var(--bg2); padding: 0.8rem 0 0.25rem; }
-  .mha-svg { display: block; width: 100%; max-width: 600px; height: auto; margin: 0 auto; }
-  .mha-embed-box { fill: var(--bg); stroke: var(--accent); stroke-width: 1.6; }
-  .mha-edot { fill: var(--accent); }
-  .mha-chip { fill: var(--text); font-family: var(--mono); font-size: 9.5px; text-anchor: middle; dominant-baseline: hanging; }
-  .mha-lbl { fill: var(--muted); font-family: var(--mono); font-size: 10px; text-anchor: middle; }
-  .mha-line { stroke: var(--muted); stroke-width: 1.5; }
+  .mha { margin: 1.75rem 0; border: 1px solid var(--border); border-radius: 10px; background: var(--bg2); padding: 0.8rem 0 0.4rem; }
+  .mha-svg { display: block; width: 100%; max-width: 680px; height: auto; margin: 0 auto; }
+  .mha-title { fill: var(--text); font-family: var(--mono); font-size: 12px; font-weight: 600; text-anchor: middle; }
+  .mha-dash { fill: none; stroke: var(--border); stroke-width: 1.3; stroke-dasharray: 5 3; }
+  .mha-sub { font-family: var(--mono); font-size: 11px; font-weight: 600; text-anchor: middle; }
+  .mha-axis { stroke: var(--muted); stroke-width: 1.1; opacity: 0.55; }
+  .mha-dlbl { fill: var(--muted); font-family: var(--mono); font-size: 8px; }
+  .mha-line { stroke: var(--muted); stroke-width: 1.5; fill: none; }
   .mha-head { fill: var(--muted); }
   .mha-proj { fill: var(--text); font-family: var(--mono); font-size: 11px; text-anchor: middle; }
-  .mha-htitle { fill: var(--text); font-family: var(--mono); font-size: 11.5px; font-weight: 600; text-anchor: middle; }
-  .mha-headbox { fill: var(--bg); stroke: var(--border); stroke-width: 1.2; }
-  .mha-axis { stroke: var(--muted); stroke-width: 1.2; opacity: 0.6; }
-  .mha-dot1 { fill: var(--accent); }
-  .mha-dot2 { fill: var(--accent2); }
-  .mha-dlbl { fill: var(--muted); font-family: var(--mono); font-size: 9px; text-anchor: start; }
+  .mha-htitle { fill: var(--text); font-family: var(--mono); font-size: 12px; font-weight: 600; text-anchor: middle; }
   .mha-concat { fill: var(--bg); stroke: var(--amber); stroke-width: 1.6; }
   .mha-concat-text { fill: var(--text); font-family: var(--mono); font-size: 11px; text-anchor: middle; }
+  .mha-out { fill: var(--muted); font-family: var(--mono); font-size: 10px; text-anchor: middle; }
   .mha-cap { font-size: 0.78rem; color: var(--muted); text-align: center; padding: 0.5rem 1rem 0.6rem; font-style: italic; line-height: 1.5; }
 </style>
