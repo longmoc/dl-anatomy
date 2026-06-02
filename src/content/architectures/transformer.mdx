@@ -13,6 +13,7 @@ import Note from '../../components/Note.astro';
 import AttentionViz from '../../components/AttentionViz.astro';
 import MultiHeadDiagram from '../../components/MultiHeadDiagram.astro';
 import ScaledDotProductDiagram from '../../components/ScaledDotProductDiagram.astro';
+import FFNDiagram from '../../components/FFNDiagram.astro';
 
 # Transformer & Attention
 
@@ -143,6 +144,8 @@ $$
 $$
 
 Nếu attention là phần "token này nên lấy thông tin từ token nào?", thì FFN là phần "sau khi đã trộn thông tin, mỗi token nên xử lý representation của mình ra sao?".
+
+<FFNDiagram lang="vi" />
 
 Residual connection giúp thông tin và gradient đi qua nhiều block dễ hơn — cùng tinh thần với [ResNet & Residual Learning](/dl-anatomy/architectures/resnet). Normalization, thường là LayerNorm/RMSNorm trong Transformer hiện đại, giúp ổn định scale activation; xem thêm [Normalization Layers](/dl-anatomy/architectures/normalization-layers).
 
