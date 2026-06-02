@@ -1,0 +1,217 @@
+---
+interface Props {
+  variant: 'encoder' | 'decoder' | 'encdec';
+  lang?: 'vi' | 'en';
+}
+const { variant, lang = 'vi' } = Astro.props;
+
+const T = lang === 'en'
+  ? {
+      inputs: 'Inputs', outputs: 'Outputs (shifted right)', pe: ['Positional', 'Encoding'],
+      inEmb: 'Input Embedding', outEmb: 'Output Embedding', emb: 'Embedding',
+      repr: ['contextual', 'representations'], outProb: 'Output Probabilities', kv: 'K, V',
+      capEnc: 'Encoder-only (BERT): N blocks of bidirectional multi-head self-attention + FFN, each sub-layer wrapped by Add & Norm. The output is a two-sided contextual representation of every token — there is no token-generation head.',
+      capDec: 'Decoder-only (GPT): each block uses masked (causal) self-attention + FFN. A Linear + Softmax head produces the next-token distribution; the input is the output sequence shifted right for autoregressive training.',
+      capED: 'Encoder–decoder (T5): the encoder reads the input with bidirectional self-attention; the decoder generates with masked self-attention and also a cross-attention that reads the encoder representation (the K, V arrow). Linear + Softmax produces the token distribution.',
+    }
+  : {
+      inputs: 'Đầu vào', outputs: 'Outputs (shifted right)', pe: ['Positional', 'Encoding'],
+      inEmb: 'Input Embedding', outEmb: 'Output Embedding', emb: 'Embedding',
+      repr: ['biểu diễn', 'ngữ cảnh'], outProb: 'Output Probabilities', kv: 'K, V',
+      capEnc: 'Encoder-only (BERT): chồng N block gồm bidirectional multi-head self-attention + FFN, mỗi sub-layer kèm Add & Norm. Đầu ra là biểu diễn ngữ cảnh hai chiều cho mỗi token — không có đầu sinh token.',
+      capDec: 'Decoder-only (GPT): mỗi block dùng masked (causal) self-attention + FFN. Đầu Linear + Softmax cho ra phân phối token kế tiếp; input là chuỗi output dịch phải để train tự hồi quy.',
+      capED: 'Encoder–decoder (T5): encoder đọc input bằng bidirectional self-attention; decoder sinh output bằng masked self-attention, đồng thời cross-attention đọc biểu diễn từ encoder (mũi tên K, V). Linear + Softmax cho ra phân phối token.',
+    };
+
+type Box = { x: number; y: number; w: number; h: number; cls: string; label?: string; lines?: string[] };
+type Arrow = { x1: number; y1: number; x2: number; y2: number };
+type Txt = { x: number; y: number; t: string; cls: string };
+type Plus = { cx: number; cy: number };
+type Cont = { x: number; y: number; w: number; h: number };
+
+const boxes: Box[] = [];
+const arrows: Arrow[] = [];
+const texts: Txt[] = [];
+const plus: Plus[] = [];
+const conts: Cont[] = [];
+const cross: { d: string }[] = [];
+
+function stack(cx: number, top: number, w: number, gap: number, specs: { cls: string; label?: string; lines?: string[]; h: number }[]) {
+  const bs: Box[] = [];
+  let y = top;
+  for (const s of specs) { bs.push({ x: cx - w / 2, y, w, h: s.h, cls: s.cls, label: s.label, lines: s.lines }); y += s.h + gap; }
+  const ar: Arrow[] = [];
+  for (let i = 0; i < bs.length - 1; i++) ar.push({ x1: cx, y1: bs[i + 1].y, x2: cx, y2: bs[i].y + bs[i].h });
+  return { boxes: bs, arrows: ar, bottom: y - gap };
+}
+
+let vb = '0 0 360 400';
+let maxw = 340;
+
+if (variant === 'encoder' || variant === 'decoder') {
+  const cx = 180, W = 150;
+  const isDec = variant === 'decoder';
+  const attn = isDec
+    ? { cls: 'attn', lines: ['Masked Multi-Head', 'Self-Attention'], h: 44 }
+    : { cls: 'attn', lines: ['Multi-Head', 'Self-Attention'], h: 44 };
+  const top = isDec ? 152 : 150;
+  const blk = stack(cx, top, W, 16, [
+    { cls: 'norm', label: 'Add & Norm', h: 26 },
+    { cls: 'ff', label: 'Feed Forward', h: 34 },
+    { cls: 'norm', label: 'Add & Norm', h: 26 },
+    attn,
+  ]);
+  boxes.push(...blk.boxes); arrows.push(...blk.arrows);
+  const cTop = top - 12;
+  conts.push({ x: cx - 85, y: cTop, w: 170, h: blk.bottom - cTop + 12 });
+  texts.push({ x: isDec ? cx + 103 : cx - 103, y: (cTop + blk.bottom + 12) / 2, t: 'N×', cls: 'ta-nx' });
+
+  // plus + positional encoding
+  const pcy = blk.bottom + 28;
+  plus.push({ cx, cy: pcy });
+  arrows.push({ x1: cx, y1: pcy - 11, x2: cx, y2: blk.bottom + 2 });
+  const peX = isDec ? cx + 90 : cx - 90;
+  const peCls = isDec ? 'ta-pe-l' : 'ta-pe-r';
+  texts.push({ x: peX, y: pcy - 3, t: T.pe[0], cls: peCls }, { x: peX, y: pcy + 11, t: T.pe[1], cls: peCls });
+
+  // embedding + io
+  const embY = pcy + 32;
+  boxes.push({ x: cx - 75, y: embY, w: 150, h: 32, cls: 'emb', label: isDec ? T.outEmb : T.inEmb });
+  arrows.push({ x1: cx, y1: embY, x2: cx, y2: pcy + 13 });
+  arrows.push({ x1: cx, y1: embY + 62, x2: cx, y2: embY + 34 });
+
+  if (isDec) {
+    texts.push({ x: cx, y: embY + 76, t: T.outputs, cls: 'ta-io' });
+    // head: Linear, Softmax, Output Probabilities
+    boxes.push({ x: cx - 75, y: 98, w: 150, h: 26, cls: 'linear', label: 'Linear' });
+    boxes.push({ x: cx - 75, y: 56, w: 150, h: 26, cls: 'softmax', label: 'Softmax' });
+    arrows.push({ x1: cx, y1: cTop, x2: cx, y2: 126 });   // block -> Linear
+    arrows.push({ x1: cx, y1: 98, x2: cx, y2: 84 });       // Linear -> Softmax
+    arrows.push({ x1: cx, y1: 56, x2: cx, y2: 42 });       // Softmax -> out prob
+    texts.push({ x: cx, y: 32, t: T.outProb, cls: 'ta-io' });
+    vb = '0 22 360 478'; maxw = 340;
+  } else {
+    texts.push({ x: cx, y: embY + 76, t: T.inputs, cls: 'ta-io' });
+    arrows.push({ x1: cx, y1: cTop, x2: cx, y2: 106 });    // block -> output
+    texts.push({ x: cx, y: 92, t: T.repr[0], cls: 'ta-io' }, { x: cx, y: 108, t: T.repr[1], cls: 'ta-io' });
+    vb = '0 80 360 400'; maxw = 340;
+  }
+} else {
+  // encoder-decoder, two columns
+  const encCx = 150, decCx = 410, W = 130, GAP = 14;
+  const encBlk = stack(encCx, 264, W, GAP, [
+    { cls: 'norm', label: 'Add & Norm', h: 24 },
+    { cls: 'ff', label: 'Feed Forward', h: 30 },
+    { cls: 'norm', label: 'Add & Norm', h: 24 },
+    { cls: 'attn', lines: ['Multi-Head', 'Self-Attention'], h: 38 },
+  ]);
+  const decBlk = stack(decCx, 176, W, GAP, [
+    { cls: 'norm', label: 'Add & Norm', h: 24 },
+    { cls: 'ff', label: 'Feed Forward', h: 30 },
+    { cls: 'norm', label: 'Add & Norm', h: 24 },
+    { cls: 'attn', lines: ['Cross', 'Attention'], h: 38 },
+    { cls: 'norm', label: 'Add & Norm', h: 24 },
+    { cls: 'attn', lines: ['Masked', 'Self-Attention'], h: 38 },
+  ]);
+  boxes.push(...encBlk.boxes, ...decBlk.boxes);
+  arrows.push(...encBlk.arrows, ...decBlk.arrows);
+  conts.push({ x: encCx - 72, y: 252, w: 144, h: encBlk.bottom - 252 + 12 });
+  conts.push({ x: decCx - 72, y: 164, w: 144, h: decBlk.bottom - 164 + 12 });
+  texts.push({ x: encCx - 90, y: 348, t: 'N×', cls: 'ta-nx' });
+  texts.push({ x: decCx + 90, y: 300, t: 'N×', cls: 'ta-nx' });
+
+  for (const [cx, isDec] of [[encCx, false], [decCx, true]] as [number, boolean][]) {
+    const pcy = 446;
+    plus.push({ cx, cy: pcy });
+    arrows.push({ x1: cx, y1: pcy - 11, x2: cx, y2: 422 });
+    const embY = 470;
+    boxes.push({ x: cx - 65, y: embY, w: 130, h: 30, cls: 'emb', label: isDec ? T.outEmb : T.inEmb });
+    arrows.push({ x1: cx, y1: embY, x2: cx, y2: pcy + 13 });
+    arrows.push({ x1: cx, y1: embY + 60, x2: cx, y2: embY + 32 });
+    const peX = isDec ? cx + 78 : cx - 78;
+    const peCls = isDec ? 'ta-pe-l' : 'ta-pe-r';
+    texts.push({ x: peX, y: pcy - 3, t: T.pe[0], cls: peCls }, { x: peX, y: pcy + 11, t: T.pe[1], cls: peCls });
+  }
+  texts.push({ x: encCx, y: 546, t: T.inputs, cls: 'ta-io' });
+  texts.push({ x: decCx, y: 540, t: 'Outputs', cls: 'ta-io' }, { x: decCx, y: 556, t: '(shifted right)', cls: 'ta-io' });
+
+  // decoder head
+  boxes.push({ x: decCx - 65, y: 118, w: 130, h: 26, cls: 'linear', label: 'Linear' });
+  boxes.push({ x: decCx - 65, y: 78, w: 130, h: 26, cls: 'softmax', label: 'Softmax' });
+  arrows.push({ x1: decCx, y1: 164, x2: decCx, y2: 146 });
+  arrows.push({ x1: decCx, y1: 118, x2: decCx, y2: 106 });
+  arrows.push({ x1: decCx, y1: 78, x2: decCx, y2: 64 });
+  texts.push({ x: decCx, y: 54, t: T.outProb, cls: 'ta-io' });
+
+  // cross-attention K,V from encoder -> decoder cross-attn box (4th from top, mid y≈314)
+  cross.push({ d: 'M150,255 H280 V314 H343' });
+  texts.push({ x: 300, y: 306, t: T.kv, cls: 'ta-kv' });
+
+  vb = '0 30 560 540'; maxw = 560;
+}
+
+const cap = variant === 'encoder' ? T.capEnc : variant === 'decoder' ? T.capDec : T.capED;
+---
+
+<figure class="ta">
+  <svg viewBox={vb} role="img" aria-label="Transformer family architecture" class="ta-svg" style={`max-width:${maxw}px`}>
+    <defs>
+      <marker id="ta-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" class="ta-head" />
+      </marker>
+      <marker id="ta-kvh" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" class="ta-kvhead" />
+      </marker>
+    </defs>
+
+    {conts.map(c => <rect x={c.x} y={c.y} width={c.w} height={c.h} rx="12" class="ta-cont" />)}
+    {arrows.map(a => <line x1={a.x1} y1={a.y1} x2={a.x2} y2={a.y2} class="ta-line" marker-end="url(#ta-arrow)" />)}
+    {cross.map(c => <path d={c.d} class="ta-cross" marker-end="url(#ta-kvh)" />)}
+
+    {boxes.map(b => (
+      <g>
+        <rect x={b.x} y={b.y} width={b.w} height={b.h} rx="6" class={`ta-box ta-${b.cls}`} />
+        {b.lines
+          ? b.lines.map((ln, i) => <text x={b.x + b.w / 2} y={b.y + b.h / 2 - (b.lines!.length - 1) * 6 + i * 12 + 4} class="ta-blk">{ln}</text>)
+          : <text x={b.x + b.w / 2} y={b.y + b.h / 2 + 4} class="ta-blk">{b.label}</text>}
+      </g>
+    ))}
+
+    {plus.map(p => (
+      <g>
+        <circle cx={p.cx} cy={p.cy} r="11" class="ta-plus" />
+        <line x1={p.cx - 8} y1={p.cy} x2={p.cx + 8} y2={p.cy} class="ta-plusline" />
+        <line x1={p.cx} y1={p.cy - 8} x2={p.cx} y2={p.cy + 8} class="ta-plusline" />
+      </g>
+    ))}
+
+    {texts.map(t => <text x={t.x} y={t.y} class={t.cls}>{t.t}</text>)}
+  </svg>
+  <figcaption class="ta-cap">{cap}</figcaption>
+</figure>
+
+<style>
+  .ta { margin: 1.75rem 0; border: 1px solid var(--border); border-radius: 10px; background: var(--bg2); padding: 0.8rem 0 0.4rem; }
+  .ta-svg { display: block; width: 100%; height: auto; margin: 0 auto; }
+  .ta-line { stroke: var(--text); stroke-width: 1.7; fill: none; }
+  .ta-head { fill: var(--text); }
+  .ta-cont { fill: none; stroke: var(--border); stroke-width: 1.4; stroke-dasharray: 5 4; }
+  .ta-box { fill: var(--bg); stroke-width: 2; }
+  .ta-attn { stroke: var(--amber); }
+  .ta-norm { stroke: var(--accent2); }
+  .ta-ff { stroke: var(--accent); }
+  .ta-emb { stroke: var(--muted); }
+  .ta-linear { stroke: var(--accent); }
+  .ta-softmax { stroke: var(--accent2); }
+  .ta-blk { fill: var(--text); font-family: var(--mono); font-size: 12px; text-anchor: middle; }
+  .ta-nx { fill: var(--muted); font-family: var(--mono); font-size: 14px; font-weight: 600; text-anchor: middle; }
+  .ta-io { fill: var(--text); font-family: var(--mono); font-size: 13px; text-anchor: middle; }
+  .ta-pe-l { fill: var(--muted); font-family: var(--mono); font-size: 10px; text-anchor: start; }
+  .ta-pe-r { fill: var(--muted); font-family: var(--mono); font-size: 10px; text-anchor: end; }
+  .ta-plus { fill: var(--bg); stroke: var(--text); stroke-width: 1.6; }
+  .ta-plusline { stroke: var(--text); stroke-width: 1.5; }
+  .ta-cross { stroke: var(--amber); stroke-width: 1.8; fill: none; }
+  .ta-kvhead { fill: var(--amber); }
+  .ta-kv { fill: var(--amber); font-family: var(--mono); font-size: 11px; font-weight: 600; text-anchor: middle; }
+  .ta-cap { font-size: 0.78rem; color: var(--muted); text-align: center; padding: 0.5rem 1rem 0.6rem; font-style: italic; line-height: 1.5; }
+</style>

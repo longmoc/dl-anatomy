@@ -20,7 +20,7 @@ const L = lang === 'en'
       cap: 'Ba họ chỉ khác nhau ở attention mask — khi tính cho một token query (tô đậm), nó được attend tới token nào. Encoder-only (BERT): bidirectional, nhìn cả hai phía. Decoder-only (GPT): causal, chỉ nhìn quá khứ và chính nó; mũi tên đỏ gạch = bị chặn nhìn token tương lai. Encoder–decoder (T5): decoder vừa self-attention causal, vừa cross-attention (cam) nhìn toàn bộ encoder bidirectional.',
     };
 
-const r = 10;
+const r = 13;
 const arcU = (x1: number, x2: number, y: number) => {
   const h = 14 + Math.abs(x2 - x1) * 0.30;
   return `M ${x1},${y - r} Q ${(x1 + x2) / 2},${y - r - h} ${x2},${y - r}`;
@@ -115,22 +115,22 @@ const encY = 92, decY = 168, ex = [540, 574, 608, 642], p3q = 608; // enc-dec, d
 
 <style>
   .amd { margin: 1.75rem 0; border: 1px solid var(--border); border-radius: 10px; background: var(--bg2); padding: 0.8rem 0 0.4rem; }
-  .amd-svg { display: block; width: 100%; max-width: 700px; height: auto; margin: 0 auto; }
+  .amd-svg { display: block; width: 100%; max-width: 760px; height: auto; margin: 0 auto; }
   .amd-div { stroke: var(--border); stroke-width: 1.2; stroke-dasharray: 4 4; }
-  .amd-title { fill: var(--text); font-family: var(--mono); font-size: 13px; font-weight: 600; text-anchor: middle; }
-  .amd-tok { fill: var(--bg); stroke: var(--muted); stroke-width: 1.5; }
+  .amd-title { fill: var(--text); font-family: var(--mono); font-size: 15px; font-weight: 600; text-anchor: middle; }
+  .amd-tok { fill: var(--bg); stroke: var(--muted); stroke-width: 1.8; }
   .amd-enc { stroke: var(--accent2); }
-  .amd-q { fill: var(--accent2); stroke: var(--accent2); stroke-width: 2; }
-  .amd-num { fill: var(--text); font-family: var(--mono); font-size: 10px; text-anchor: middle; }
+  .amd-q { fill: var(--accent2); stroke: var(--accent2); stroke-width: 2.2; }
+  .amd-num { fill: var(--text); font-family: var(--mono); font-size: 12px; text-anchor: middle; }
   .amd-qnum { fill: var(--bg); font-weight: 600; }
-  .amd-arc { fill: none; stroke: var(--accent); stroke-width: 1.6; }
+  .amd-arc { fill: none; stroke: var(--accent); stroke-width: 1.8; }
   .amd-self-h { fill: var(--accent); }
-  .amd-blocked { fill: none; stroke: var(--danger); stroke-width: 1.5; stroke-dasharray: 4 3; }
-  .amd-x { fill: var(--danger); font-family: var(--mono); font-size: 12px; font-weight: 700; text-anchor: middle; }
-  .amd-cross { stroke: var(--amber); stroke-width: 1.5; fill: none; }
+  .amd-blocked { fill: none; stroke: var(--danger); stroke-width: 1.7; stroke-dasharray: 4 3; }
+  .amd-x { fill: var(--danger); font-family: var(--mono); font-size: 13px; font-weight: 700; text-anchor: middle; }
+  .amd-cross { stroke: var(--amber); stroke-width: 1.7; fill: none; }
   .amd-cross-h { fill: var(--amber); }
-  .amd-row { fill: var(--muted); font-family: var(--mono); font-size: 10px; text-anchor: end; }
-  .amd-mask { fill: var(--accent); font-family: var(--mono); font-size: 11.5px; font-weight: 600; text-anchor: middle; }
-  .amd-ex { fill: var(--muted); font-family: var(--mono); font-size: 10.5px; text-anchor: middle; }
+  .amd-row { fill: var(--muted); font-family: var(--mono); font-size: 12px; text-anchor: end; }
+  .amd-mask { fill: var(--accent); font-family: var(--mono); font-size: 13px; font-weight: 600; text-anchor: middle; }
+  .amd-ex { fill: var(--muted); font-family: var(--mono); font-size: 12px; text-anchor: middle; }
   .amd-cap { font-size: 0.78rem; color: var(--muted); text-align: center; padding: 0.5rem 1rem 0.6rem; font-style: italic; line-height: 1.5; }
 </style>

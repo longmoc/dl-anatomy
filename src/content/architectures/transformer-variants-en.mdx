@@ -11,6 +11,7 @@ tags: [transformer, bert, gpt, vit, moe, scaling]
 
 import Note from '../../components/Note.astro';
 import AttentionMaskDiagram from '../../components/AttentionMaskDiagram.astro';
+import TransformerArchDiagram from '../../components/TransformerArchDiagram.astro';
 
 # Transformer Variants & MoE
 
@@ -58,6 +59,8 @@ In BERT, for example, the model is trained with **masked language modeling**: hi
 Encoder-only is like reading the whole paragraph before answering. It can understand context well, but it is not constrained to write from left to right.
 </Note>
 
+<TransformerArchDiagram variant="encoder" lang="en" />
+
 ### Decoder-only: generation with a causal mask
 
 Decoder-only models use **causal self-attention**: the current token can see only past tokens and itself. This mask turns the Transformer into an autoregressive model:
@@ -75,6 +78,8 @@ The objective is simple: **predict the next token**. That simplicity is one reas
 
 The cost appears at inference: to generate the next token efficiently, the model usually stores a **KV-cache** for previous tokens. This avoids recomputing the full past, but memory still grows with context length.
 
+<TransformerArchDiagram variant="decoder" lang="en" />
+
 ### Encoder-decoder: separate input understanding from output generation
 
 Encoder-decoder Transformers separate two roles:
@@ -86,6 +91,8 @@ Encoder-decoder Transformers separate two roles:
 This architecture is a natural fit for seq2seq tasks: machine translation, summarization, correction, code transformation, or any task where input and output are different sequences. T5 pushed this idea far by casting many NLP tasks into the same "text-to-text" format.
 
 Compared with decoder-only, encoder-decoder has a clearer inductive bias for sequence transformation. Compared with encoder-only, it has an explicit output generation mechanism. But in the instruction-tuned LLM era, decoder-only became dominant because it is simpler: one model, one objective, one text-in/text-out interface.
+
+<TransformerArchDiagram variant="encdec" lang="en" />
 
 ## ViT: turning images into token sequences
 
