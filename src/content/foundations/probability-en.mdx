@@ -1,0 +1,68 @@
+---
+title: "Probability for Deep Learning"
+description: "Probability as a foundation for deep learning: likelihood, expectation, entropy, cross-entropy, KL divergence, sampling, and uncertainty."
+lang: en
+category: foundations
+order: 0
+translation: probability
+tags: [probability, likelihood, entropy, kl-divergence, foundations]
+---
+
+import Note from '../../components/Note.astro';
+
+# Probability for Deep Learning
+
+Deep learning does not only learn deterministic prediction functions. Many modern models learn or manipulate **probability distributions**:
+
+- classifiers learn $p_\theta(y \mid x)$
+- language models learn $p_\theta(x_t \mid x_{<t})$
+- VAEs learn latent distributions
+- diffusion models learn denoising processes related to scores and probability densities
+- calibration asks whether model probabilities can be trusted
+
+So probability is a broad foundation: it sits underneath loss functions, generative models, representation learning, uncertainty, sampling, and evaluation.
+
+<Note type="intuition">
+If linear algebra is the language of vector representations, probability is the language of **uncertainty**. It asks: what does the model believe, what distribution does the data follow, and how far is the model from that data distribution?
+</Note>
+
+## What will this series cover?
+
+This hub is not trying to become a full probability textbook. It collects the probability concepts that appear repeatedly in deep learning, then connects each one directly to losses, models, and training.
+
+| Article | Content |
+|---|---|
+| [Likelihood, Cross-Entropy & KL Divergence](/dl-anatomy/foundations/likelihood-cross-entropy-kl-en) | Why training often means maximizing likelihood or minimizing cross-entropy/KL |
+| Expectation & Monte Carlo | Loss as an expectation over the data distribution; mini-batches as Monte Carlo estimates |
+| Entropy, Mutual Information & Compression | Uncertainty, information bottleneck, contrastive learning, representation |
+| Bayesian View of Deep Learning | Priors, posteriors, MAP, uncertainty, Bayesian approximation |
+| Sampling & Distribution Matching | Sampling, MCMC intuition, generative models, diffusion view |
+
+The order may change as the series develops. The first article should be likelihood/cross-entropy/KL because that triangle appears immediately in classification, language modeling, VAEs, and generative modeling.
+
+## A small map
+
+| Concept | Question |
+|---|---|
+| Random variable | What quantity is uncertain? |
+| Distribution | How is probability spread across values? |
+| Expectation | What is the long-run average of a quantity? |
+| Likelihood | How much probability does the model assign to observed data? |
+| Entropy | How uncertain is the true distribution? |
+| Cross-entropy | How costly is it to encode true data using the model? |
+| KL divergence | How far is the model from the true distribution? |
+| Sampling | How do we draw samples from a distribution? |
+
+The key point: these concepts do not live separately. In supervised classification, cross-entropy is negative log-likelihood with one-hot labels. In variational inference, KL measures the mismatch between an approximate posterior and a prior or true posterior. In language modeling, perplexity is a more readable scale for cross-entropy.
+
+## Why start with likelihood, CE, and KL?
+
+These three concepts are the most natural entry point:
+
+1. **Likelihood** reads from the model's side: does the model assign high probability to the observed data?
+2. **Cross-entropy** reads from the coding/loss side: how costly is it to encode true data using the model?
+3. **KL divergence** reads from the mismatch side: how different is the model distribution from the true distribution?
+
+The same training objective can be read through all three lenses. Once that connection is clear, cross-entropy loss is no longer just "the formula used in classifiers"; it becomes a way to measure mismatch between the model distribution and the data.
+
+First article: [Likelihood, Cross-Entropy & KL Divergence](/dl-anatomy/foundations/likelihood-cross-entropy-kl-en).

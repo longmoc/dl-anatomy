@@ -1,0 +1,68 @@
+---
+title: "Probability for Deep Learning"
+description: "Xác suất như ngôn ngữ nền của deep learning: likelihood, expectation, entropy, cross-entropy, KL divergence, sampling và uncertainty."
+lang: vi
+category: foundations
+order: 0
+translation: probability-en
+tags: [probability, likelihood, entropy, kl-divergence, foundations]
+---
+
+import Note from '../../components/Note.astro';
+
+# Probability for Deep Learning
+
+Deep learning không chỉ học một hàm dự đoán. Rất nhiều mô hình hiện đại đang học hoặc thao tác với **phân phối xác suất**:
+
+- classifier học $p_\theta(y \mid x)$
+- language model học $p_\theta(x_t \mid x_{<t})$
+- VAE học latent distribution
+- diffusion model học quá trình khử nhiễu liên quan đến score/probability density
+- calibration hỏi xác suất model nói ra có đáng tin không
+
+Vì vậy probability là một lớp nền rất rộng: nó nằm dưới loss function, generative models, representation learning, uncertainty, sampling và evaluation.
+
+<Note type="intuition">
+Nếu linear algebra là ngôn ngữ của vector representation, probability là ngôn ngữ của **uncertainty**. Nó trả lời: model tin điều gì, dữ liệu thật trông như phân phối nào, và model lệch khỏi dữ liệu thật bao nhiêu.
+</Note>
+
+## Series này sẽ đi theo hướng nào?
+
+Hub này không cố biến Foundations thành giáo trình xác suất đầy đủ. Nó chỉ gom các khái niệm xác suất xuất hiện liên tục trong deep learning, rồi mỗi bài nối thẳng về loss, model và training.
+
+| Bài | Nội dung |
+|---|---|
+| [Likelihood, Cross-Entropy & KL Divergence](/dl-anatomy/foundations/likelihood-cross-entropy-kl) | Vì sao training thường là maximize likelihood hoặc minimize cross-entropy/KL |
+| Expectation & Monte Carlo | Loss là kỳ vọng trên data distribution; mini-batch là ước lượng Monte Carlo |
+| Entropy, Mutual Information & Compression | Uncertainty, information bottleneck, contrastive learning, representation |
+| Bayesian View of Deep Learning | Prior, posterior, MAP, uncertainty, Bayesian approximation |
+| Sampling & Distribution Matching | Sampling, MCMC trực giác, generative models, diffusion view |
+
+Thứ tự có thể thay đổi khi series phát triển. Bài đầu tiên nên là likelihood/cross-entropy/KL vì đây là tam giác xuất hiện ngay trong classification, language modeling, VAE và generative modeling.
+
+## Một bản đồ nhỏ
+
+| Khái niệm | Câu hỏi |
+|---|---|
+| Random variable | Đại lượng nào đang bất định? |
+| Distribution | Xác suất được phân bổ thế nào trên các giá trị? |
+| Expectation | Trung bình dài hạn của một đại lượng là gì? |
+| Likelihood | Model gán xác suất bao nhiêu cho dữ liệu đã quan sát? |
+| Entropy | Phân phối thật bất định đến mức nào? |
+| Cross-entropy | Dùng model để mã hóa dữ liệu thật tốn bao nhiêu? |
+| KL divergence | Model lệch khỏi phân phối thật bao nhiêu? |
+| Sampling | Làm sao lấy sample từ một phân phối? |
+
+Điểm quan trọng: các khái niệm này không nằm riêng rẽ. Trong supervised classification, cross-entropy chính là negative log-likelihood với label one-hot. Trong variational inference, KL đo độ lệch giữa posterior xấp xỉ và prior/posterior thật. Trong language modeling, perplexity là cách diễn giải cross-entropy theo thang dễ đọc hơn.
+
+## Vì sao bắt đầu với likelihood, CE và KL?
+
+Ba khái niệm này là cửa vào tự nhiên nhất:
+
+1. **Likelihood** nhìn từ phía model: dữ liệu thật có xác suất cao dưới model không?
+2. **Cross-entropy** nhìn từ phía coding/loss: dùng model để mã hóa dữ liệu thật tốn bao nhiêu?
+3. **KL divergence** nhìn từ phía mismatch: model khác phân phối thật bao nhiêu?
+
+Cùng một training objective có thể được đọc bằng cả ba lens. Khi hiểu được sự liên hệ này, cross-entropy loss không còn là "công thức để nhét vào classifier" nữa; nó trở thành một cách đo khoảng cách giữa phân phối model và dữ liệu.
+
+Bài đầu tiên: [Likelihood, Cross-Entropy & KL Divergence](/dl-anatomy/foundations/likelihood-cross-entropy-kl).

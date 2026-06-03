@@ -323,14 +323,36 @@ declare module 'astro:content' {
   data: InferEntrySchema<"architectures">
 } & { render(): Render[".mdx"] };
 };
-"foundations": Record<string, {
-  id: string;
-  slug: string;
+"foundations": {
+"likelihood-cross-entropy-kl-en.mdx": {
+	id: "likelihood-cross-entropy-kl-en.mdx";
+  slug: "likelihood-cross-entropy-kl-en";
   body: string;
   collection: "foundations";
-  data: InferEntrySchema<"foundations">;
-  render(): Render[".md"];
-}>;
+  data: InferEntrySchema<"foundations">
+} & { render(): Render[".mdx"] };
+"likelihood-cross-entropy-kl.mdx": {
+	id: "likelihood-cross-entropy-kl.mdx";
+  slug: "likelihood-cross-entropy-kl";
+  body: string;
+  collection: "foundations";
+  data: InferEntrySchema<"foundations">
+} & { render(): Render[".mdx"] };
+"probability-en.mdx": {
+	id: "probability-en.mdx";
+  slug: "probability-en";
+  body: string;
+  collection: "foundations";
+  data: InferEntrySchema<"foundations">
+} & { render(): Render[".mdx"] };
+"probability.mdx": {
+	id: "probability.mdx";
+  slug: "probability";
+  body: string;
+  collection: "foundations";
+  data: InferEntrySchema<"foundations">
+} & { render(): Render[".mdx"] };
+};
 "optimization": {
 "loss-landscape-en.mdx": {
 	id: "loss-landscape-en.mdx";

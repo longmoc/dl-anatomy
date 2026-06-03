@@ -1,0 +1,111 @@
+---
+interface Props {
+  lang?: 'vi' | 'en';
+}
+const { lang = 'vi' } = Astro.props;
+
+const L = lang === 'en'
+  ? {
+      title: 'Likelihood, cross-entropy, and KL are the same mismatch seen three ways',
+      data: 'data distribution p',
+      model: 'model distribution qθ',
+      likelihood: 'likelihood',
+      ce: 'cross-entropy',
+      kl: 'KL divergence',
+      nll: 'NLL asks: how surprising is the observed data?',
+      coding: 'CE asks: how many nats/bits if q encodes p?',
+      mismatch: 'KL asks: how much extra cost from using q instead of p?',
+      cap: 'In supervised classification, the true distribution is often represented by a one-hot label. Then cross-entropy reduces to negative log-likelihood. In distribution form, minimizing cross-entropy is equivalent to minimizing KL divergence because H(p) is fixed.',
+    }
+  : {
+      title: 'Likelihood, cross-entropy và KL là cùng một độ lệch nhìn từ ba phía',
+      data: 'phân phối dữ liệu p',
+      model: 'phân phối model qθ',
+      likelihood: 'likelihood',
+      ce: 'cross-entropy',
+      kl: 'KL divergence',
+      nll: 'NLL hỏi: dữ liệu quan sát bất ngờ đến mức nào?',
+      coding: 'CE hỏi: dùng q để mã hóa p tốn bao nhiêu nats/bits?',
+      mismatch: 'KL hỏi: dùng q thay p lãng phí thêm bao nhiêu?',
+      cap: 'Trong classification supervised, phân phối thật thường được biểu diễn bằng label one-hot. Khi đó cross-entropy rút về negative log-likelihood. Ở dạng phân phối, minimize cross-entropy tương đương minimize KL vì H(p) cố định.',
+    };
+---
+
+<figure class="pdd" data-lang={lang}>
+  <svg viewBox="0 0 720 330" role="img" aria-label="Likelihood cross-entropy KL diagram" class="pdd-svg">
+    <defs>
+      <marker id="pdd-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" class="pdd-head" />
+      </marker>
+      <marker id="pdd-arrow2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" class="pdd-head2" />
+      </marker>
+    </defs>
+
+    <text x="360" y="28" class="pdd-title">{L.title}</text>
+
+    <rect x="62" y="116" width="168" height="62" rx="10" class="pdd-data" />
+    <text x="146" y="140" class="pdd-label">p(x, y)</text>
+    <text x="146" y="160" class="pdd-small">{L.data}</text>
+
+    <rect x="490" y="116" width="168" height="62" rx="10" class="pdd-model" />
+    <text x="574" y="140" class="pdd-label">qθ(y|x)</text>
+    <text x="574" y="160" class="pdd-small">{L.model}</text>
+
+    <line x1="230" y1="147" x2="490" y2="147" class="pdd-line" marker-end="url(#pdd-arrow)" />
+    <text x="360" y="130" class="pdd-mid">{L.kl}</text>
+
+    <path d="M146,178 C176,238 260,260 350,260 C440,260 520,238 574,178" class="pdd-arc" fill="none" marker-end="url(#pdd-arrow2)" />
+    <text x="360" y="248" class="pdd-mid">{L.ce}</text>
+
+    <path d="M574,116 C548,70 476,58 396,72 C316,86 226,72 146,116" class="pdd-arc2" fill="none" marker-end="url(#pdd-arrow2)" />
+    <text x="360" y="76" class="pdd-mid">{L.likelihood}</text>
+
+    <rect x="60" y="224" width="202" height="48" rx="8" class="pdd-note" />
+    <text x="161" y="244" class="pdd-note-text">{L.nll}</text>
+
+    <rect x="282" y="224" width="176" height="48" rx="8" class="pdd-note2" />
+    <text x="370" y="244" class="pdd-note-text">{L.coding}</text>
+
+    <rect x="480" y="224" width="202" height="48" rx="8" class="pdd-note" />
+    <text x="581" y="244" class="pdd-note-text">{L.mismatch}</text>
+  </svg>
+  <figcaption class="pdd-cap">{L.cap}</figcaption>
+</figure>
+
+<style>
+  .pdd {
+    margin: 1.75rem 0;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg2);
+    padding: 0.75rem 0 0.2rem;
+  }
+  .pdd-svg { display: block; width: 100%; max-width: 780px; height: auto; margin: 0 auto; }
+  .pdd-title { fill: var(--text); font-family: var(--mono); font-size: 12.8px; font-weight: 600; text-anchor: middle; }
+  .pdd-data { fill: var(--bg); stroke: var(--accent); stroke-width: 1.8; }
+  .pdd-model { fill: var(--bg); stroke: var(--accent2); stroke-width: 1.8; }
+  .pdd-line { stroke: var(--accent2); stroke-width: 1.8; }
+  .pdd-arc { stroke: var(--amber); stroke-width: 1.6; }
+  .pdd-arc2 { stroke: var(--accent); stroke-width: 1.6; }
+  .pdd-head { fill: var(--accent2); }
+  .pdd-head2 { fill: currentColor; color: var(--muted); }
+  .pdd-note { fill: var(--bg); stroke: var(--border); stroke-width: 1.2; }
+  .pdd-note2 { fill: var(--bg); stroke: var(--amber); stroke-width: 1.2; }
+  .pdd-label, .pdd-small, .pdd-mid, .pdd-note-text {
+    font-family: var(--mono);
+    text-anchor: middle;
+  }
+  .pdd-label { fill: var(--text); font-size: 13px; font-weight: 700; }
+  .pdd-small { fill: var(--muted); font-size: 10px; }
+  .pdd-mid { fill: var(--text); font-size: 11px; font-weight: 600; }
+  .pdd-note-text { fill: var(--muted); font-size: 9.2px; }
+  .pdd-cap {
+    font-size: 0.78rem;
+    color: var(--muted);
+    text-align: center;
+    padding: 0.5rem 1rem 0.65rem;
+    font-style: italic;
+    line-height: 1.5;
+  }
+</style>

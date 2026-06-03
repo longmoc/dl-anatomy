@@ -1,0 +1,318 @@
+---
+title: "Likelihood, Cross-Entropy & KL Divergence"
+description: "Three views of the same mismatch: how much probability the model assigns to real data, what cross-entropy loss means, and how KL divergence measures distribution mismatch."
+lang: en
+category: foundations
+order: 1
+parent: probability
+translation: likelihood-cross-entropy-kl
+tags: [probability, likelihood, cross-entropy, kl-divergence, negative-log-likelihood]
+---
+
+import Note from '../../components/Note.astro';
+import ProbabilityDivergenceDiagram from '../../components/ProbabilityDivergenceDiagram.astro';
+
+# Likelihood, Cross-Entropy & KL Divergence
+
+In deep learning, we often say "the model predicts the right class" or "the language model predicts the next token". Under that language, many models are doing something more probabilistic:
+
+> Assign high probability to real data, and low probability to incompatible data.
+
+A classifier does not only choose a class. It produces a distribution:
+
+$$
+q_\theta(y \mid x)
+$$
+
+A language model does not only emit a token. It produces a distribution:
+
+$$
+q_\theta(x_t \mid x_{<t})
+$$
+
+Training usually means making the model distribution $q_\theta$ close to the true data distribution $p_{\text{data}}$. Likelihood, cross-entropy, and KL divergence are three ways to view that same mismatch.
+
+<ProbabilityDivergenceDiagram lang="en" />
+
+## True distribution and model distribution
+
+Suppose data comes from a true distribution:
+
+$$
+(x, y) \sim p_{\text{data}}(x, y)
+$$
+
+We do not know the full $p_{\text{data}}$. We only have a finite dataset:
+
+$$
+\mathcal{D} = \{(x_i, y_i)\}_{i=1}^{n}
+$$
+
+The model creates an approximate distribution:
+
+$$
+q_\theta(y \mid x)
+$$
+
+The goal is not for the model to memorize labels, but to make $q_\theta(y \mid x)$ as close as possible to the true conditional distribution $p_{\text{data}}(y \mid x)$ within the limits of data and model class.
+
+<Note type="intuition">
+When a classifier returns `[0.02, 0.91, 0.07]`, those are not just scores. They are a probability distribution the model is claiming: "for this input, I believe class 2 has probability 91%".
+</Note>
+
+## Likelihood — how much probability does the model assign to real data?
+
+For one sample $(x_i, y_i)$, the model assigns probability:
+
+$$
+q_\theta(y_i \mid x_i)
+$$
+
+For the whole dataset, likelihood is the product of these probabilities:
+
+$$
+\mathcal{L}(\theta) = \prod_{i=1}^{n} q_\theta(y_i \mid x_i)
+$$
+
+If the model assigns high probability to the correct label of every sample, likelihood is high. If even a few real labels receive very low probability, the product drops sharply.
+
+In practice, we use log-likelihood:
+
+$$
+\log \mathcal{L}(\theta) = \sum_{i=1}^{n} \log q_\theta(y_i \mid x_i)
+$$
+
+Log turns products into sums, improves numerical stability, and is easier to optimize.
+
+## Maximum likelihood and negative log-likelihood
+
+**Maximum likelihood estimation (MLE)** chooses parameters that make the observed data most probable:
+
+$$
+\theta^\* = \arg\max_\theta \sum_{i=1}^{n} \log q_\theta(y_i \mid x_i)
+$$
+
+Deep learning optimizers usually minimize losses, so we flip the sign:
+
+$$
+\mathcal{L}_{\text{NLL}}(\theta) = - \sum_{i=1}^{n} \log q_\theta(y_i \mid x_i)
+$$
+
+This is **negative log-likelihood**.
+
+For one sample, if the model assigns probability $0.9$ to the correct label:
+
+$$
+-\log 0.9 \approx 0.105
+$$
+
+If it assigns only $0.01$:
+
+$$
+-\log 0.01 \approx 4.605
+$$
+
+NLL heavily penalizes confident mistakes or low probability assigned to real data.
+
+<Note type="result">
+Training with NLL means making observed data **less surprising** under the model. Real data that the model considers very unlikely creates a large loss.
+</Note>
+
+## A softmax classifier is a distribution
+
+In classification, the model usually produces logits:
+
+$$
+s = f_\theta(x)
+$$
+
+Softmax turns logits into a distribution:
+
+$$
+q_\theta(y=k \mid x) = \frac{\exp(s_k)}{\sum_j \exp(s_j)}
+$$
+
+If the correct label is class $c$, the sample NLL is:
+
+$$
+\mathcal{L}(x, c) = -\log q_\theta(y=c \mid x)
+$$
+
+This is the familiar classification loss. Softmax + NLL is not a standalone trick; it is maximum likelihood for a categorical distribution.
+
+## Entropy — how uncertain is the true distribution?
+
+The entropy of a distribution $p$ is:
+
+$$
+H(p) = -\sum_y p(y)\log p(y)
+$$
+
+Entropy measures the intrinsic uncertainty of a distribution.
+
+- If $p$ puts all mass on one class, entropy is low.
+- If $p$ is close to uniform, entropy is high.
+
+For a fair coin:
+
+$$
+H(p) = -0.5\log 0.5 - 0.5\log 0.5
+$$
+
+Entropy does not depend on the model. It is a property of the true distribution. If the task is genuinely ambiguous, high entropy is unavoidable.
+
+<Note type="intuition">
+Entropy is the minimum "surprise" if we know the true distribution. Even a perfect model may face uncertainty if the phenomenon itself is uncertain.
+</Note>
+
+## Cross-entropy — encoding true data with the model
+
+Cross-entropy between the true distribution $p$ and model distribution $q$ is:
+
+$$
+H(p, q) = -\sum_y p(y)\log q(y)
+$$
+
+It asks: if data truly comes from $p$, but we use $q$ to assign probabilities or encode it, what is the average cost?
+
+If $p$ is a one-hot label for the correct class $c$:
+
+$$
+p(y=c)=1,\qquad p(y\neq c)=0
+$$
+
+then cross-entropy becomes:
+
+$$
+H(p, q_\theta) = -\log q_\theta(y=c \mid x)
+$$
+
+So **cross-entropy loss in classification is NLL** when labels are one-hot.
+
+## KL divergence — how far is the model from the true distribution?
+
+KL divergence from $p$ to $q$ is:
+
+$$
+D_{\text{KL}}(p \| q) = \sum_y p(y)\log \frac{p(y)}{q(y)}
+$$
+
+It measures the extra cost of using $q$ instead of $p$.
+
+The important identity:
+
+$$
+H(p, q) = H(p) + D_{\text{KL}}(p \| q)
+$$
+
+During training, $p$ is the fixed data distribution, so $H(p)$ does not depend on $\theta$. Therefore:
+
+$$
+\arg\min_\theta H(p, q_\theta)
+=
+\arg\min_\theta D_{\text{KL}}(p \| q_\theta)
+$$
+
+Minimizing cross-entropy is equivalent to minimizing KL from the data distribution to the model distribution.
+
+<Note type="result">
+This is the key bridge: cross-entropy is not only a practical loss; it pulls the model distribution toward the data distribution in the direction $D_{\text{KL}}(p_{\text{data}} \| q_\theta)$.
+</Note>
+
+## KL direction matters
+
+KL is not symmetric:
+
+$$
+D_{\text{KL}}(p \| q) \neq D_{\text{KL}}(q \| p)
+$$
+
+The direction $D_{\text{KL}}(p \| q)$ heavily penalizes cases where $p(y)$ is high but $q(y)$ is low. In other words, the model is penalized for missing regions where real data appears.
+
+The direction $D_{\text{KL}}(q \| p)$ heavily penalizes cases where the model puts probability mass in regions where $p$ is low. It tends to avoid uncertain regions and can be more mode-seeking.
+
+| Direction | Intuition |
+|---|---|
+| $D_{\text{KL}}(p \| q)$ | the model should cover real data |
+| $D_{\text{KL}}(q \| p)$ | the model should avoid putting mass where real data has little support |
+
+In supervised MLE, we usually encounter $D_{\text{KL}}(p_{\text{data}} \| q_\theta)$. In variational inference, depending on the setup, we may see the other KL direction, with different behavior.
+
+## Classification, language modeling, and generative models
+
+These three formulas appear everywhere.
+
+### Classification
+
+With one-hot labels:
+
+$$
+\mathcal{L}_{\text{CE}} = -\log q_\theta(y=c \mid x)
+$$
+
+This is the NLL of a categorical distribution.
+
+### Language modeling
+
+An autoregressive sequence factorizes as:
+
+$$
+q_\theta(x_1,\dots,x_T) = \prod_{t=1}^{T} q_\theta(x_t \mid x_{<t})
+$$
+
+NLL:
+
+$$
+-\sum_{t=1}^{T} \log q_\theta(x_t \mid x_{<t})
+$$
+
+This is token-level cross-entropy. Perplexity is:
+
+$$
+\text{PPL} = \exp(\text{CE})
+$$
+
+Lower perplexity means the model assigns better average probability to the true tokens.
+
+### Generative models
+
+A generative model learns a distribution $q_\theta(x)$ over data. If it optimizes likelihood directly, it does:
+
+$$
+\max_\theta \sum_i \log q_\theta(x_i)
+$$
+
+Autoregressive models do this explicitly. VAEs use a lower bound because direct likelihood is hard to compute. Diffusion models use objectives related to denoising and score matching, but they still live in the larger story: learn a distribution close to the data distribution.
+
+## Common misunderstandings
+
+**Cross-entropy is not only for classification.** It is a concept between two distributions; one-hot classification is just the most common case.
+
+**Likelihood is not the probability of parameters.** Likelihood is a function of $\theta$ after data has been observed. It is not $p(\theta)$; Bayesian inference places distributions over parameters.
+
+**KL is not a distance metric.** It is asymmetric and does not satisfy the triangle inequality. Calling it a "distance" should be understood loosely.
+
+**Low loss does not guarantee good calibration.** A model can have high accuracy but poorly calibrated probabilities. Calibration is the separate question of whether confidence matches real frequency.
+
+## The Big Picture
+
+| Lens | Formula | Question |
+|---|---|---|
+| Likelihood | $\prod_i q_\theta(y_i \mid x_i)$ | Does the model assign high probability to real data? |
+| NLL | $-\sum_i \log q_\theta(y_i \mid x_i)$ | How surprising is real data under the model? |
+| Cross-entropy | $H(p, q)$ | How costly is it to encode true data with the model? |
+| KL divergence | $D_{\text{KL}}(p \| q)$ | How far is the model from the true distribution? |
+
+When $p$ is fixed, minimizing cross-entropy is equivalent to minimizing KL. When labels are one-hot, cross-entropy becomes NLL. When the model is a softmax classifier, NLL is the familiar classification loss.
+
+That is why the same idea appears across deep learning: **training makes the model distribution less mismatched with the data distribution**.
+
+## References
+
+| Paper | |
+|---|---|
+| Shannon (1948) | A Mathematical Theory of Communication |
+| Kullback & Leibler (1951) | On Information and Sufficiency |
+| Bishop (2006) | Pattern Recognition and Machine Learning |
+| Goodfellow et al. (2016) | Deep Learning |
+| Murphy (2022) | Probabilistic Machine Learning: An Introduction |

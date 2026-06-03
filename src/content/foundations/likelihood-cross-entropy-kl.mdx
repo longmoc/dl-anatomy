@@ -1,0 +1,318 @@
+---
+title: "Likelihood, Cross-Entropy & KL Divergence"
+description: "Ba cách nhìn cùng một vấn đề: model gán xác suất cho dữ liệu thật thế nào, cross-entropy là loss gì, và KL divergence đo mismatch giữa hai phân phối ra sao."
+lang: vi
+category: foundations
+order: 1
+parent: probability
+translation: likelihood-cross-entropy-kl-en
+tags: [probability, likelihood, cross-entropy, kl-divergence, negative-log-likelihood]
+---
+
+import Note from '../../components/Note.astro';
+import ProbabilityDivergenceDiagram from '../../components/ProbabilityDivergenceDiagram.astro';
+
+# Likelihood, Cross-Entropy & KL Divergence
+
+Trong deep learning, ta hay nói "model dự đoán class đúng" hoặc "language model dự đoán token tiếp theo". Nhưng dưới lớp ngôn ngữ đó, rất nhiều model đang làm một việc xác suất hơn:
+
+> Gán xác suất cao cho dữ liệu thật, và xác suất thấp cho dữ liệu không phù hợp.
+
+Classifier không chỉ chọn class. Nó tạo một phân phối:
+
+$$
+q_\theta(y \mid x)
+$$
+
+Language model không chỉ xuất token. Nó tạo phân phối:
+
+$$
+q_\theta(x_t \mid x_{<t})
+$$
+
+Training thường là làm cho phân phối model $q_\theta$ gần với phân phối dữ liệu thật $p_{\text{data}}$. Likelihood, cross-entropy và KL divergence là ba cách nhìn vào cùng độ lệch đó.
+
+<ProbabilityDivergenceDiagram />
+
+## Distribution thật và distribution của model
+
+Giả sử dữ liệu đến từ một phân phối thật:
+
+$$
+(x, y) \sim p_{\text{data}}(x, y)
+$$
+
+Ta không biết toàn bộ $p_{\text{data}}$. Ta chỉ có dataset hữu hạn:
+
+$$
+\mathcal{D} = \{(x_i, y_i)\}_{i=1}^{n}
+$$
+
+Model tạo một phân phối xấp xỉ:
+
+$$
+q_\theta(y \mid x)
+$$
+
+Mục tiêu không phải để model "thuộc lòng label", mà là làm $q_\theta(y \mid x)$ giống với phân phối điều kiện thật $p_{\text{data}}(y \mid x)$ nhất có thể trong phạm vi data và model class.
+
+<Note type="intuition">
+Khi classifier trả về `[0.02, 0.91, 0.07]`, đó không chỉ là ba score. Nó là một phân phối xác suất mà model đang tuyên bố: "với input này, tôi tin class 2 có xác suất 91%".
+</Note>
+
+## Likelihood — dữ liệu thật có xác suất bao nhiêu dưới model?
+
+Với một sample $(x_i, y_i)$, model gán xác suất:
+
+$$
+q_\theta(y_i \mid x_i)
+$$
+
+Với toàn bộ dataset, likelihood là tích các xác suất đó:
+
+$$
+\mathcal{L}(\theta) = \prod_{i=1}^{n} q_\theta(y_i \mid x_i)
+$$
+
+Nếu model gán xác suất cao cho label đúng của mọi sample, likelihood lớn. Nếu chỉ một vài sample đúng bị gán xác suất rất thấp, tích này giảm mạnh.
+
+Thực tế ta dùng log-likelihood:
+
+$$
+\log \mathcal{L}(\theta) = \sum_{i=1}^{n} \log q_\theta(y_i \mid x_i)
+$$
+
+Log biến tích thành tổng, ổn định số học hơn, và dễ tối ưu hơn.
+
+## Maximum likelihood và negative log-likelihood
+
+**Maximum likelihood estimation (MLE)** chọn tham số làm dữ liệu quan sát có xác suất cao nhất:
+
+$$
+\theta^\* = \arg\max_\theta \sum_{i=1}^{n} \log q_\theta(y_i \mid x_i)
+$$
+
+Trong deep learning, optimizer thường minimize loss, nên ta đổi dấu:
+
+$$
+\mathcal{L}_{\text{NLL}}(\theta) = - \sum_{i=1}^{n} \log q_\theta(y_i \mid x_i)
+$$
+
+Đây là **negative log-likelihood**.
+
+Với một sample, nếu model gán xác suất $0.9$ cho label đúng:
+
+$$
+-\log 0.9 \approx 0.105
+$$
+
+Nếu model chỉ gán $0.01$:
+
+$$
+-\log 0.01 \approx 4.605
+$$
+
+NLL phạt rất mạnh khi model tự tin sai hoặc gán xác suất thấp cho dữ liệu thật.
+
+<Note type="result">
+Training bằng NLL có nghĩa: làm cho dữ liệu quan sát trở nên **ít bất ngờ hơn** dưới model. Dữ liệu thật mà model cho là rất hiếm sẽ tạo loss lớn.
+</Note>
+
+## Softmax classifier là một distribution
+
+Trong classification, model thường tạo logits:
+
+$$
+s = f_\theta(x)
+$$
+
+Softmax biến logits thành phân phối:
+
+$$
+q_\theta(y=k \mid x) = \frac{\exp(s_k)}{\sum_j \exp(s_j)}
+$$
+
+Nếu label đúng là class $c$, NLL của sample là:
+
+$$
+\mathcal{L}(x, c) = -\log q_\theta(y=c \mid x)
+$$
+
+Đây chính là loss classification quen thuộc. Softmax + NLL không phải một trick rời rạc; nó là maximum likelihood cho mô hình phân phối categorical.
+
+## Entropy — phân phối thật bất định đến mức nào?
+
+Entropy của phân phối $p$ là:
+
+$$
+H(p) = -\sum_y p(y)\log p(y)
+$$
+
+Entropy đo độ bất định nội tại của phân phối.
+
+- Nếu $p$ dồn hết vào một class, entropy thấp.
+- Nếu $p$ gần uniform, entropy cao.
+
+Ví dụ với một coin công bằng:
+
+$$
+H(p) = -0.5\log 0.5 - 0.5\log 0.5
+$$
+
+Entropy không phụ thuộc vào model. Nó là thuộc tính của phân phối thật. Nếu task thật sự mơ hồ, entropy cao là điều không tránh được.
+
+<Note type="intuition">
+Entropy là "độ bất ngờ tối thiểu" nếu ta biết đúng phân phối thật. Dù model hoàn hảo, dữ liệu vẫn có thể bất định nếu bản thân hiện tượng là bất định.
+</Note>
+
+## Cross-entropy — dùng model để mã hóa dữ liệu thật
+
+Cross-entropy giữa phân phối thật $p$ và phân phối model $q$ là:
+
+$$
+H(p, q) = -\sum_y p(y)\log q(y)
+$$
+
+Nó hỏi: nếu dữ liệu thật đến từ $p$, nhưng ta dùng $q$ để gán xác suất/mã hóa, chi phí trung bình là bao nhiêu?
+
+Nếu $p$ là one-hot label cho class đúng $c$:
+
+$$
+p(y=c)=1,\qquad p(y\neq c)=0
+$$
+
+thì cross-entropy trở thành:
+
+$$
+H(p, q_\theta) = -\log q_\theta(y=c \mid x)
+$$
+
+Tức là **cross-entropy loss trong classification chính là NLL** khi label là one-hot.
+
+## KL divergence — model lệch khỏi phân phối thật bao nhiêu?
+
+KL divergence từ $p$ sang $q$:
+
+$$
+D_{\text{KL}}(p \| q) = \sum_y p(y)\log \frac{p(y)}{q(y)}
+$$
+
+Nó đo chi phí thừa khi dùng $q$ thay vì $p$.
+
+Quan hệ quan trọng:
+
+$$
+H(p, q) = H(p) + D_{\text{KL}}(p \| q)
+$$
+
+Khi training model, $p$ là data distribution cố định, nên $H(p)$ không phụ thuộc vào $\theta$. Vì vậy:
+
+$$
+\arg\min_\theta H(p, q_\theta)
+=
+\arg\min_\theta D_{\text{KL}}(p \| q_\theta)
+$$
+
+Minimize cross-entropy tương đương minimize KL từ data distribution sang model distribution.
+
+<Note type="result">
+Đây là cầu nối lớn: cross-entropy không chỉ là loss thực dụng; nó là cách kéo phân phối model lại gần phân phối dữ liệu theo chiều $D_{\text{KL}}(p_{\text{data}} \| q_\theta)$.
+</Note>
+
+## Chiều của KL rất quan trọng
+
+KL không đối xứng:
+
+$$
+D_{\text{KL}}(p \| q) \neq D_{\text{KL}}(q \| p)
+$$
+
+Chiều $D_{\text{KL}}(p \| q)$ phạt mạnh khi $p(y)$ cao nhưng $q(y)$ thấp. Nói cách khác, model bị phạt nếu bỏ sót vùng dữ liệu thật.
+
+Chiều $D_{\text{KL}}(q \| p)$ phạt mạnh khi model đặt xác suất vào vùng mà $p$ thấp. Nó có xu hướng tránh vùng không chắc và có thể mode-seeking hơn.
+
+| Chiều | Trực giác |
+|---|---|
+| $D_{\text{KL}}(p \| q)$ | model phải cover dữ liệu thật |
+| $D_{\text{KL}}(q \| p)$ | model tránh đặt mass vào vùng dữ liệu thật ít hỗ trợ |
+
+Trong supervised MLE, ta thường gặp $D_{\text{KL}}(p_{\text{data}} \| q_\theta)$. Trong variational inference, tùy setup ta có thể gặp chiều KL khác, và hành vi sẽ khác.
+
+## Classification, language modeling và generative models
+
+Ba công thức này xuất hiện ở nhiều nơi.
+
+### Classification
+
+Với label one-hot:
+
+$$
+\mathcal{L}_{\text{CE}} = -\log q_\theta(y=c \mid x)
+$$
+
+Đây là NLL của phân phối categorical.
+
+### Language modeling
+
+Một chuỗi được factorize tự hồi quy:
+
+$$
+q_\theta(x_1,\dots,x_T) = \prod_{t=1}^{T} q_\theta(x_t \mid x_{<t})
+$$
+
+NLL:
+
+$$
+-\sum_{t=1}^{T} \log q_\theta(x_t \mid x_{<t})
+$$
+
+Chính là cross-entropy token-level. Perplexity là:
+
+$$
+\text{PPL} = \exp(\text{CE})
+$$
+
+Perplexity càng thấp nghĩa là model trung bình gán xác suất tốt hơn cho token thật.
+
+### Generative models
+
+Generative model học một phân phối $q_\theta(x)$ cho dữ liệu. Nếu optimize likelihood trực tiếp, ta đang làm:
+
+$$
+\max_\theta \sum_i \log q_\theta(x_i)
+$$
+
+Autoregressive models làm điều này rõ ràng. VAE dùng lower bound vì likelihood trực tiếp khó tính. Diffusion models dùng objective liên quan đến denoising/score matching, nhưng vẫn nằm trong câu chuyện lớn: học một phân phối gần data distribution.
+
+## Những hiểu nhầm thường gặp
+
+**Cross-entropy không chỉ dùng cho classification.** Nó là khái niệm giữa hai phân phối; classification one-hot chỉ là trường hợp phổ biến nhất.
+
+**Likelihood không phải probability của tham số.** Likelihood là hàm của $\theta$ sau khi dữ liệu đã quan sát. Nó không phải $p(\theta)$; Bayesian inference mới đặt phân phối lên tham số.
+
+**KL không phải distance metric.** Nó không đối xứng và không thỏa triangle inequality. Gọi là "khoảng cách" chỉ nên hiểu lỏng.
+
+**Loss thấp không đảm bảo calibration tốt.** Model có thể accuracy cao nhưng xác suất không calibrated. Calibration là câu chuyện riêng về việc confidence có khớp tần suất thật không.
+
+## Bức tranh chung
+
+| Lens | Công thức | Câu hỏi |
+|---|---|---|
+| Likelihood | $\prod_i q_\theta(y_i \mid x_i)$ | Dữ liệu thật có xác suất cao dưới model không? |
+| NLL | $-\sum_i \log q_\theta(y_i \mid x_i)$ | Dữ liệu thật bất ngờ đến mức nào? |
+| Cross-entropy | $H(p, q)$ | Dùng model để mã hóa dữ liệu thật tốn bao nhiêu? |
+| KL divergence | $D_{\text{KL}}(p \| q)$ | Model lệch khỏi phân phối thật bao nhiêu? |
+
+Khi $p$ cố định, minimize cross-entropy tương đương minimize KL. Khi label one-hot, cross-entropy trở thành NLL. Khi model là softmax classifier, NLL chính là loss classification quen thuộc.
+
+Đó là lý do cùng một ý tưởng xuất hiện khắp deep learning: **training là làm phân phối model bớt lệch khỏi phân phối dữ liệu**.
+
+## Papers tham khảo
+
+| Paper | |
+|---|---|
+| Shannon (1948) | A Mathematical Theory of Communication |
+| Kullback & Leibler (1951) | On Information and Sufficiency |
+| Bishop (2006) | Pattern Recognition and Machine Learning |
+| Goodfellow et al. (2016) | Deep Learning |
+| Murphy (2022) | Probabilistic Machine Learning: An Introduction |
