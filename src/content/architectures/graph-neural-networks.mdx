@@ -1,6 +1,6 @@
 ---
 title: "Graph Neural Networks"
-description: "Message passing trên đồ thị — GCN, GraphSAGE, GAT, Graph Transformer — và mối liên hệ với Transformer."
+description: "Message passing trên đồ thị — từ node/edge feature, GCN, GraphSAGE, GAT đến Graph Transformer và các thách thức như over-smoothing, over-squashing."
 lang: vi
 category: architectures
 order: 8
@@ -10,70 +10,245 @@ tags: [gnn, gcn, gat, message-passing, graph]
 ---
 
 import Note from '../../components/Note.astro';
+import GraphMessagePassingDiagram from '../../components/GraphMessagePassingDiagram.astro';
 
 # Graph Neural Networks
 
-Nhiều dữ liệu không phải lưới (ảnh) hay chuỗi (văn bản) mà là **đồ thị**: mạng xã hội, phân tử, knowledge graph, hệ thống gợi ý. Inductive bias cần thiết: bất biến theo hoán vị node, và khai thác **quan hệ qua cạnh**.
+CNN rất mạnh vì ảnh là một **lưới đều**: mỗi pixel có hàng xóm trái/phải/trên/dưới, kernel có thể quét cùng một pattern trên toàn ảnh. Nhưng nhiều dữ liệu quan trọng không nằm trên lưới đều như vậy. Chúng là **đồ thị**: mạng xã hội, phân tử, knowledge graph, hệ thống gợi ý, citation network, đường đi trong giao thông.
+
+Với đồ thị, câu hỏi không còn là "pixel lân cận trong cửa sổ $3 \times 3$ là gì?", mà là:
+
+> Node này nên nhận thông tin từ những node nào qua các cạnh nào?
+
+**Graph Neural Networks (GNN)** là họ kiến trúc đưa inductive bias của đồ thị vào deep learning. Thay vì giả định dữ liệu nằm trên grid như CNN, GNN giả định dữ liệu gồm các **node** và **edge**, và representation nên được cập nhật bằng cách truyền thông tin qua edge.
+
+## Graph trong machine learning gồm gì?
+
+Một đồ thị thường được viết là:
+
+$$
+G = (V, E)
+$$
+
+Trong đó $V$ là tập node và $E$ là tập edge. Trong ML, đồ thị thường có thêm feature:
+
+| Thành phần | Ý nghĩa | Ví dụ |
+|---|---|---|
+| Node feature $x_v$ | thông tin gắn với node | user profile, atom type, paper embedding |
+| Edge feature $e_{uv}$ | thông tin gắn với edge | bond type, quan hệ trong KG, tương tác user-item |
+| Adjacency $A$ | node nào nối với node nào | ma trận kết nối hoặc edge list |
+| Graph feature | thông tin toàn đồ thị | thuộc tính phân tử, metadata của network |
+
+Khác với ảnh, node trong graph không có thứ tự tự nhiên. Nếu ta đổi cách đánh số node, bản chất đồ thị không đổi. Vì vậy GNN cần tôn trọng hai tính chất:
+
+- **Permutation equivariance** cho node-level output: đổi thứ tự node đầu vào thì output node đổi theo cùng thứ tự.
+- **Permutation invariance** cho graph-level output: đổi thứ tự node nhưng prediction cho toàn graph phải giữ nguyên.
+
+<Note type="warning">
+Nói "GNN bất biến theo hoán vị node" là chưa đủ chính xác. Với bài toán phân loại node, model phải equivariant: node nào đổi vị trí trong tensor thì output tương ứng cũng đổi theo. Chỉ bước readout cho toàn đồ thị mới cần invariant.
+</Note>
+
+## Các loại bài toán trên graph
+
+GNN không chỉ dùng cho một kiểu prediction. Tùy bài toán, output có thể nằm ở node, edge hoặc toàn graph.
+
+| Task | Output | Ví dụ |
+|---|---|---|
+| Node classification | nhãn cho từng node | phân loại paper trong citation network |
+| Link prediction | xác suất có edge giữa hai node | gợi ý bạn bè, recommendation |
+| Edge classification | nhãn cho từng edge | loại quan hệ trong knowledge graph |
+| Graph classification | nhãn cho toàn graph | phân tử có độc tính không |
+| Graph regression | giá trị liên tục cho toàn graph | năng lượng phân tử, thuộc tính vật liệu |
+
+Điểm chung: prediction cho một node hoặc graph thường không thể nhìn node đó một cách cô lập. Quan hệ qua edge là tín hiệu chính.
 
 ## Message passing — nguyên lý chung
 
-Gần như mọi GNN đều theo khuôn **message passing**: mỗi node cập nhật biểu diễn của nó bằng cách tổng hợp thông tin từ các node hàng xóm, lặp qua nhiều vòng:
+Gần như mọi GNN hiện đại đều xoay quanh **message passing**. Mỗi node nhận message từ hàng xóm, tổng hợp chúng, rồi cập nhật representation của mình.
+
+Một layer tổng quát có thể viết thành ba bước:
 
 $$
-h_v^{(k+1)} = \text{UPDATE}\Big(h_v^{(k)},\; \text{AGGREGATE}\big(\{ h_u^{(k)} : u \in \mathcal{N}(v) \}\big)\Big)
+m_{uv}^{(k)} = \text{MESSAGE}^{(k)}(h_u^{(k)}, h_v^{(k)}, e_{uv})
 $$
 
-Sau $k$ vòng, mỗi node "thấy" được thông tin từ các node cách nó $k$ bước. Hàm AGGREGATE phải **bất biến theo hoán vị** (sum, mean, max) vì hàng xóm không có thứ tự.
+$$
+a_v^{(k)} = \text{AGGREGATE}^{(k)}\big(\{m_{uv}^{(k)} : u \in \mathcal{N}(v)\}\big)
+$$
+
+$$
+h_v^{(k+1)} = \text{UPDATE}^{(k)}(h_v^{(k)}, a_v^{(k)})
+$$
+
+Trong đó:
+
+- $h_v^{(k)}$ là representation của node $v$ ở layer $k$
+- $\mathcal{N}(v)$ là tập hàng xóm của node $v$
+- $e_{uv}$ là edge feature nếu có
+- AGGREGATE thường là sum/mean/max hoặc attention-weighted sum
+
+<GraphMessagePassingDiagram />
+
+Sau một vòng message passing, node biết thông tin từ hàng xóm 1-hop. Sau hai vòng, thông tin từ node 2-hop có thể đi tới nó thông qua hàng xóm. Vì vậy số layer GNN cũng là một cách mở rộng receptive field trên graph.
 
 <Note type="intuition">
-So sánh với các kiến trúc khác: CNN tổng hợp từ pixel lân cận trên lưới, RNN từ bước trước trên chuỗi, GNN từ node kề trên đồ thị. Cùng một ý tưởng "thu thập từ hàng xóm rồi cập nhật" — chỉ khác *hàng xóm là gì*.
+CNN và GNN rất gần nhau về tinh thần. CNN tổng hợp từ hàng xóm cố định trên lưới ảnh; GNN tổng hợp từ hàng xóm do edge định nghĩa. CNN có kernel chia sẻ trên mọi vị trí; GNN có hàm message/update chia sẻ trên mọi node/edge.
 </Note>
 
-## Các biến thể chính
+## Readout — từ node representation đến prediction
 
-**GCN (Kipf & Welling, 2017)** — aggregate = trung bình có chuẩn hóa theo bậc node:
+Không phải bài toán nào cũng cần output cho từng node. Nếu cần dự đoán thuộc tính toàn graph, ta phải gom các node representation thành một vector graph:
+
+$$
+h_G = \text{READOUT}(\{h_v^{(K)} : v \in V\})
+$$
+
+READOUT phải permutation-invariant: sum, mean, max pooling, attention pooling hoặc một module pooling học được. Đây là điểm nối giữa message passing và graph-level task như dự đoán thuộc tính phân tử.
+
+## GCN — convolution trên graph
+
+**GCN (Graph Convolutional Network)** có thể xem như phiên bản "convolution hóa" của message passing. Với CNN, mỗi pixel lấy trung bình có trọng số từ vùng lân cận đều đặn. Với GCN, mỗi node lấy thông tin từ hàng xóm theo edge.
+
+Một layer GCN thường được viết:
 
 $$
 h_v^{(k+1)} = \sigma\!\Big( \sum_{u \in \mathcal{N}(v) \cup \{v\}} \frac{1}{\sqrt{d_u d_v}}\, W h_u^{(k)} \Big)
 $$
 
-Đơn giản, hiệu quả, nhưng trọng số mỗi hàng xóm cố định theo cấu trúc đồ thị.
+Hạng tử $\frac{1}{\sqrt{d_u d_v}}$ là degree normalization. Nó tránh việc node có bậc rất lớn làm tín hiệu bị phóng đại quá mạnh.
 
-**GraphSAGE (Hamilton et al., 2017)** — thay vì dùng *toàn bộ* hàng xóm (không scale với đồ thị tỉ node), **lấy mẫu** một tập con cố định và aggregate. Cho phép inductive learning trên đồ thị lớn/động.
+Điểm mạnh của GCN:
 
-**GAT (Veličković et al., 2018)** — thêm **attention trên cạnh**: học trọng số $\alpha_{vu}$ cho từng hàng xóm thay vì cố định theo bậc:
+- đơn giản, dễ hiểu, dễ triển khai
+- tận dụng tốt cấu trúc graph cục bộ
+- là baseline mạnh cho nhiều node classification task
+
+Điểm yếu: trọng số hàng xóm chủ yếu đến từ cấu trúc degree, không học được "hàng xóm nào quan trọng hơn" theo nội dung một cách linh hoạt như attention.
+
+## GraphSAGE — sampling để scale và inductive learning
+
+GCN cổ điển thường giả định ta đang train trên một graph cố định. Nhưng trong thực tế, graph có thể rất lớn hoặc liên tục thay đổi: social network, user-item graph, transaction graph.
+
+**GraphSAGE** giải quyết bằng cách lấy mẫu một số hàng xóm cố định thay vì dùng toàn bộ neighborhood:
+
+$$
+h_v^{(k+1)} = \sigma\!\Big(W \cdot \text{CONCAT}(h_v^{(k)},\; \text{AGG}(\{h_u^{(k)} : u \in \text{Sample}(\mathcal{N}(v))\}))\Big)
+$$
+
+Điểm quan trọng không chỉ là sampling. GraphSAGE học một **hàm aggregate có thể áp dụng cho node mới**, thay vì chỉ học embedding cho các node đã thấy. Vì vậy nó hợp với inductive setting: graph lớn, node mới xuất hiện, edge mới xuất hiện.
+
+<Note type="result">
+GraphSAGE chuyển GNN từ "học representation cho một graph cố định" sang "học một hàm tạo representation từ neighborhood". Đây là khác biệt lớn khi đưa GNN vào hệ thống thực tế.
+</Note>
+
+## GAT — attention trên cạnh
+
+Trong GCN, trọng số hàng xóm đến từ degree normalization. Nhưng không phải hàng xóm nào cũng quan trọng như nhau. **Graph Attention Network (GAT)** đưa attention vào graph: node $v$ học trọng số $\alpha_{vu}$ cho từng hàng xóm $u$.
 
 $$
 h_v^{(k+1)} = \sigma\!\Big( \sum_{u \in \mathcal{N}(v)} \alpha_{vu}\, W h_u^{(k)} \Big)
 $$
 
-→ node tự quyết hàng xóm nào quan trọng, giống self-attention nhưng giới hạn trong các cạnh có thật.
+Trực giác: GAT cho node tự quyết nên nghe hàng xóm nào nhiều hơn. Nếu GCN là "lấy trung bình có chuẩn hóa", GAT là "weighted aggregation học được".
+
+Giống Transformer, GAT thường dùng multi-head attention để ổn định và tăng capacity:
+
+- một head có thể tập trung vào quan hệ gần
+- head khác có thể tập trung vào node có feature giống nhau
+- head khác có thể học pattern cấu trúc riêng
+
+Không nên hiểu mỗi head luôn có vai trò rõ ràng, nhưng multi-head cho model nhiều subspace để tổng hợp quan hệ.
 
 ## Liên hệ với Transformer
 
-Đặt cạnh GAT, Transformer trở nên rất quen: cả hai đều là **attention-weighted aggregation từ hàng xóm**. Khác biệt duy nhất là *đồ thị*:
+Đặt cạnh GAT, Transformer trở nên rất quen: cả hai đều là **attention-weighted aggregation từ hàng xóm**. Nhưng "hàng xóm" được định nghĩa khác nhau.
 
 | | GAT | Transformer |
 |---|---|---|
-| Đồ thị | Cạnh có thật của dữ liệu | Đồ thị **đầy đủ** (mọi token nối nhau) |
-| Hàng xóm | $\mathcal{N}(v)$ theo cạnh | Tất cả token |
-| Vị trí | Cấu trúc đồ thị là vị trí | Cần positional encoding |
+| Đồ thị | edge thật của dữ liệu | đồ thị đầy đủ giữa mọi token |
+| Hàng xóm | $\mathcal{N}(v)$ theo cạnh | tất cả token trong context |
+| Attention | chỉ trên edge có thật | mọi cặp token được phép bởi mask |
+| Vị trí/cấu trúc | topology nằm trong edge | cần positional/structural encoding |
+| Chi phí | theo số edge | thường theo $O(n^2)$ với attention đầy đủ |
 
-<Note type="result">
-Transformer = GNN trên đồ thị đầy đủ. **Graph Transformer** đi ngược lại: áp attention kiểu Transformer lên đồ thị thật, dùng structural/positional encoding (Laplacian eigenvectors, random walk) để bơm thông tin topology — kết hợp sức mạnh attention với inductive bias của đồ thị.
+Một cách nhìn hữu ích: **Transformer là message passing trên đồ thị đầy đủ**. Mỗi token là một node, mọi token nối với mọi token khác, attention score là trọng số cạnh động.
+
+Graph Transformer đi theo hướng ngược lại: lấy attention kiểu Transformer đưa lên graph thật. Nhưng nếu chỉ dùng attention đầy đủ mà bỏ topology, model sẽ mất inductive bias của graph. Vì vậy Graph Transformer thường thêm structural/positional encoding:
+
+- Laplacian eigenvectors
+- random walk encoding
+- shortest-path distance
+- edge bias hoặc relation bias
+
+<Note type="intuition">
+Transformer bỏ nhiều cấu trúc thiết kế tay để học quan hệ từ data. GNN giữ cấu trúc graph như một inductive bias mạnh: nếu hai node không nối qua edge hoặc path, thông tin không nên trộn tự do ngay từ đầu.
 </Note>
 
-## Thách thức đặc thù
+## Những thách thức đặc thù của GNN
 
-- **Over-smoothing**: chồng quá nhiều vòng message passing → biểu diễn các node hội tụ về giống nhau, mất khả năng phân biệt
-- **Scalability**: đồ thị tỉ node (mạng xã hội) cần sampling (GraphSAGE) hoặc phân cụm
-- **Geometric GNN**: với dữ liệu có cấu trúc hình học (phân tử 3D), cần thêm bất biến theo phép quay/tịnh tiến (equivariance) — quan trọng cho AlphaFold, mô phỏng vật lý
+GNN nghe rất tự nhiên: cứ truyền message nhiều vòng là node sẽ biết nhiều hơn. Nhưng graph có những vấn đề riêng.
+
+### Over-smoothing
+
+Khi chồng quá nhiều layer message passing, representation của các node có thể trở nên giống nhau. Node ban đầu khác nhau, nhưng sau nhiều lần trung bình hóa với hàng xóm, tín hiệu bị làm mượt quá mức.
+
+Đây là lý do GNN sâu không đơn giản như CNN/Transformer sâu. Muốn scale depth thường cần residual connection, normalization, skip connection hoặc kiến trúc đặc biệt.
+
+### Over-squashing
+
+Sau $k$ layer, một node có thể nhận thông tin từ rất nhiều node $k$-hop. Nhưng tất cả thông tin đó bị nén qua các edge và hidden vector hữu hạn. Nếu nhiều thông tin xa phải đi qua một bottleneck nhỏ, model không truyền đủ tín hiệu.
+
+Over-squashing giải thích vì sao "stack thêm layer để thấy xa hơn" không luôn hiệu quả. Graph topology quyết định đường truyền thông tin: nếu nhiều path bị ép qua vài cạnh hẹp, dependency xa rất khó học.
+
+### Scalability
+
+Graph thực tế có thể có hàng triệu hoặc hàng tỉ node. Full-batch message passing trên toàn graph thường không khả thi. Các hướng xử lý gồm:
+
+- neighbor sampling như GraphSAGE
+- subgraph sampling
+- clustering graph thành block nhỏ
+- mini-batch theo edge hoặc node
+- precompute một phần feature propagation
+
+### Heterophily
+
+Nhiều GNN cổ điển hoạt động tốt khi graph có **homophily**: node nối với nhau thường giống nhau. Ví dụ paper cùng lĩnh vực cite nhau. Nhưng có graph **heterophily**: node nối với nhau lại khác loại, như user-item graph hoặc một số network vai trò.
+
+Khi đó "trộn với hàng xóm" có thể làm nhiễu representation. GNN cho heterophily cần thiết kế cẩn thận hơn: tách ego feature, dùng signed/directed relation, hoặc học cách chọn thông tin từ neighbor.
+
+### Edge features và graph động
+
+Không phải edge nào cũng giống nhau. Trong phân tử, bond đơn/đôi/thơm khác nhau. Trong knowledge graph, edge là loại quan hệ. Trong recommender system, edge có timestamp, weight, hành vi.
+
+Nếu bỏ edge feature, GNN có thể mất phần quan trọng nhất của graph. Với graph động, edge/node còn thay đổi theo thời gian, nên cần temporal GNN hoặc kết hợp sequence modeling.
+
+### Geometric equivariance
+
+Với phân tử 3D, protein, vật lý mô phỏng, node không chỉ nối với nhau mà còn có tọa độ không gian. Khi xoay hoặc tịnh tiến hệ, prediction scalar như năng lượng nên giữ nguyên, còn vector như lực nên xoay theo.
+
+Đây là nơi **geometric GNN** dùng E(n)/SE(3)-equivariance. Nói ngắn gọn: model không chỉ hiểu graph topology, mà còn tôn trọng hình học của không gian.
+
+## Bức tranh chung
+
+GNN là lời đáp cho một loại dữ liệu mà CNN/RNN/Transformer chuẩn không mô tả tự nhiên: dữ liệu có quan hệ bất kỳ.
+
+| Kiến trúc | Inductive bias | Hàng xóm là gì? |
+|---|---|---|
+| CNN | locality trên lưới đều | pixel/patch gần trong kernel |
+| RNN/SSM | thứ tự thời gian | state trước đó |
+| Transformer | token có thể tương tác toàn cục | mọi token được mask cho phép |
+| GNN | quan hệ qua edge | node nối bằng cạnh |
+
+Điểm mạnh của GNN là **relational inductive bias**: model không cần tự phát hiện từ đầu rằng cạnh quan trọng; graph đã nói cho model biết kênh truyền thông tin nằm ở đâu. Điểm yếu là nếu graph thiếu cạnh, sai cạnh, hoặc topology tạo bottleneck, message passing cũng bị giới hạn bởi chính cấu trúc đó.
 
 ## Papers tham khảo
 
-| Paper | |
+| Paper | Vai trò |
 |---|---|
-| Kipf & Welling (2017) | Semi-Supervised Classification with GCN |
-| Hamilton et al. (2017) | Inductive Representation Learning on Large Graphs (GraphSAGE) |
-| Veličković et al. (2018) | Graph Attention Networks (GAT) |
+| Kipf & Welling (2017) | GCN, convolution đơn giản trên graph |
+| Hamilton et al. (2017) | GraphSAGE, neighbor sampling và inductive learning |
+| Veličković et al. (2018) | GAT, attention trên edge |
 | Gilmer et al. (2017) | Neural Message Passing for Quantum Chemistry |
+| Battaglia et al. (2018) | Relational inductive biases, graph networks |
+| Ying et al. (2021) | Graphormer, Transformer-style graph representation |
+| Bronstein et al. (2021) | Geometric deep learning perspective |

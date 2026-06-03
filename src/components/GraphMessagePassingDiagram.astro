@@ -1,0 +1,123 @@
+---
+interface Props {
+  lang?: 'vi' | 'en';
+}
+const { lang = 'vi' } = Astro.props;
+
+const L = lang === 'en'
+  ? {
+      title: 'Message passing around one node',
+      center: 'v',
+      self: 'self state',
+      oneHop: '1-hop neighbors',
+      twoHop: '2-hop after another layer',
+      aggregate: 'aggregate',
+      update: 'update hᵥ',
+      cap: 'A GNN layer gathers messages from the 1-hop neighbors of node v. After stacking another layer, information from 2-hop nodes can reach v through its neighbors.',
+    }
+  : {
+      title: 'Message passing quanh một node',
+      center: 'v',
+      self: 'state hiện tại',
+      oneHop: 'hàng xóm 1-hop',
+      twoHop: '2-hop sau layer kế',
+      aggregate: 'aggregate',
+      update: 'update hᵥ',
+      cap: 'Một GNN layer gom message từ các hàng xóm 1-hop của node v. Khi chồng thêm layer, thông tin từ các node 2-hop có thể đi tới v thông qua hàng xóm.',
+    };
+---
+
+<figure class="gmp" data-lang={lang}>
+  <svg viewBox="0 0 620 330" role="img" aria-label="Graph neural network message passing" class="gmp-svg">
+    <defs>
+      <marker id="gmp-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" class="gmp-head" />
+      </marker>
+      <marker id="gmp-arrow2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" class="gmp-head2" />
+      </marker>
+    </defs>
+
+    <text x="310" y="28" class="gmp-title">{L.title}</text>
+
+    <!-- 2-hop nodes -->
+    <g class="gmp-faint">
+      <circle cx="88" cy="82" r="16" class="gmp-node2" /><text x="88" y="87" class="gmp-small">a</text>
+      <circle cx="126" cy="238" r="16" class="gmp-node2" /><text x="126" y="243" class="gmp-small">b</text>
+      <circle cx="496" cy="72" r="16" class="gmp-node2" /><text x="496" y="77" class="gmp-small">c</text>
+      <circle cx="532" cy="230" r="16" class="gmp-node2" /><text x="532" y="235" class="gmp-small">d</text>
+      <line x1="101" y1="91" x2="183" y2="125" class="gmp-edge2" marker-end="url(#gmp-arrow2)" />
+      <line x1="141" y1="232" x2="193" y2="187" class="gmp-edge2" marker-end="url(#gmp-arrow2)" />
+      <line x1="482" y1="82" x2="418" y2="125" class="gmp-edge2" marker-end="url(#gmp-arrow2)" />
+      <line x1="516" y1="224" x2="426" y2="187" class="gmp-edge2" marker-end="url(#gmp-arrow2)" />
+    </g>
+
+    <!-- 1-hop neighbors -->
+    <circle cx="200" cy="132" r="22" class="gmp-node" /><text x="200" y="137" class="gmp-label">u₁</text>
+    <circle cx="210" cy="194" r="22" class="gmp-node" /><text x="210" y="199" class="gmp-label">u₂</text>
+    <circle cx="410" cy="132" r="22" class="gmp-node" /><text x="410" y="137" class="gmp-label">u₃</text>
+    <circle cx="420" cy="194" r="22" class="gmp-node" /><text x="420" y="199" class="gmp-label">u₄</text>
+
+    <!-- center -->
+    <circle cx="310" cy="164" r="30" class="gmp-center" />
+    <text x="310" y="171" class="gmp-center-text">{L.center}</text>
+
+    <!-- messages to center -->
+    <line x1="222" y1="139" x2="281" y2="156" class="gmp-msg" marker-end="url(#gmp-arrow)" />
+    <line x1="232" y1="190" x2="284" y2="175" class="gmp-msg" marker-end="url(#gmp-arrow)" />
+    <line x1="389" y1="140" x2="339" y2="156" class="gmp-msg" marker-end="url(#gmp-arrow)" />
+    <line x1="399" y1="189" x2="337" y2="175" class="gmp-msg" marker-end="url(#gmp-arrow)" />
+
+    <!-- aggregate/update pipeline -->
+    <rect x="257" y="246" width="106" height="32" rx="7" class="gmp-box" />
+    <text x="310" y="266" class="gmp-box-text">{L.aggregate}</text>
+    <line x1="310" y1="194" x2="310" y2="245" class="gmp-msg" marker-end="url(#gmp-arrow)" />
+    <rect x="384" y="246" width="104" height="32" rx="7" class="gmp-box2" />
+    <text x="436" y="266" class="gmp-box-text">{L.update}</text>
+    <line x1="363" y1="262" x2="383" y2="262" class="gmp-msg" marker-end="url(#gmp-arrow)" />
+
+    <text x="200" y="46" class="gmp-note">{L.twoHop}</text>
+    <text x="310" y="218" class="gmp-note">{L.self}</text>
+    <text x="310" y="306" class="gmp-note">{L.oneHop}</text>
+  </svg>
+  <figcaption class="gmp-cap">{L.cap}</figcaption>
+</figure>
+
+<style>
+  .gmp {
+    margin: 1.75rem 0;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg2);
+    padding: 0.75rem 0 0.2rem;
+  }
+  .gmp-svg { display: block; width: 100%; max-width: 720px; height: auto; margin: 0 auto; }
+  .gmp-title { fill: var(--text); font-family: var(--mono); font-size: 13px; font-weight: 600; text-anchor: middle; }
+  .gmp-node { fill: var(--bg); stroke: var(--accent2); stroke-width: 1.8; }
+  .gmp-node2 { fill: var(--bg); stroke: var(--muted); stroke-width: 1.4; }
+  .gmp-center { fill: var(--bg); stroke: var(--accent); stroke-width: 2; }
+  .gmp-edge2 { stroke: var(--muted); stroke-width: 1.2; opacity: 0.45; }
+  .gmp-msg { stroke: var(--accent2); stroke-width: 1.7; }
+  .gmp-head { fill: var(--accent2); }
+  .gmp-head2 { fill: var(--muted); opacity: 0.55; }
+  .gmp-box { fill: var(--bg); stroke: var(--amber); stroke-width: 1.6; }
+  .gmp-box2 { fill: var(--bg); stroke: var(--accent); stroke-width: 1.6; }
+  .gmp-label, .gmp-small, .gmp-center-text, .gmp-box-text, .gmp-note {
+    font-family: var(--mono);
+    text-anchor: middle;
+  }
+  .gmp-label { fill: var(--text); font-size: 12px; }
+  .gmp-small { fill: var(--muted); font-size: 11px; }
+  .gmp-center-text { fill: var(--text); font-size: 15px; font-weight: 700; }
+  .gmp-box-text { fill: var(--text); font-size: 11px; font-weight: 600; }
+  .gmp-note { fill: var(--muted); font-size: 9.5px; }
+  .gmp-faint { opacity: 0.75; }
+  .gmp-cap {
+    font-size: 0.78rem;
+    color: var(--muted);
+    text-align: center;
+    padding: 0.5rem 1rem 0.65rem;
+    font-style: italic;
+    line-height: 1.5;
+  }
+</style>

@@ -1,6 +1,6 @@
 ---
 title: "Graph Neural Networks"
-description: "Message passing over graphs — GCN, GraphSAGE, GAT, Graph Transformer — and the connection to Transformers."
+description: "Message passing over graphs — from node/edge features, GCN, GraphSAGE, and GAT to Graph Transformers and challenges like over-smoothing and over-squashing."
 lang: en
 category: architectures
 order: 8
@@ -10,70 +10,245 @@ tags: [gnn, gcn, gat, message-passing, graph]
 ---
 
 import Note from '../../components/Note.astro';
+import GraphMessagePassingDiagram from '../../components/GraphMessagePassingDiagram.astro';
 
 # Graph Neural Networks
 
-Much data is neither a grid (images) nor a sequence (text) but a **graph**: social networks, molecules, knowledge graphs, recommendation systems. The needed inductive bias: permutation invariance over nodes, and exploiting **relations via edges**.
+CNNs are powerful because images are a **regular grid**: each pixel has left/right/up/down neighbors, and a kernel can scan the same pattern across the whole image. But many important data types do not live on a regular grid. They are **graphs**: social networks, molecules, knowledge graphs, recommender systems, citation networks, road networks.
+
+For graphs, the question is no longer "which pixels are inside this $3 \times 3$ window?" but:
+
+> Which nodes should this node receive information from, through which edges?
+
+**Graph Neural Networks (GNNs)** bring graph inductive bias into deep learning. Instead of assuming data lies on a grid like a CNN, a GNN assumes data consists of **nodes** and **edges**, and representations should be updated by passing information along edges.
+
+## What is a graph in machine learning?
+
+A graph is usually written as:
+
+$$
+G = (V, E)
+$$
+
+where $V$ is the set of nodes and $E$ is the set of edges. In ML, graphs often also have features:
+
+| Component | Meaning | Example |
+|---|---|---|
+| Node feature $x_v$ | information attached to a node | user profile, atom type, paper embedding |
+| Edge feature $e_{uv}$ | information attached to an edge | bond type, KG relation, user-item interaction |
+| Adjacency $A$ | which nodes are connected | adjacency matrix or edge list |
+| Graph feature | information about the whole graph | molecular property, network metadata |
+
+Unlike images, graph nodes have no natural order. If we renumber the nodes, the graph itself has not changed. So GNNs need to respect two properties:
+
+- **Permutation equivariance** for node-level outputs: reorder the input nodes and the node outputs reorder the same way.
+- **Permutation invariance** for graph-level outputs: reorder the nodes and the prediction for the whole graph stays the same.
+
+<Note type="warning">
+Saying "GNNs are permutation-invariant over nodes" is not precise enough. For node classification, the model should be equivariant: if a node moves to another tensor position, its output moves with it. Only graph-level readout needs to be invariant.
+</Note>
+
+## Types of graph tasks
+
+GNNs are not used for just one kind of prediction. Depending on the task, the output may live on nodes, edges, or the whole graph.
+
+| Task | Output | Example |
+|---|---|---|
+| Node classification | label for each node | classify papers in a citation network |
+| Link prediction | probability of an edge between two nodes | friend recommendation, recommendation systems |
+| Edge classification | label for each edge | relation type in a knowledge graph |
+| Graph classification | label for the whole graph | whether a molecule is toxic |
+| Graph regression | continuous value for the whole graph | molecular energy, material property |
+
+The common theme: a prediction for a node or graph usually cannot treat that node in isolation. Relations through edges are the signal.
 
 ## Message passing — the common principle
 
-Almost every GNN follows the **message passing** template: each node updates its representation by aggregating information from its neighbors, iterated over several rounds:
+Almost every modern GNN revolves around **message passing**. Each node receives messages from neighbors, aggregates them, and updates its representation.
+
+A general layer can be written in three steps:
 
 $$
-h_v^{(k+1)} = \text{UPDATE}\Big(h_v^{(k)},\; \text{AGGREGATE}\big(\{ h_u^{(k)} : u \in \mathcal{N}(v) \}\big)\Big)
+m_{uv}^{(k)} = \text{MESSAGE}^{(k)}(h_u^{(k)}, h_v^{(k)}, e_{uv})
 $$
 
-After $k$ rounds, each node "sees" information from nodes up to $k$ hops away. The AGGREGATE function must be **permutation-invariant** (sum, mean, max) since neighbors have no order.
+$$
+a_v^{(k)} = \text{AGGREGATE}^{(k)}\big(\{m_{uv}^{(k)} : u \in \mathcal{N}(v)\}\big)
+$$
+
+$$
+h_v^{(k+1)} = \text{UPDATE}^{(k)}(h_v^{(k)}, a_v^{(k)})
+$$
+
+where:
+
+- $h_v^{(k)}$ is the representation of node $v$ at layer $k$
+- $\mathcal{N}(v)$ is the neighbor set of node $v$
+- $e_{uv}$ is an edge feature, if present
+- AGGREGATE is often sum/mean/max or an attention-weighted sum
+
+<GraphMessagePassingDiagram lang="en" />
+
+After one message-passing round, a node has information from its 1-hop neighbors. After two rounds, information from 2-hop nodes can reach it through those neighbors. So the number of GNN layers is also a way to expand receptive field on a graph.
 
 <Note type="intuition">
-Compared to other architectures: a CNN aggregates from nearby pixels on a grid, an RNN from the previous step on a sequence, a GNN from adjacent nodes on a graph. The same "gather from neighbors and update" idea — only *what counts as a neighbor* differs.
+CNNs and GNNs are close in spirit. A CNN aggregates from fixed neighbors on an image grid; a GNN aggregates from neighbors defined by edges. A CNN shares kernels across positions; a GNN shares message/update functions across nodes and edges.
 </Note>
 
-## Main variants
+## Readout — from node representations to predictions
 
-**GCN (Kipf & Welling, 2017)** — aggregate = degree-normalized average:
+Not every graph task needs an output for each node. If we need to predict a property of the whole graph, we must pool node representations into a graph vector:
+
+$$
+h_G = \text{READOUT}(\{h_v^{(K)} : v \in V\})
+$$
+
+READOUT must be permutation-invariant: sum, mean, max pooling, attention pooling, or a learned pooling module. This is the bridge from message passing to graph-level tasks such as molecular property prediction.
+
+## GCN — convolution on graphs
+
+**GCN (Graph Convolutional Network)** can be seen as a "convolutionalized" version of message passing. In a CNN, each pixel takes a weighted average from a regular local neighborhood. In a GCN, each node takes information from neighbors connected by edges.
+
+A GCN layer is often written:
 
 $$
 h_v^{(k+1)} = \sigma\!\Big( \sum_{u \in \mathcal{N}(v) \cup \{v\}} \frac{1}{\sqrt{d_u d_v}}\, W h_u^{(k)} \Big)
 $$
 
-Simple, effective, but each neighbor's weight is fixed by the graph structure.
+The term $\frac{1}{\sqrt{d_u d_v}}$ is degree normalization. It prevents high-degree nodes from amplifying signals too strongly.
 
-**GraphSAGE (Hamilton et al., 2017)** — instead of using *all* neighbors (which doesn't scale to billion-node graphs), it **samples** a fixed-size subset and aggregates. This enables inductive learning on large/dynamic graphs.
+GCN strengths:
 
-**GAT (Veličković et al., 2018)** — adds **attention over edges**: it learns a weight $\alpha_{vu}$ for each neighbor instead of fixing it by degree:
+- simple, interpretable, easy to implement
+- uses local graph structure well
+- a strong baseline for many node classification tasks
+
+Its limitation: neighbor weights mostly come from degree structure, so it cannot flexibly learn which neighbors matter more by content the way attention can.
+
+## GraphSAGE — sampling for scale and inductive learning
+
+Classical GCNs often assume we train on a fixed graph. In practice, graphs may be huge or constantly changing: social networks, user-item graphs, transaction graphs.
+
+**GraphSAGE** addresses this by sampling a fixed number of neighbors instead of using the full neighborhood:
+
+$$
+h_v^{(k+1)} = \sigma\!\Big(W \cdot \text{CONCAT}(h_v^{(k)},\; \text{AGG}(\{h_u^{(k)} : u \in \text{Sample}(\mathcal{N}(v))\}))\Big)
+$$
+
+The key is not only sampling. GraphSAGE learns an **aggregation function that can be applied to new nodes**, rather than only learning embeddings for nodes seen during training. That makes it suitable for inductive settings: large graphs, new nodes, new edges.
+
+<Note type="result">
+GraphSAGE moves GNNs from "learn representations for one fixed graph" to "learn a function that builds representations from neighborhoods". That is a major difference for real systems.
+</Note>
+
+## GAT — attention over edges
+
+In GCN, neighbor weights come from degree normalization. But not every neighbor matters equally. **Graph Attention Network (GAT)** brings attention to graphs: node $v$ learns a weight $\alpha_{vu}$ for each neighbor $u$.
 
 $$
 h_v^{(k+1)} = \sigma\!\Big( \sum_{u \in \mathcal{N}(v)} \alpha_{vu}\, W h_u^{(k)} \Big)
 $$
 
-→ a node decides which neighbors matter, just like self-attention but restricted to real edges.
+Intuitively, GAT lets a node decide which neighbors to listen to more. If GCN is a normalized average, GAT is a learned weighted aggregation.
+
+Like Transformers, GAT often uses multi-head attention for stability and capacity:
+
+- one head may focus on close relations
+- another may focus on nodes with similar features
+- another may learn a structural pattern
+
+We should not assume every head always has a clean role, but multi-head attention gives the model multiple subspaces for relational aggregation.
 
 ## The connection to Transformers
 
-Next to GAT, the Transformer looks very familiar: both are **attention-weighted aggregation from neighbors**. The only difference is the *graph*:
+Next to GAT, the Transformer looks very familiar: both are **attention-weighted aggregation from neighbors**. But "neighbor" is defined differently.
 
 | | GAT | Transformer |
 |---|---|---|
-| Graph | The data's real edges | The **complete** graph (every token connected) |
-| Neighbors | $\mathcal{N}(v)$ by edges | All tokens |
-| Position | Graph structure is position | Needs positional encoding |
+| Graph | real data edges | complete graph between all tokens |
+| Neighbors | $\mathcal{N}(v)$ by edges | all tokens in the context |
+| Attention | only over real edges | every token pair allowed by the mask |
+| Position/structure | topology lives in edges | needs positional/structural encoding |
+| Cost | scales with number of edges | often $O(n^2)$ with full attention |
 
-<Note type="result">
-A Transformer is a GNN on a complete graph. **Graph Transformers** go the other way: they apply Transformer-style attention to real graphs, using structural/positional encodings (Laplacian eigenvectors, random walks) to inject topology — combining attention's power with the graph's inductive bias.
+One useful view: **a Transformer is message passing on a complete graph**. Each token is a node, every token connects to every other token, and attention scores are dynamic edge weights.
+
+Graph Transformers go in the opposite direction: they bring Transformer-style attention to real graphs. But if we use full attention and ignore topology, the model loses the graph's inductive bias. So Graph Transformers often add structural/positional encodings:
+
+- Laplacian eigenvectors
+- random walk encodings
+- shortest-path distances
+- edge bias or relation bias
+
+<Note type="intuition">
+Transformers remove much hand-designed structure and learn relations from data. GNNs keep graph structure as a strong inductive bias: if two nodes are not connected by an edge or path, their information should not mix freely from the start.
 </Note>
 
-## Specific challenges
+## Challenges specific to GNNs
 
-- **Over-smoothing**: stacking too many message-passing rounds → node representations converge to be identical, losing discriminative power
-- **Scalability**: billion-node graphs (social networks) require sampling (GraphSAGE) or clustering
-- **Geometric GNNs**: for geometrically structured data (3D molecules), you also need invariance to rotation/translation (equivariance) — crucial for AlphaFold and physical simulation
+GNNs sound natural: pass messages for more rounds and nodes know more. Graphs make this harder than it sounds.
+
+### Over-smoothing
+
+When we stack too many message-passing layers, node representations can become too similar. Nodes that started distinct get repeatedly averaged with their neighborhoods until discriminative information is washed out.
+
+This is why deep GNNs are not as straightforward as deep CNNs or Transformers. Scaling depth often needs residual connections, normalization, skip connections, or specialized architectures.
+
+### Over-squashing
+
+After $k$ layers, a node can receive information from many $k$-hop nodes. But all of that information must be compressed through edges and finite hidden vectors. If many distant signals must pass through a narrow bottleneck, the model cannot transmit enough information.
+
+Over-squashing explains why "just stack more layers to see farther" does not always work. Graph topology controls information flow: if many paths are forced through a few narrow edges, long-range dependencies are hard to learn.
+
+### Scalability
+
+Real graphs may have millions or billions of nodes. Full-batch message passing over the whole graph is often impossible. Common approaches include:
+
+- neighbor sampling, as in GraphSAGE
+- subgraph sampling
+- clustering the graph into smaller blocks
+- mini-batching by edges or nodes
+- precomputing part of feature propagation
+
+### Heterophily
+
+Many classical GNNs work well under **homophily**: connected nodes tend to be similar. For example, papers in the same field cite each other. But some graphs have **heterophily**: connected nodes are different types, such as user-item graphs or role-based networks.
+
+Then "mix with neighbors" can corrupt the representation. GNNs for heterophily need more careful design: preserve ego features, use signed/directed relations, or learn which neighbor information to select.
+
+### Edge features and dynamic graphs
+
+Not all edges are the same. In molecules, single/double/aromatic bonds are different. In knowledge graphs, edges are relation types. In recommender systems, edges have timestamps, weights, and behaviors.
+
+If we ignore edge features, the GNN may lose the most important part of the graph. In dynamic graphs, edges and nodes also change over time, so temporal GNNs or sequence modeling may be needed.
+
+### Geometric equivariance
+
+For 3D molecules, proteins, and physical simulation, nodes are not only connected; they also have spatial coordinates. If we rotate or translate the system, scalar predictions such as energy should stay the same, while vector predictions such as forces should rotate accordingly.
+
+This is where **geometric GNNs** use E(n)/SE(3)-equivariance. In short: the model must understand graph topology while respecting the geometry of space.
+
+## The Big Picture
+
+GNNs answer a kind of data that standard CNNs/RNNs/Transformers do not describe naturally: data with arbitrary relations.
+
+| Architecture | Inductive bias | What counts as a neighbor? |
+|---|---|---|
+| CNN | locality on a regular grid | nearby pixels/patches inside a kernel |
+| RNN/SSM | temporal order | the previous state |
+| Transformer | global token interaction | every token allowed by the mask |
+| GNN | relations through edges | nodes connected by edges |
+
+The strength of GNNs is **relational inductive bias**: the model does not need to discover from scratch that edges matter; the graph already tells it where information channels are. The weakness is that if the graph is missing edges, has wrong edges, or its topology creates bottlenecks, message passing is limited by that structure too.
 
 ## References
 
-| Paper | |
+| Paper | Role |
 |---|---|
-| Kipf & Welling (2017) | Semi-Supervised Classification with GCN |
-| Hamilton et al. (2017) | Inductive Representation Learning on Large Graphs (GraphSAGE) |
-| Veličković et al. (2018) | Graph Attention Networks (GAT) |
+| Kipf & Welling (2017) | GCN, simple convolution on graphs |
+| Hamilton et al. (2017) | GraphSAGE, neighbor sampling and inductive learning |
+| Veličković et al. (2018) | GAT, attention over edges |
 | Gilmer et al. (2017) | Neural Message Passing for Quantum Chemistry |
+| Battaglia et al. (2018) | Relational inductive biases, graph networks |
+| Ying et al. (2021) | Graphormer, Transformer-style graph representation |
+| Bronstein et al. (2021) | Geometric deep learning perspective |
