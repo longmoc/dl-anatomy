@@ -1,0 +1,269 @@
+---
+title: "Representation Learning"
+description: "Representation learning học embedding/latent space hữu ích từ dữ liệu — qua autoencoder, contrastive learning, masked modeling và self-distillation."
+lang: vi
+category: architectures
+order: 9
+parent: architecture-anatomy
+translation: representation-learning-en
+tags: [representation-learning, embedding, self-supervised, contrastive-learning, autoencoder]
+---
+
+import Note from '../../components/Note.astro';
+import RepresentationLearningDiagram from '../../components/RepresentationLearningDiagram.astro';
+
+# Representation Learning
+
+Các bài Backbone architectures trước đó hỏi: **thông tin di chuyển qua model bằng cơ chế nào?** CNN dùng convolution, Transformer dùng attention, SSM dùng state-space, GNN dùng message passing trên graph.
+
+Representation learning hỏi một câu khác:
+
+> Làm sao học được một representation $z$ của dữ liệu, sao cho representation đó hữu ích cho nhiều task sau này?
+
+Nếu backbone là "đường ống xử lý thông tin", thì representation learning là cách ta **ép đường ống đó học ra latent space tốt**. Một encoder nhận input $x$ và tạo embedding:
+
+$$
+z = f_\theta(x)
+$$
+
+Embedding $z$ có thể dùng cho classification, retrieval, clustering, detection, generation, recommendation, hoặc làm input cho một model khác. Điểm quan trọng: representation tốt không chỉ nhớ raw input; nó giữ những yếu tố có ích và bỏ bớt nhiễu.
+
+<RepresentationLearningDiagram />
+
+## Representation là gì?
+
+Trong deep learning, "representation" thường chỉ vector trung gian mà model học được:
+
+- activation ở một layer
+- embedding của câu, ảnh, node, user, item
+- latent code của autoencoder
+- hidden state của Transformer
+- feature map của CNN
+
+Một representation tốt thường có vài tính chất:
+
+| Tính chất | Ý nghĩa |
+|---|---|
+| Disentangled vừa đủ | các yếu tố quan trọng được tách tương đối rõ |
+| Invariant đúng chỗ | không đổi trước nhiễu/augmentation không quan trọng |
+| Equivariant đúng chỗ | thay đổi có cấu trúc khi input thay đổi có cấu trúc |
+| Compact | nén được thông tin cần thiết |
+| Transferable | dùng được cho task khác, data khác |
+| Searchable | khoảng cách trong embedding space có ý nghĩa |
+
+<Note type="intuition">
+Representation learning không phải học "vector đẹp" theo nghĩa thẩm mỹ. Nó học một không gian trong đó những khác biệt quan trọng với task trở nên dễ đọc hơn — thường bằng một classifier đơn giản, nearest neighbor, hoặc một decoder nhỏ.
+</Note>
+
+## Vì sao cần representation learning?
+
+Nếu có đủ label cho mọi task, ta có thể train supervised end-to-end. Nhưng thực tế label đắt, task thay đổi, và dữ liệu thô thường chứa nhiều cấu trúc chưa được annotate.
+
+Representation learning giải quyết bằng cách tận dụng dữ liệu chưa gán nhãn hoặc weak label để học feature trước:
+
+1. **Pretrain** encoder trên objective giàu tín hiệu.
+2. **Reuse** representation cho task sau.
+3. **Fine-tune** toàn bộ model hoặc chỉ train một head nhỏ.
+
+Điều này làm deep learning hiện đại chuyển từ "train model riêng cho từng task" sang "học foundation representation rồi adapt".
+
+| Cách học | Tín hiệu huấn luyện | Ví dụ |
+|---|---|---|
+| Supervised representation | label con người | ImageNet pretraining |
+| Self-supervised representation | tín hiệu tự sinh từ dữ liệu | masked token, contrastive pairs |
+| Generative representation | reconstruct hoặc model phân phối dữ liệu | autoencoder, VAE, autoregressive pretraining |
+| Multimodal representation | align nhiều modality | image-text contrastive learning |
+
+## Anatomy của một hệ representation learning
+
+Một setup representation learning thường có các phần:
+
+| Thành phần | Vai trò |
+|---|---|
+| Encoder $f_\theta$ | biến input thành representation |
+| Projection head | map representation sang không gian loss, thường bỏ khi downstream |
+| Objective | định nghĩa representation nên giữ/bỏ gì |
+| Data transform | augmentation, masking, corruption, positive pair |
+| Readout/head | dùng representation cho task sau |
+
+Projection head là chi tiết quan trọng. Trong contrastive learning, loss có thể cần một không gian embedding rất đặc thù. Nhưng representation tốt cho downstream có khi nằm ở layer trước projection head. Vì vậy nhiều hệ train với projection head rồi discard nó khi evaluate.
+
+<Note type="warning">
+Objective quyết định representation học gì. Nếu augmentation sai, positive pair sai, hoặc masking quá dễ, model có thể học shortcut: tối ưu loss tốt nhưng representation không transfer tốt.
+</Note>
+
+## Autoencoder — học bằng reconstruction
+
+Autoencoder là một trong những cách cổ điển nhất để học representation:
+
+$$
+z = f_\theta(x), \qquad \hat{x} = g_\phi(z)
+$$
+
+Encoder nén input thành latent code $z$, decoder cố reconstruct lại input $\hat{x}$. Loss thường là reconstruction error:
+
+$$
+\mathcal{L} = \|x - \hat{x}\|^2
+$$
+
+Nếu bottleneck đủ chặt, encoder buộc phải giữ thông tin quan trọng. Nhưng nếu decoder quá mạnh hoặc bottleneck quá rộng, autoencoder có thể học copy input mà không tạo representation hữu ích.
+
+Các biến thể quan trọng:
+
+| Biến thể | Ý tưởng |
+|---|---|
+| Denoising autoencoder | input bị làm nhiễu, model reconstruct bản sạch |
+| Sparse autoencoder | ép latent code chỉ active một phần |
+| VAE | học latent distribution thay vì một vector cố định |
+| VQ-VAE | dùng latent rời rạc, hữu ích cho token hóa ảnh/audio |
+| MAE | masked autoencoder cho ảnh, reconstruct patch bị che |
+
+### VAE và latent space có cấu trúc
+
+VAE không chỉ encode $x$ thành một vector. Nó học một phân phối:
+
+$$
+q_\phi(z \mid x)
+$$
+
+Sau đó sample $z$ và decode lại $x$. Objective có hai phần: reconstruct tốt và giữ latent distribution gần prior đơn giản như Gaussian chuẩn.
+
+VAE vì vậy nằm ở ranh giới giữa representation learning và generative modeling. Trong bài này, lens chính là representation: latent space được tổ chức sao cho smooth, sample được, interpolate được.
+
+<Note type="paper">
+VAE sẽ còn quay lại trong Generative Models. Ở đây chỉ cần nhớ: autoencoder học representation bằng cách buộc model nén thông tin qua một latent bottleneck; VAE thêm cấu trúc xác suất vào bottleneck đó.
+</Note>
+
+## Contrastive learning — kéo gần cái giống, đẩy xa cái khác
+
+Contrastive learning học representation bằng quan hệ tương đối. Ý tưởng:
+
+- hai view của cùng một sample là **positive pair**
+- view từ sample khác là **negative pair**
+- embedding của positive nên gần nhau
+- embedding của negative nên xa nhau
+
+Ví dụ với ảnh, ta lấy cùng một ảnh rồi crop/color jitter/blur để tạo hai view. Model nên hiểu chúng là cùng một nội dung, dù pixel khác nhau.
+
+Một loss phổ biến là InfoNCE:
+
+$$
+\mathcal{L}_i = -\log \frac{\exp(\text{sim}(z_i, z_i^+)/\tau)}{\sum_j \exp(\text{sim}(z_i, z_j)/\tau)}
+$$
+
+Trong đó $z_i^+$ là positive, các $z_j$ khác đóng vai trò candidates/negatives, và $\tau$ là temperature.
+
+| Hệ | Ý tưởng chính |
+|---|---|
+| SimCLR | dùng batch lớn để có nhiều negative |
+| MoCo | dùng memory queue để giữ nhiều negative |
+| CLIP | contrastive learning giữa image embedding và text embedding |
+
+Điểm mạnh của contrastive learning là học embedding space rất hợp cho retrieval và semantic similarity. Điểm khó là định nghĩa positive/negative đúng. Nếu augmentation quá mạnh, positive pair có thể mất semantic; nếu negative thực ra cùng class, model bị ép đẩy xa những thứ đáng lẽ gần nhau.
+
+## Masked modeling — học bằng cách điền phần thiếu
+
+Masked modeling không cần label. Nó che một phần input, rồi yêu cầu model dự đoán phần bị che.
+
+Trong NLP, BERT dùng **masked language modeling**: che token và đoán lại token đó từ ngữ cảnh hai phía. Trong vision, MAE che phần lớn patch ảnh, encoder xử lý phần còn lại, decoder reconstruct patch bị che.
+
+| Miền | Input bị che | Model học gì? |
+|---|---|---|
+| Text | token | ngữ nghĩa và cú pháp từ context |
+| Image | patch | cấu trúc vật thể, texture, layout |
+| Audio | frame/span | pattern thời gian và phổ |
+| Multimodal | token/patch của một modality | align và suy luận chéo modality |
+
+Masked modeling khác contrastive learning ở chỗ nó không nhất thiết cần negative. Nó tạo task dự đoán nội tại: muốn điền phần thiếu, model phải hiểu cấu trúc dữ liệu.
+
+<Note type="result">
+Masked modeling rất hợp với Transformer vì self-attention có thể gom thông tin từ context còn lại để dự đoán phần bị che. Đây là một lý do BERT, MAE và nhiều pretraining recipe hiện đại dùng masking làm tín hiệu chính.
+</Note>
+
+## Self-distillation và non-contrastive learning
+
+Không phải mọi self-supervised representation learning đều cần negative hoặc reconstruct input. Một số phương pháp như BYOL, SimSiam, DINO dùng hai network/view và ép representation nhất quán với nhau.
+
+Ý tưởng chung:
+
+1. Tạo hai augmentation của cùng input.
+2. Một nhánh student dự đoán representation của nhánh teacher/target.
+3. Dùng stop-gradient, momentum teacher hoặc normalization để tránh collapse.
+
+Các phương pháp này đặt ra một câu hỏi thú vị: nếu không có negative, vì sao model không collapse thành cùng một vector cho mọi input? Câu trả lời nằm ở chi tiết kiến trúc và optimization: predictor, stop-gradient, batch/statistics, momentum update.
+
+Ở mức anatomy, chỉ cần nhớ: non-contrastive learning vẫn học invariance giữa nhiều view, nhưng thay "đẩy negative ra xa" bằng cơ chế chống collapse khác.
+
+## Invariance vs equivariance
+
+Representation tốt không phải lúc nào cũng bất biến. Nó cần bất biến với những biến đổi không quan trọng, nhưng nhạy với những biến đổi có ý nghĩa.
+
+| Biến đổi | Representation nên làm gì? | Ví dụ |
+|---|---|---|
+| Crop nhẹ ảnh | gần như giữ semantic | object classification |
+| Đổi màu nhẹ | thường nên invariant | contrastive vision pretraining |
+| Dịch vị trí object | có thể equivariant | detection/segmentation |
+| Đổi thứ tự từ | không nên invariant hoàn toàn | NLP |
+| Xoay phân tử 3D | scalar invariant, vector equivariant | molecular modeling |
+
+Đây là lý do augmentation không phải chi tiết phụ. Nó nói với model: "những biến đổi này không nên làm đổi meaning". Nếu nói sai, representation học sai bias.
+
+## Đánh giá representation
+
+Representation learning thường được evaluate bằng cách hỏi: sau khi đã học encoder, representation đó giúp task khác tốt đến đâu?
+
+| Cách evaluate | Ý nghĩa |
+|---|---|
+| Linear probe | freeze encoder, train classifier tuyến tính |
+| Fine-tuning | cập nhật toàn bộ model trên downstream task |
+| kNN / retrieval | xem nearest neighbors có cùng semantic không |
+| Clustering | embedding có tự nhóm theo cấu trúc dữ liệu không |
+| Transfer | pretrain ở domain này, dùng ở domain khác |
+| Few-shot | cần bao nhiêu label để đạt performance tốt |
+
+Linear probe đo xem feature có "đọc ra dễ" không. Fine-tuning đo xem pretrained representation có phải initialization tốt không. Retrieval đo chất lượng geometry của embedding space.
+
+## Failure modes
+
+Representation learning có vài lỗi kinh điển:
+
+- **Collapse**: mọi input có embedding gần như giống nhau.
+- **Shortcut learning**: model dùng tín hiệu rẻ như watermark, background, length, color distribution.
+- **Bad invariance**: augmentation ép model bỏ thông tin thật sự quan trọng.
+- **False negatives**: contrastive loss đẩy xa hai sample thực ra cùng semantic.
+- **Over-compression**: bottleneck mất chi tiết cần cho downstream task.
+- **Domain mismatch**: pretraining data không khớp task sau.
+
+<Note type="warning">
+Representation tốt luôn phụ thuộc vào task. Một embedding rất tốt cho retrieval chưa chắc tốt cho generation; representation invariant với màu có thể tốt cho object classification nhưng tệ cho medical imaging nếu màu là tín hiệu bệnh lý.
+</Note>
+
+## Bức tranh chung
+
+Representation learning là tầng nối giữa backbone architecture và các model family lớn hơn.
+
+| Họ | Câu hỏi chính |
+|---|---|
+| Autoencoder | Nén gì để reconstruct được input? |
+| Contrastive learning | Những view nào nên gần/xa nhau trong embedding space? |
+| Masked modeling | Cần hiểu cấu trúc nào để điền phần thiếu? |
+| Self-distillation | Làm sao học invariance mà không cần negative? |
+| Multimodal alignment | Làm sao đưa nhiều modality vào không gian chung? |
+
+Từ góc nhìn này, nhiều hệ hiện đại chỉ khác nhau ở objective dùng để định hình latent space. BERT học representation bằng masked token; SimCLR học bằng positive/negative views; CLIP học bằng image-text alignment; MAE học bằng reconstruct patch bị che; VAE học latent distribution có thể sample.
+
+Bài tiếp theo trong Model families sẽ chuyển từ "học representation hữu ích" sang "học phân phối để sinh dữ liệu": [Generative Models](/dl-anatomy/architectures/generative-models).
+
+## Papers tham khảo
+
+| Paper | |
+|---|---|
+| Rumelhart et al. (1986) | Learning Internal Representations by Error Propagation |
+| Kingma & Welling (2013) | Auto-Encoding Variational Bayes |
+| van den Oord et al. (2017) | Neural Discrete Representation Learning |
+| Chen et al. (2020) | A Simple Framework for Contrastive Learning of Visual Representations |
+| He et al. (2020) | Momentum Contrast for Unsupervised Visual Representation Learning |
+| Devlin et al. (2018) | BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding |
+| He et al. (2021) | Masked Autoencoders Are Scalable Vision Learners |
+| Grill et al. (2020) | Bootstrap Your Own Latent |
+| Caron et al. (2021) | Emerging Properties in Self-Supervised Vision Transformers |

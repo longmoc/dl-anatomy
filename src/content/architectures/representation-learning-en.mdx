@@ -1,0 +1,269 @@
+---
+title: "Representation Learning"
+description: "Representation learning trains useful embeddings and latent spaces from data — through autoencoders, contrastive learning, masked modeling, and self-distillation."
+lang: en
+category: architectures
+order: 9
+parent: architecture-anatomy
+translation: representation-learning
+tags: [representation-learning, embedding, self-supervised, contrastive-learning, autoencoder]
+---
+
+import Note from '../../components/Note.astro';
+import RepresentationLearningDiagram from '../../components/RepresentationLearningDiagram.astro';
+
+# Representation Learning
+
+The previous Backbone architecture articles asked: **what mechanism moves information through the model?** CNNs use convolution, Transformers use attention, SSMs use state-space dynamics, and GNNs use graph message passing.
+
+Representation learning asks a different question:
+
+> How do we learn a representation $z$ of data that remains useful for many later tasks?
+
+If a backbone is the information-processing pipeline, representation learning is how we **force that pipeline to produce a useful latent space**. An encoder receives input $x$ and produces an embedding:
+
+$$
+z = f_\theta(x)
+$$
+
+The embedding $z$ can be used for classification, retrieval, clustering, detection, generation, recommendation, or as input to another model. The key point: a good representation does not simply memorize the raw input; it preserves useful factors and drops some nuisance variation.
+
+<RepresentationLearningDiagram lang="en" />
+
+## What is a representation?
+
+In deep learning, "representation" usually refers to an intermediate vector learned by a model:
+
+- an activation at some layer
+- an embedding of a sentence, image, node, user, or item
+- the latent code of an autoencoder
+- the hidden state of a Transformer
+- a feature map in a CNN
+
+A good representation often has several properties:
+
+| Property | Meaning |
+|---|---|
+| Sufficiently disentangled | important factors are relatively separable |
+| Invariant where needed | unchanged under irrelevant noise/augmentation |
+| Equivariant where needed | changes in a structured way when input changes structurally |
+| Compact | compresses the needed information |
+| Transferable | useful for other tasks or datasets |
+| Searchable | distances in embedding space mean something |
+
+<Note type="intuition">
+Representation learning is not about making "pretty vectors". It learns a space where task-relevant differences become easier to read — often by a simple classifier, nearest neighbor search, or a small decoder.
+</Note>
+
+## Why representation learning matters
+
+If we had enough labels for every task, we could train supervised models end-to-end. In practice, labels are expensive, tasks change, and raw data contains structure that has not been annotated.
+
+Representation learning addresses this by using unlabeled data or weak labels to learn features first:
+
+1. **Pretrain** an encoder with a rich objective.
+2. **Reuse** the representation for later tasks.
+3. **Fine-tune** the full model or train only a small head.
+
+This is how modern deep learning moved from "train one model per task" toward "learn a foundation representation, then adapt it".
+
+| Learning style | Training signal | Example |
+|---|---|---|
+| Supervised representation | human labels | ImageNet pretraining |
+| Self-supervised representation | signal generated from the data itself | masked tokens, contrastive pairs |
+| Generative representation | reconstruct or model the data distribution | autoencoders, VAE, autoregressive pretraining |
+| Multimodal representation | align multiple modalities | image-text contrastive learning |
+
+## Anatomy of a representation learning system
+
+A representation learning setup usually contains:
+
+| Component | Role |
+|---|---|
+| Encoder $f_\theta$ | maps input to a representation |
+| Projection head | maps the representation into the loss space, often discarded downstream |
+| Objective | defines what the representation should keep or discard |
+| Data transform | augmentation, masking, corruption, positive pair construction |
+| Readout/head | uses the representation for a later task |
+
+The projection head is an important detail. In contrastive learning, the loss may need a very specific embedding space. But the representation that transfers well may live in the layer before the projection head. Many systems train with a projection head and then discard it during evaluation.
+
+<Note type="warning">
+The objective determines what the representation learns. If augmentation is wrong, positive pairs are wrong, or the masking task is too easy, the model can learn shortcuts: the loss improves, but the representation does not transfer.
+</Note>
+
+## Autoencoders — learning by reconstruction
+
+Autoencoders are one of the classic ways to learn representations:
+
+$$
+z = f_\theta(x), \qquad \hat{x} = g_\phi(z)
+$$
+
+The encoder compresses input into a latent code $z$, and the decoder reconstructs the input as $\hat{x}$. The loss is often reconstruction error:
+
+$$
+\mathcal{L} = \|x - \hat{x}\|^2
+$$
+
+If the bottleneck is tight enough, the encoder must preserve important information. But if the decoder is too powerful or the bottleneck too wide, the autoencoder may simply copy the input without learning a useful representation.
+
+Important variants:
+
+| Variant | Idea |
+|---|---|
+| Denoising autoencoder | corrupt input, reconstruct the clean version |
+| Sparse autoencoder | force only part of the latent code to activate |
+| VAE | learn a latent distribution instead of one fixed vector |
+| VQ-VAE | use discrete latents, useful for image/audio tokenization |
+| MAE | masked autoencoder for images, reconstruct masked patches |
+
+### VAE and structured latent space
+
+A VAE does not encode $x$ into a single vector. It learns a distribution:
+
+$$
+q_\phi(z \mid x)
+$$
+
+Then it samples $z$ and decodes it back to $x$. The objective has two parts: reconstruct well and keep the latent distribution close to a simple prior such as a standard Gaussian.
+
+So VAE sits on the boundary between representation learning and generative modeling. In this article, the main lens is representation: the latent space is organized so it is smooth, sampleable, and interpolatable.
+
+<Note type="paper">
+VAE will return in Generative Models. For now, remember: autoencoders learn representations by forcing information through a latent bottleneck; VAE adds probabilistic structure to that bottleneck.
+</Note>
+
+## Contrastive learning — pull similar views together, push others apart
+
+Contrastive learning learns representations through relative relationships. The idea:
+
+- two views of the same sample are a **positive pair**
+- views from other samples are **negative pairs**
+- embeddings of positives should be close
+- embeddings of negatives should be far apart
+
+For images, we might take one image and apply crop/color jitter/blur to create two views. The model should understand that they contain the same content even though the pixels differ.
+
+A common loss is InfoNCE:
+
+$$
+\mathcal{L}_i = -\log \frac{\exp(\text{sim}(z_i, z_i^+)/\tau)}{\sum_j \exp(\text{sim}(z_i, z_j)/\tau)}
+$$
+
+Here $z_i^+$ is the positive, the other $z_j$ are candidates/negatives, and $\tau$ is the temperature.
+
+| System | Main idea |
+|---|---|
+| SimCLR | large batches provide many negatives |
+| MoCo | a memory queue stores many negatives |
+| CLIP | contrastive learning between image embeddings and text embeddings |
+
+Contrastive learning is strong for retrieval and semantic similarity. The hard part is defining positives and negatives correctly. If augmentation is too strong, positives may lose semantics; if a negative is actually the same class, the model is pushed to separate things that should be close.
+
+## Masked modeling — learning by filling missing parts
+
+Masked modeling does not need labels. It hides part of the input and asks the model to predict the missing part.
+
+In NLP, BERT uses **masked language modeling**: hide tokens and reconstruct them from both-sided context. In vision, MAE hides many image patches, the encoder processes the visible patches, and the decoder reconstructs the masked patches.
+
+| Domain | What is masked | What the model learns |
+|---|---|---|
+| Text | tokens | semantics and syntax from context |
+| Image | patches | object structure, texture, layout |
+| Audio | frames/spans | temporal and spectral patterns |
+| Multimodal | tokens/patches from one modality | alignment and cross-modal reasoning |
+
+Masked modeling differs from contrastive learning because it does not necessarily need negatives. It creates an internal prediction task: to fill the missing part, the model must understand data structure.
+
+<Note type="result">
+Masked modeling pairs naturally with Transformers because self-attention can gather information from the remaining context to predict the masked part. This is one reason BERT, MAE, and many modern pretraining recipes use masking as a central signal.
+</Note>
+
+## Self-distillation and non-contrastive learning
+
+Not all self-supervised representation learning needs negatives or input reconstruction. Methods such as BYOL, SimSiam, and DINO use two networks/views and force their representations to agree.
+
+The general idea:
+
+1. Create two augmentations of the same input.
+2. A student branch predicts the representation of a teacher/target branch.
+3. Use stop-gradient, a momentum teacher, or normalization to avoid collapse.
+
+These methods raise an interesting question: without negatives, why does the model not collapse to the same vector for every input? The answer lies in architecture and optimization details: predictor, stop-gradient, batch/statistics, and momentum updates.
+
+At the anatomy level, remember: non-contrastive learning still learns invariance across views, but replaces "push negatives away" with another anti-collapse mechanism.
+
+## Invariance vs equivariance
+
+A good representation is not always invariant. It should be invariant to irrelevant transformations, but sensitive to meaningful ones.
+
+| Transformation | What should the representation do? | Example |
+|---|---|---|
+| Slight image crop | mostly preserve semantics | object classification |
+| Slight color change | often invariant | contrastive vision pretraining |
+| Object translation | may be equivariant | detection/segmentation |
+| Word order change | should not be fully invariant | NLP |
+| 3D molecule rotation | scalar invariant, vector equivariant | molecular modeling |
+
+This is why augmentation is not a minor detail. It tells the model: "these transformations should not change meaning". If that signal is wrong, the representation learns the wrong bias.
+
+## Evaluating representations
+
+Representation learning is usually evaluated by asking: after the encoder is learned, how much does that representation help other tasks?
+
+| Evaluation | Meaning |
+|---|---|
+| Linear probe | freeze encoder, train a linear classifier |
+| Fine-tuning | update the full model on a downstream task |
+| kNN / retrieval | check whether nearest neighbors share semantics |
+| Clustering | see whether embeddings group by data structure |
+| Transfer | pretrain in one domain, use in another |
+| Few-shot | measure how few labels are needed for good performance |
+
+Linear probing measures whether features are easy to read. Fine-tuning measures whether the pretrained representation is a good initialization. Retrieval measures the geometry of the embedding space.
+
+## Failure modes
+
+Representation learning has several classic failure modes:
+
+- **Collapse**: all inputs get nearly identical embeddings.
+- **Shortcut learning**: the model uses cheap cues like watermark, background, length, or color distribution.
+- **Bad invariance**: augmentation forces the model to discard information that matters.
+- **False negatives**: contrastive loss pushes apart samples that are semantically similar.
+- **Over-compression**: the bottleneck loses details needed downstream.
+- **Domain mismatch**: pretraining data does not match the later task.
+
+<Note type="warning">
+Representation quality is always task-dependent. An embedding that is excellent for retrieval may not be good for generation; color-invariant features may help object classification but hurt medical imaging if color carries diagnostic signal.
+</Note>
+
+## The Big Picture
+
+Representation learning is the layer between backbone architecture and larger model families.
+
+| Family | Main question |
+|---|---|
+| Autoencoder | What must be compressed to reconstruct the input? |
+| Contrastive learning | Which views should be close or far in embedding space? |
+| Masked modeling | What structure is needed to fill missing parts? |
+| Self-distillation | How can we learn invariance without negatives? |
+| Multimodal alignment | How do multiple modalities enter a shared space? |
+
+From this view, many modern systems mainly differ in the objective used to shape latent space. BERT learns representations through masked tokens; SimCLR through positive/negative views; CLIP through image-text alignment; MAE through masked patch reconstruction; VAE through a sampleable latent distribution.
+
+The next Model families article moves from "learning useful representations" to "learning distributions that generate data": [Generative Models](/dl-anatomy/architectures/generative-models-en).
+
+## References
+
+| Paper | |
+|---|---|
+| Rumelhart et al. (1986) | Learning Internal Representations by Error Propagation |
+| Kingma & Welling (2013) | Auto-Encoding Variational Bayes |
+| van den Oord et al. (2017) | Neural Discrete Representation Learning |
+| Chen et al. (2020) | A Simple Framework for Contrastive Learning of Visual Representations |
+| He et al. (2020) | Momentum Contrast for Unsupervised Visual Representation Learning |
+| Devlin et al. (2018) | BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding |
+| He et al. (2021) | Masked Autoencoders Are Scalable Vision Learners |
+| Grill et al. (2020) | Bootstrap Your Own Latent |
+| Caron et al. (2021) | Emerging Properties in Self-Supervised Vision Transformers |

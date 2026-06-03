@@ -238,6 +238,20 @@ declare module 'astro:content' {
   collection: "architectures";
   data: InferEntrySchema<"architectures">
 } & { render(): Render[".mdx"] };
+"representation-learning-en.mdx": {
+	id: "representation-learning-en.mdx";
+  slug: "representation-learning-en";
+  body: string;
+  collection: "architectures";
+  data: InferEntrySchema<"architectures">
+} & { render(): Render[".mdx"] };
+"representation-learning.mdx": {
+	id: "representation-learning.mdx";
+  slug: "representation-learning";
+  body: string;
+  collection: "architectures";
+  data: InferEntrySchema<"architectures">
+} & { render(): Render[".mdx"] };
 "resnet-en.mdx": {
 	id: "resnet-en.mdx";
   slug: "resnet-en";

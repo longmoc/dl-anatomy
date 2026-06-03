@@ -1,0 +1,114 @@
+---
+interface Props {
+  lang?: 'vi' | 'en';
+}
+const { lang = 'vi' } = Astro.props;
+
+const L = lang === 'en'
+  ? {
+      title: 'Representation learning: many objectives, one useful embedding',
+      input: 'input x',
+      encoder: 'encoder',
+      z: 'embedding z',
+      rec: 'reconstruct',
+      contrast: 'align / separate',
+      mask: 'predict missing parts',
+      transfer: 'reuse for downstream tasks',
+      cap: 'Representation learning trains an encoder so different objectives all shape a useful embedding space. The learned representation can then be reused for classification, retrieval, clustering, generation, or multimodal alignment.',
+    }
+  : {
+      title: 'Representation learning: nhiều objective, một embedding hữu ích',
+      input: 'input x',
+      encoder: 'encoder',
+      z: 'embedding z',
+      rec: 'reconstruct',
+      contrast: 'align / tách xa',
+      mask: 'đoán phần bị che',
+      transfer: 'dùng lại cho task sau',
+      cap: 'Representation learning train một encoder để nhiều objective khác nhau cùng định hình một embedding space hữu ích. Representation học được có thể dùng lại cho classification, retrieval, clustering, generation hoặc multimodal alignment.',
+    };
+---
+
+<figure class="rld" data-lang={lang}>
+  <svg viewBox="0 0 680 300" role="img" aria-label="Representation learning objectives" class="rld-svg">
+    <defs>
+      <marker id="rld-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" class="rld-head" />
+      </marker>
+      <marker id="rld-arrow2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" class="rld-head2" />
+      </marker>
+    </defs>
+
+    <text x="340" y="28" class="rld-title">{L.title}</text>
+
+    <rect x="56" y="118" width="92" height="44" rx="8" class="rld-box" />
+    <text x="102" y="144" class="rld-text">{L.input}</text>
+
+    <line x1="148" y1="140" x2="218" y2="140" class="rld-line" marker-end="url(#rld-arrow)" />
+
+    <rect x="220" y="106" width="112" height="68" rx="10" class="rld-encoder" />
+    <text x="276" y="144" class="rld-text strong">{L.encoder}</text>
+
+    <line x1="332" y1="140" x2="402" y2="140" class="rld-line" marker-end="url(#rld-arrow)" />
+
+    <circle cx="438" cy="140" r="34" class="rld-z" />
+    <text x="438" y="145" class="rld-text strong">{L.z}</text>
+
+    <path d="M452,110 C500,62 548,57 594,82" class="rld-branch" fill="none" marker-end="url(#rld-arrow2)" />
+    <path d="M474,140 C514,140 548,140 594,140" class="rld-branch" fill="none" marker-end="url(#rld-arrow2)" />
+    <path d="M452,170 C500,218 548,223 594,198" class="rld-branch" fill="none" marker-end="url(#rld-arrow2)" />
+
+    <rect x="500" y="54" width="130" height="38" rx="8" class="rld-target" />
+    <text x="565" y="77" class="rld-small">{L.rec}</text>
+
+    <rect x="500" y="121" width="130" height="38" rx="8" class="rld-target2" />
+    <text x="565" y="144" class="rld-small">{L.contrast}</text>
+
+    <rect x="500" y="188" width="130" height="38" rx="8" class="rld-target" />
+    <text x="565" y="211" class="rld-small">{L.mask}</text>
+
+    <line x1="438" y1="174" x2="438" y2="240" class="rld-line" marker-end="url(#rld-arrow)" />
+    <rect x="330" y="242" width="216" height="38" rx="8" class="rld-transfer" />
+    <text x="438" y="265" class="rld-small">{L.transfer}</text>
+  </svg>
+  <figcaption class="rld-cap">{L.cap}</figcaption>
+</figure>
+
+<style>
+  .rld {
+    margin: 1.75rem 0;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg2);
+    padding: 0.75rem 0 0.2rem;
+  }
+  .rld-svg { display: block; width: 100%; max-width: 760px; height: auto; margin: 0 auto; }
+  .rld-title { fill: var(--text); font-family: var(--mono); font-size: 13px; font-weight: 600; text-anchor: middle; }
+  .rld-box { fill: var(--bg); stroke: var(--muted); stroke-width: 1.5; }
+  .rld-encoder { fill: var(--bg); stroke: var(--accent); stroke-width: 1.8; }
+  .rld-z { fill: var(--bg); stroke: var(--accent2); stroke-width: 2; }
+  .rld-target { fill: var(--bg); stroke: var(--amber); stroke-width: 1.5; }
+  .rld-target2 { fill: var(--bg); stroke: var(--accent2); stroke-width: 1.5; }
+  .rld-transfer { fill: var(--bg); stroke: var(--accent); stroke-width: 1.5; }
+  .rld-line { stroke: var(--muted); stroke-width: 1.6; }
+  .rld-branch { stroke: var(--accent2); stroke-width: 1.5; opacity: 0.9; }
+  .rld-head { fill: var(--muted); }
+  .rld-head2 { fill: var(--accent2); }
+  .rld-text, .rld-small {
+    fill: var(--text);
+    font-family: var(--mono);
+    text-anchor: middle;
+  }
+  .rld-text { font-size: 12px; }
+  .rld-small { font-size: 10.5px; }
+  .rld-text.strong { font-weight: 700; }
+  .rld-cap {
+    font-size: 0.78rem;
+    color: var(--muted);
+    text-align: center;
+    padding: 0.5rem 1rem 0.65rem;
+    font-style: italic;
+    line-height: 1.5;
+  }
+</style>
