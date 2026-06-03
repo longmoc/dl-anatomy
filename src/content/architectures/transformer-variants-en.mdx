@@ -201,7 +201,7 @@ The central idea is **sparse activation**:
 - the model gains capacity without using all capacity for every token
 
 <Note type="result">
-MoE does not make models "free". It changes the problem from "one large FFN for every token" to "many FFNs, with each token using only a few". If routing works well, we get more capacity at lower compute/token than a dense model with the same total parameter count.
+MoE does not remove the cost of scaling a model; it changes how that cost is allocated. Instead of using one very large FFN for every token, the model keeps many FFN experts and lets each token activate only a few of them. If routing works well, we get more capacity at lower compute/token than a dense model with the same total parameter count, at the cost of routing, load balancing, and system complexity.
 </Note>
 
 ### What does the router learn?

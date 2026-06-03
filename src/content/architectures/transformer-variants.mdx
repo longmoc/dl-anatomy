@@ -201,7 +201,7 @@ Trong đó $g_e(x)$ là trọng số router cho expert $e$.
 - model có nhiều capacity hơn mà không phải dùng toàn bộ capacity cho mọi token
 
 <Note type="result">
-MoE không làm model "miễn phí". Nó đổi bài toán từ "một FFN lớn cho mọi token" sang "nhiều FFN, mỗi token chỉ dùng vài FFN". Nếu routing tốt, ta có thêm capacity với compute/token thấp hơn dense model cùng tổng tham số.
+MoE không xóa chi phí của việc scale model; nó chỉ đổi cách phân bổ chi phí. Thay vì dùng một FFN rất lớn cho mọi token, model giữ nhiều FFN expert và để mỗi token chỉ kích hoạt một vài expert. Nếu routing tốt, ta có thêm capacity với compute/token thấp hơn dense model cùng tổng tham số, đổi lại phải xử lý routing, load balancing và độ phức tạp hệ thống.
 </Note>
 
 ### Router học gì?
