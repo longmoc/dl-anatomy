@@ -53,12 +53,16 @@ Các khái niệm xác suất trong deep learning thường không xuất hiện
 
 Điểm quan trọng: các khái niệm này không nằm riêng rẽ. Trong supervised classification, cross-entropy chính là negative log-likelihood với label one-hot. Trong variational inference, KL đo độ lệch giữa posterior xấp xỉ và prior/posterior thật. Trong language modeling, perplexity là cách diễn giải cross-entropy theo thang dễ đọc hơn.
 
-## Tam giác likelihood, cross-entropy và KL
+## Các lens chính
 
-Likelihood, cross-entropy và KL divergence là ba lens thường gặp nhất khi đọc loss function trong deep learning:
+Các bài trong nhóm này có thể được đọc như nhiều lens khác nhau trên cùng một câu hỏi: model đang biểu diễn uncertainty bằng cách nào?
 
-1. **Likelihood** nhìn từ phía model: dữ liệu thật có xác suất cao dưới model không?
-2. **Cross-entropy** nhìn từ phía coding/loss: dùng model để mã hóa dữ liệu thật tốn bao nhiêu?
-3. **KL divergence** nhìn từ phía mismatch: model khác phân phối thật bao nhiêu?
+| Lens | Dùng để đọc gì? |
+|---|---|
+| Likelihood / cross-entropy / KL | Loss function như cách kéo phân phối model lại gần phân phối dữ liệu |
+| Expectation / Monte Carlo | Vì sao empirical loss và mini-batch gradient là ước lượng của một kỳ vọng |
+| Entropy / mutual information | Uncertainty, compression, bottleneck và lượng thông tin trong representation |
+| Bayesian view | Prior, posterior và uncertainty về tham số hoặc prediction |
+| Sampling / distribution matching | Cách model sinh dữ liệu mới hoặc xấp xỉ một phân phối khó tính trực tiếp |
 
-Cùng một training objective có thể được đọc bằng cả ba lens. Khi hiểu được sự liên hệ này, cross-entropy loss không còn là "công thức để nhét vào classifier" nữa; nó trở thành một cách đo độ lệch giữa phân phối model và phân phối dữ liệu. Chi tiết nằm ở bài [Likelihood, Cross-Entropy & KL Divergence](/dl-anatomy/foundations/likelihood-cross-entropy-kl).
+Điểm chung là các lens này đều biến một câu hỏi mơ hồ — "model học dữ liệu tốt chưa?" — thành câu hỏi có thể tối ưu hoặc đo được: xác suất cao hơn, kỳ vọng thấp hơn, entropy/KL hợp lý hơn, posterior sắc hơn, hoặc sample giống dữ liệu thật hơn.

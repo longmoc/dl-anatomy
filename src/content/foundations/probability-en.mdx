@@ -53,12 +53,16 @@ Probability concepts in deep learning rarely appear as isolated definitions. The
 
 The key point: these concepts do not live separately. In supervised classification, cross-entropy is negative log-likelihood with one-hot labels. In variational inference, KL measures the mismatch between an approximate posterior and a prior or true posterior. In language modeling, perplexity is a more readable scale for cross-entropy.
 
-## The likelihood, cross-entropy, and KL triangle
+## Main lenses
 
-Likelihood, cross-entropy, and KL divergence are the three most common lenses for reading loss functions in deep learning:
+The articles in this group can be read as different lenses on the same question: how does a model represent uncertainty?
 
-1. **Likelihood** reads from the model's side: does the model assign high probability to the observed data?
-2. **Cross-entropy** reads from the coding/loss side: how costly is it to encode true data using the model?
-3. **KL divergence** reads from the mismatch side: how different is the model distribution from the true distribution?
+| Lens | What it helps read |
+|---|---|
+| Likelihood / cross-entropy / KL | loss functions as a way to pull the model distribution toward the data distribution |
+| Expectation / Monte Carlo | why empirical loss and mini-batch gradients are estimates of an expectation |
+| Entropy / mutual information | uncertainty, compression, bottlenecks, and information in representations |
+| Bayesian view | priors, posteriors, and uncertainty over parameters or predictions |
+| Sampling / distribution matching | how models generate new data or approximate distributions that are hard to evaluate directly |
 
-The same training objective can be read through all three lenses. Once that connection is clear, cross-entropy loss is no longer just "the formula used in classifiers"; it becomes a way to measure mismatch between the model distribution and the data distribution. The details are in [Likelihood, Cross-Entropy & KL Divergence](/dl-anatomy/foundations/likelihood-cross-entropy-kl-en).
+The common thread is that these lenses turn a vague question — "has the model learned the data well?" — into something optimizable or measurable: higher probability, lower expected loss, better entropy/KL behavior, sharper posterior beliefs, or samples that look more like real data.
