@@ -6,10 +6,10 @@ const { lang = 'vi' } = Astro.props;
 
 const ui = lang === 'en'
   ? {
-      caption: 'We only ever have data samples (ticks below the axis). They are pushed in one at a time — not left-to-right, in clusters — and each one shapes pθ (green) right where it lands. As enough samples accumulate, pθ grows onto the true data distribution (faint blue) and the divergence D(p_data ‖ pθ) → 0.',
+      caption: 'We never have the true data distribution — only samples from it. A generative model learns a distribution pθ that matches the data: the more samples constrain it, the closer pθ (green) is shaped to the true distribution (faint blue) and the divergence D(p_data ‖ pθ) goes to 0. This matching is the basis of every generative model.',
     }
   : {
-      caption: 'Ta chỉ có sample dữ liệu (các vạch dưới trục). Từng sample được đẩy vào — không theo thứ tự trái–phải, có thể theo cụm — và mỗi sample nắn pθ (xanh lá) mọc lên đúng chỗ nó rơi vào. Gom đủ sample, pθ lớn dần trùm lên phân phối dữ liệu thật (nét xanh dương mờ) và divergence D(p_data ‖ pθ) → 0.',
+      caption: 'Ta không có phân phối dữ liệu thật, chỉ có các sample của nó. Generative model học một phân phối pθ sao cho khớp với dữ liệu: càng nhiều sample ràng buộc, pθ (xanh lá) càng được nắn sát phân phối thật (nét xanh dương mờ) và divergence D(p_data ‖ pθ) tiến về 0. Việc khớp phân phối này là nền của mọi generative model.',
     };
 ---
 
