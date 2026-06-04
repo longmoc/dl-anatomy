@@ -6,12 +6,12 @@ const { lang = 'vi' } = Astro.props;
 
 const ui = lang === 'en'
   ? {
-      caption: 'A generative model draws simple noise and pushes it through Gθ to sample from pθ. Training adjusts θ so the model distribution (green) morphs to match the real data distribution (blue) — the divergence D(p_data ‖ pθ) shrinks toward 0. The falling dots are samples drawn from the current pθ; watch them migrate under the data peaks as the match improves.',
+      caption: 'A generative model draws simple noise and pushes it through Gθ to sample from pθ. Training adjusts θ so the model distribution (green) morphs to match the real data distribution (blue) — the divergence D(p_data ‖ pθ) shrinks toward 0. The ticks on the axis are samples drawn from the current pθ; they slide under the data peaks as the match improves.',
       training: 'training…',
       matched: 'matched ✓',
     }
   : {
-      caption: 'Generative model lấy nhiễu đơn giản rồi đẩy qua Gθ để sample từ pθ. Training chỉnh θ sao cho phân phối model (xanh lá) biến dạng để khớp phân phối dữ liệu thật (xanh dương) — divergence D(p_data ‖ pθ) co dần về 0. Các chấm rơi là sample lấy từ pθ hiện tại; chúng dồn về dưới các đỉnh của dữ liệu khi độ khớp tăng.',
+      caption: 'Generative model lấy nhiễu đơn giản rồi đẩy qua Gθ để sample từ pθ. Training chỉnh θ sao cho phân phối model (xanh lá) biến dạng để khớp phân phối dữ liệu thật (xanh dương) — divergence D(p_data ‖ pθ) co dần về 0. Các vạch trên trục là sample lấy từ pθ hiện tại; chúng trượt dồn về dưới các đỉnh dữ liệu khi độ khớp tăng.',
       training: 'đang train…',
       matched: 'đã khớp ✓',
     };
@@ -46,9 +46,9 @@ document.querySelectorAll('.dmv').forEach(root => {
   let D0 = 0; { const dx = 1 / (N - 1); for (let i = 0; i < N; i++) D0 += Math.abs(target[i] - start[i]) * dx; D0 *= 0.5; }
   const PEAK = Math.max(...target);
 
-  // ---- falling sample particles ----
-  type P = { x: number; y: number; vy: number };
-  const NP = 28;
+  // ---- sample rug: ticks on the axis that glide as pθ morphs ----
+  type P = { x: number; target: number; timer: number };
+  const NP = 34;
   let parts: P[] = [];
 
   const PL = 14, PR = 14, PT = 36, PB = 26;
@@ -100,7 +100,7 @@ document.querySelectorAll('.dmv').forEach(root => {
 
       // init particles once
       if (!started) {
-        parts = Array.from({ length: NP }, () => ({ x: sampleX(cur), y: PT + Math.random() * (H - PT - PB), vy: 70 + Math.random() * 70 }));
+        parts = Array.from({ length: NP }, () => { const x = sampleX(cur); return { x, target: x, timer: Math.random() * 1.2 }; });
         started = true;
       }
 
@@ -128,17 +128,16 @@ document.querySelectorAll('.dmv').forEach(root => {
       area(target, data, data + '22');
       area(cur, model, model + '33');
 
-      // falling samples drawn from current pθ
-      ctx.fillStyle = model;
+      // sample rug: ticks at sampled x-values, gliding as pθ morphs
+      ctx.strokeStyle = model; ctx.lineWidth = 1.6; ctx.globalAlpha = 0.7;
       for (const p of parts) {
         if (!reduce) {
-          p.y += p.vy * dt;
-          if (p.y >= baseY()) { p.y = PT - Math.random() * 26; p.x = sampleX(cur); p.vy = 70 + Math.random() * 70; }
+          p.timer -= dt;
+          if (p.timer <= 0) { p.target = sampleX(cur); p.timer = 0.6 + Math.random() * 0.9; }
+          p.x += (p.target - p.x) * Math.min(1, dt * 5);
         }
         const X = tx(p.x);
-        const fade = p.y > baseY() - 20 ? Math.max(0, (baseY() - p.y) / 20) : 1;
-        ctx.globalAlpha = 0.85 * fade;
-        ctx.beginPath(); ctx.arc(X, p.y, 2.6, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(X, baseY()); ctx.lineTo(X, baseY() - 9); ctx.stroke();
       }
       ctx.globalAlpha = 1;
 
