@@ -1,0 +1,292 @@
+---
+title: "Entropy, Mutual Information & Compression"
+description: "Entropy measures uncertainty, mutual information measures shared information between variables, and compression gives a deeper view of representations, bottlenecks, and generalization."
+lang: en
+category: foundations
+order: 3
+parent: probability
+translation: entropy-mutual-information-compression
+tags: [probability, entropy, mutual-information, compression, information-theory]
+---
+
+import Note from '../../components/Note.astro';
+import InformationBottleneckDiagram from '../../components/InformationBottleneckDiagram.astro';
+
+# Entropy, Mutual Information & Compression
+
+In [Likelihood, Cross-Entropy & KL Divergence](/dl-anatomy/foundations/likelihood-cross-entropy-kl-en), entropy appeared as the uncertainty of a distribution. But entropy is not only a side term in cross-entropy:
+
+$$
+H(p, q) = H(p) + D_{\text{KL}}(p \| q)
+$$
+
+It is the entry point into a broader view: **information theory**. If probability asks "what can happen, and with what probability?", information theory asks:
+
+> How much does this observation reduce uncertainty?
+
+In deep learning, that question appears everywhere:
+
+- how much information does a label contain about the input?
+- how much useful information does an embedding keep?
+- what noise can compression remove?
+- how does contrastive learning increase shared information between views?
+- can a bottleneck improve generalization?
+
+## Entropy — uncertainty before observation
+
+For a discrete random variable $X \sim p(x)$, entropy is:
+
+$$
+H(X) = -\sum_x p(x)\log p(x)
+$$
+
+Entropy measures the average uncertainty of $X$ before observing a concrete value.
+
+| Distribution | Entropy |
+|---|---|
+| certain single value | lowest |
+| nearly uniform over many values | high |
+| heavily skewed to a few values | medium/low |
+
+If we use $\log_2$, the unit is **bits**. If we use $\log_e$, the unit is **nats**. Deep learning usually uses natural log, so losses such as NLL and cross-entropy are often measured in nats.
+
+<Note type="intuition">
+A rare outcome carries more information than a common one. If the weather is sunny every day, "today is sunny" says little. If snow is extremely rare, observing snow reduces uncertainty much more.
+</Note>
+
+## Self-information — surprise of one outcome
+
+The information content of one outcome $x$ is:
+
+$$
+I(x) = -\log p(x)
+$$
+
+The rarer the outcome, the smaller $p(x)$ is, and the larger $-\log p(x)$ becomes. Entropy is the expectation of self-information:
+
+$$
+H(X) = \mathbb{E}_{x\sim p}[-\log p(x)]
+$$
+
+This is why negative log-likelihood has the intuition of "surprise": if the model assigns low probability to real data, that sample creates high surprise and high loss.
+
+## Conditional entropy — how much uncertainty remains after knowing something else?
+
+Conditional entropy measures uncertainty in $Y$ after knowing $X$:
+
+$$
+H(Y \mid X) = -\sum_{x,y}p(x,y)\log p(y\mid x)
+$$
+
+If knowing $X$ predicts $Y$ well, $H(Y\mid X)$ is low. If knowing $X$ does not help, $H(Y\mid X)$ is close to $H(Y)$.
+
+In supervised learning, this is a foundational question:
+
+> How much information does input $X$ contain about label $Y$?
+
+If $Y$ is genuinely noisy or ambiguous even after knowing $X$, then no model can achieve zero loss in a probabilistic sense. Conditional entropy is the irreducible uncertainty limit.
+
+## Mutual information — how much information do two variables share?
+
+Mutual information between $X$ and $Y$ is:
+
+$$
+I(X;Y) = H(Y) - H(Y\mid X)
+$$
+
+It measures how much uncertainty about $Y$ is reduced by knowing $X$.
+
+An equivalent form:
+
+$$
+I(X;Y) = \sum_{x,y}p(x,y)\log \frac{p(x,y)}{p(x)p(y)}
+$$
+
+If $X$ and $Y$ are independent:
+
+$$
+p(x,y)=p(x)p(y)
+$$
+
+then:
+
+$$
+I(X;Y)=0
+$$
+
+If knowing $X$ helps predict $Y$, mutual information is positive.
+
+<Note type="result">
+Mutual information is a more precise way to say "two quantities are related". It does not only measure linear dependence like correlation; in definition, it measures any probabilistic dependence.
+</Note>
+
+## Compression — shorter codes from better distributions
+
+Information theory is tightly connected to coding. If an event is likely, it should receive a short code. If an event is rare, a longer code is acceptable.
+
+Entropy $H(X)$ is the minimum average code length for samples from the true distribution $p(x)$.
+
+Cross-entropy:
+
+$$
+H(p,q) = -\mathbb{E}_{x\sim p}[\log q(x)]
+$$
+
+is the average code length if data truly comes from $p$ but we encode it using model $q$. The extra waste is exactly KL:
+
+$$
+H(p,q) - H(p) = D_{\text{KL}}(p\|q)
+$$
+
+Under the coding view:
+
+- entropy: minimum cost if we know the true distribution
+- cross-entropy: cost when using the model distribution
+- KL: wasted nats/bits because the model is wrong
+
+## Compression in representation learning
+
+Representation learning often wants to keep useful information and discard irrelevant detail. If input is $X$, representation is $Z$, and target is $Y$, a common intuition is:
+
+- $Z$ should keep information about $Y$
+- $Z$ should not keep every detail of $X$
+
+<InformationBottleneckDiagram lang="en" />
+
+This is the spirit of the **information bottleneck**:
+
+$$
+\max I(Z;Y) - \beta I(Z;X)
+$$
+
+where:
+
+- $I(Z;Y)$ encourages the representation to keep target-predictive information
+- $I(Z;X)$ is controlled so the representation does not copy the entire input
+- $\beta$ controls the compression level
+
+This formula should not be treated as a simple recipe for training every model. Mutual information is often hard to estimate accurately in deep learning, especially in continuous and high-dimensional spaces. But it is a powerful lens: a good representation does not keep everything; it keeps the right parts.
+
+<Note type="warning">
+"Compression" does not mean making vectors small at all costs. A small representation that loses important signal is bad. Useful compression removes nuisance variation, not the signal itself.
+</Note>
+
+## Mutual information and contrastive learning
+
+Contrastive learning is often described as pulling positive pairs together and pushing negatives apart. From the information-theoretic view, it can also be read as learning representations that preserve shared information between two views.
+
+Suppose we have two augmentations of the same sample:
+
+$$
+v_1 = a_1(x), \qquad v_2 = a_2(x)
+$$
+
+The encoder produces:
+
+$$
+z_1=f_\theta(v_1), \qquad z_2=f_\theta(v_2)
+$$
+
+The contrastive objective encourages $z_1$ and $z_2$ to share information that remains stable under augmentation. If augmentation is well chosen, that stable part is often semantic content.
+
+InfoNCE is connected to a lower bound on mutual information under certain conditions. But the important intuition is:
+
+> A positive pair defines "what information should be kept"; augmentation defines "what information may be discarded".
+
+If augmentation is wrong, the model can learn the wrong invariance. In medical imaging, too much color distortion may remove diagnostic signal; in OCR, aggressive cropping can remove the character itself.
+
+## Entropy in classification and calibration
+
+A classifier output is a distribution:
+
+$$
+q_\theta(y\mid x)
+$$
+
+The entropy of the output:
+
+$$
+H(q_\theta(\cdot\mid x))
+$$
+
+measures the uncertainty the model expresses for that input.
+
+| Output | Entropy | Intuition |
+|---|---|---|
+| `[0.99, 0.01]` | low | the model is very confident |
+| `[0.55, 0.45]` | higher | the model is unsure |
+| uniform over many classes | high | the model nearly does not know |
+
+But low entropy does not mean the model is correct. A model can be confidently wrong. Calibration asks a different question:
+
+> Among predictions made with 90% confidence, is the model correct about 90% of the time?
+
+Entropy says whether the model is uncertain; calibration says whether that uncertainty is trustworthy.
+
+## Entropy regularization
+
+Sometimes entropy is added to the objective to control the sharpness of a policy or distribution.
+
+In reinforcement learning, an entropy bonus encourages exploration:
+
+$$
+\mathcal{L} = \mathcal{L}_{\text{reward}} - \alpha H(\pi(\cdot\mid s))
+$$
+
+High entropy means the policy has not put all probability on one action, so it still explores.
+
+In classification, label smoothing can also be read as a way to avoid an overly sharp target distribution. Instead of a strict one-hot target, a small amount of probability mass is assigned to other classes. This reduces overconfidence and can improve calibration.
+
+## Minimum description length and generalization
+
+Compression also connects to generalization through an old intuition: a model that explains data with a shorter description is often more trustworthy than a model that must memorize too many random details.
+
+**Minimum Description Length (MDL)** reads learning as a coding problem:
+
+$$
+\text{total length} = \text{model description} + \text{data description given model}
+$$
+
+An overly simple model has a short description but does not compress data well. An overly complex model may compress train data well but has a long model description or learns noise. The good region trades off the two.
+
+In modern deep learning, this connection does not become one simple formula for all large models. But the compression lens remains useful for reading:
+
+- regularization
+- flat minima
+- pruning/quantization
+- representation bottlenecks
+- self-supervised pretraining
+
+## Common misunderstandings
+
+**High entropy is not always bad.** If a task is genuinely ambiguous, high entropy is honest. Forcing confidence on ambiguous data can make calibration worse.
+
+**High mutual information is not always good.** A representation that keeps too much input information may also keep noise, background, shortcuts, or private information.
+
+**Compression is not the same as dimensionality reduction.** A vector with the same dimension can still carry less information if noise, dropout, quantization, or a bottleneck objective controls it.
+
+**The information-theoretic lens does not replace evaluation.** MI and entropy give strong intuition, but estimators in high-dimensional neural networks can be difficult and biased.
+
+## The Big Picture
+
+| Concept | Question |
+|---|---|
+| Self-information | How surprising is this outcome? |
+| Entropy | Before observing, how uncertain are we? |
+| Conditional entropy | After knowing $X$, how much uncertainty remains about $Y$? |
+| Mutual information | How much does knowing $X$ reduce uncertainty about $Y$? |
+| Compression | How can data or representations be encoded more compactly? |
+| Information bottleneck | What should a representation keep about the target and discard from the input? |
+
+From this view, learning is not only loss reduction. It is also the organization of information: keep signal, discard noise, compress unnecessary detail, and create representations rich enough to predict without copying the entire input.
+
+## References
+
+| Paper | |
+|---|---|
+| Shannon (1948) | A Mathematical Theory of Communication |
+| Kullback & Leibler (1951) | On Information and Sufficiency |
+| Tishby et al. (1999) | The Information Bottleneck Method |
+| Hinton & Van Camp (1993) | Keeping the Neural Networks Simple by Minimizing the Description Length of the Weights |
+| van den Oord et al. (2018) | Representation Learning with Contrastive Predictive Coding |
+| Chen et al. (2020) | A Simple Framework for Contrastive Learning of Visual Representations |

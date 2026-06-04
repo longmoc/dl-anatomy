@@ -1,0 +1,292 @@
+---
+title: "Entropy, Mutual Information & Compression"
+description: "Entropy đo uncertainty, mutual information đo phần thông tin chung giữa biến, và compression cho ta cách nhìn sâu hơn về representation, bottleneck và generalization."
+lang: vi
+category: foundations
+order: 3
+parent: probability
+translation: entropy-mutual-information-compression-en
+tags: [probability, entropy, mutual-information, compression, information-theory]
+---
+
+import Note from '../../components/Note.astro';
+import InformationBottleneckDiagram from '../../components/InformationBottleneckDiagram.astro';
+
+# Entropy, Mutual Information & Compression
+
+Trong bài [Likelihood, Cross-Entropy & KL Divergence](/dl-anatomy/foundations/likelihood-cross-entropy-kl), entropy xuất hiện như độ bất định của một phân phối. Nhưng entropy không chỉ là một công thức phụ trong cross-entropy:
+
+$$
+H(p, q) = H(p) + D_{\text{KL}}(p \| q)
+$$
+
+Nó là cửa vào của một góc nhìn rộng hơn: **information theory**. Nếu probability nói "điều gì có thể xảy ra và với xác suất nào", thì information theory hỏi:
+
+> Quan sát này làm ta giảm uncertainty bao nhiêu?
+
+Trong deep learning, câu hỏi đó xuất hiện khắp nơi:
+
+- label chứa bao nhiêu thông tin về input?
+- embedding giữ lại bao nhiêu thông tin hữu ích?
+- compression bỏ được nhiễu nào?
+- contrastive learning đang tăng thông tin chung giữa hai view ra sao?
+- bottleneck có giúp generalize tốt hơn không?
+
+## Entropy — uncertainty trước khi quan sát
+
+Với random variable rời rạc $X \sim p(x)$, entropy là:
+
+$$
+H(X) = -\sum_x p(x)\log p(x)
+$$
+
+Entropy đo độ bất định trung bình của $X$ trước khi quan sát giá trị cụ thể.
+
+| Phân phối | Entropy |
+|---|---|
+| Chắc chắn một giá trị | thấp nhất |
+| Gần uniform trên nhiều giá trị | cao |
+| Lệch mạnh về vài giá trị | vừa/thấp |
+
+Nếu dùng $\log_2$, đơn vị là **bits**. Nếu dùng $\log_e$, đơn vị là **nats**. Deep learning thường dùng natural log, nên loss như NLL/cross-entropy thường tính bằng nats.
+
+<Note type="intuition">
+Một outcome hiếm mang nhiều thông tin hơn outcome phổ biến. Nếu trời ngày nào cũng nắng, câu "hôm nay nắng" không nói thêm nhiều. Nếu một ngày rất hiếm có tuyết, quan sát đó làm uncertainty giảm mạnh.
+</Note>
+
+## Self-information — độ bất ngờ của một outcome
+
+Information content của một outcome $x$ là:
+
+$$
+I(x) = -\log p(x)
+$$
+
+Outcome càng hiếm, $p(x)$ càng nhỏ, nên $-\log p(x)$ càng lớn. Entropy chính là kỳ vọng của self-information:
+
+$$
+H(X) = \mathbb{E}_{x\sim p}[-\log p(x)]
+$$
+
+Đây là lý do negative log-likelihood có trực giác "surprise": nếu model gán xác suất thấp cho dữ liệu thật, sample đó tạo ra nhiều surprise và loss cao.
+
+## Conditional entropy — còn bất định bao nhiêu sau khi biết thông tin khác?
+
+Conditional entropy đo uncertainty của $Y$ sau khi biết $X$:
+
+$$
+H(Y \mid X) = -\sum_{x,y}p(x,y)\log p(y\mid x)
+$$
+
+Nếu biết $X$ giúp dự đoán $Y$ rất tốt, $H(Y\mid X)$ thấp. Nếu biết $X$ không giúp gì, $H(Y\mid X)$ gần $H(Y)$.
+
+Trong supervised learning, đây là câu hỏi nền:
+
+> Input $X$ chứa bao nhiêu thông tin về label $Y$?
+
+Nếu $Y$ thật sự nhiễu hoặc ambiguous ngay cả khi biết $X$, thì không model nào có thể đạt loss bằng 0 theo nghĩa xác suất. Khi đó entropy có điều kiện là giới hạn bất định không thể tránh.
+
+## Mutual information — hai biến chia sẻ bao nhiêu thông tin?
+
+Mutual information giữa $X$ và $Y$:
+
+$$
+I(X;Y) = H(Y) - H(Y\mid X)
+$$
+
+Nó đo lượng uncertainty về $Y$ được giảm đi khi biết $X$.
+
+Một dạng tương đương:
+
+$$
+I(X;Y) = \sum_{x,y}p(x,y)\log \frac{p(x,y)}{p(x)p(y)}
+$$
+
+Nếu $X$ và $Y$ độc lập:
+
+$$
+p(x,y)=p(x)p(y)
+$$
+
+thì:
+
+$$
+I(X;Y)=0
+$$
+
+Nếu biết $X$ giúp dự đoán $Y$, mutual information dương.
+
+<Note type="result">
+Mutual information là cách nói chính xác hơn cho câu "hai đại lượng có liên quan". Nó không chỉ đo quan hệ tuyến tính như correlation; nó đo mọi dạng phụ thuộc xác suất, ít nhất về mặt định nghĩa lý thuyết.
+</Note>
+
+## Compression — mã hóa ngắn hơn nhờ phân phối tốt hơn
+
+Information theory gắn chặt với coding. Nếu một event có xác suất cao, ta nên mã hóa nó bằng code ngắn. Nếu event hiếm, code dài hơn cũng chấp nhận được.
+
+Entropy $H(X)$ là độ dài mã trung bình tối thiểu khi mã hóa sample từ phân phối thật $p(x)$.
+
+Cross-entropy:
+
+$$
+H(p,q) = -\mathbb{E}_{x\sim p}[\log q(x)]
+$$
+
+là độ dài mã trung bình nếu dữ liệu thật đến từ $p$ nhưng ta dùng model $q$ để mã hóa. Phần lãng phí thêm chính là KL:
+
+$$
+H(p,q) - H(p) = D_{\text{KL}}(p\|q)
+$$
+
+Đọc theo coding view:
+
+- entropy: chi phí tối thiểu nếu biết đúng phân phối thật
+- cross-entropy: chi phí khi dùng phân phối model
+- KL: số nats/bits lãng phí vì model sai
+
+## Compression trong representation learning
+
+Representation learning thường muốn giữ thông tin hữu ích và bỏ thông tin không cần. Nếu input là $X$, representation là $Z$, target là $Y$, một trực giác phổ biến là:
+
+- $Z$ nên giữ nhiều thông tin về $Y$
+- $Z$ không nên giữ mọi chi tiết của $X$
+
+<InformationBottleneckDiagram />
+
+Đây là tinh thần của **information bottleneck**:
+
+$$
+\max I(Z;Y) - \beta I(Z;X)
+$$
+
+Trong đó:
+
+- $I(Z;Y)$ khuyến khích representation giữ thông tin dự đoán target
+- $I(Z;X)$ bị kiểm soát để representation không copy toàn bộ input
+- $\beta$ điều chỉnh mức độ nén
+
+Không nên hiểu công thức này như recipe đơn giản để train mọi model. Mutual information trong deep learning thường khó ước lượng chính xác, đặc biệt ở không gian liên tục và high-dimensional. Nhưng nó là một lens mạnh: representation tốt không phải giữ tất cả, mà giữ đúng phần.
+
+<Note type="warning">
+"Nén" không có nghĩa là làm vector nhỏ bằng mọi giá. Một representation nhỏ nhưng mất thông tin quan trọng là tệ. Compression hữu ích là bỏ nuisance variation, không phải bóp nghẹt signal.
+</Note>
+
+## Mutual information và contrastive learning
+
+Contrastive learning thường được mô tả là kéo positive pairs lại gần và đẩy negatives ra xa. Dưới góc nhìn information theory, nó còn có thể được đọc như cách học representation giữ thông tin chung giữa hai view.
+
+Giả sử ta có hai augmentation của cùng một sample:
+
+$$
+v_1 = a_1(x), \qquad v_2 = a_2(x)
+$$
+
+Encoder tạo:
+
+$$
+z_1=f_\theta(v_1), \qquad z_2=f_\theta(v_2)
+$$
+
+Objective contrastive khuyến khích $z_1$ và $z_2$ chia sẻ phần thông tin ổn định dưới augmentation. Nếu augmentation hợp lý, phần ổn định đó thường là semantic content.
+
+InfoNCE có liên hệ với lower bound của mutual information trong một số điều kiện. Nhưng điều quan trọng ở mức trực giác:
+
+> Positive pair định nghĩa "thông tin nào nên giữ"; augmentation định nghĩa "thông tin nào được phép bỏ".
+
+Nếu augmentation sai, model có thể học invariance sai. Ví dụ trong medical imaging, biến đổi màu quá mạnh có thể xóa tín hiệu bệnh lý; trong OCR, crop quá mạnh có thể làm mất chữ.
+
+## Entropy trong classification và calibration
+
+Output của classifier là một phân phối:
+
+$$
+q_\theta(y\mid x)
+$$
+
+Entropy của output:
+
+$$
+H(q_\theta(\cdot\mid x))
+$$
+
+đo uncertainty mà model tự biểu diễn cho input đó.
+
+| Output | Entropy | Trực giác |
+|---|---|---|
+| `[0.99, 0.01]` | thấp | model rất tự tin |
+| `[0.55, 0.45]` | cao hơn | model phân vân |
+| uniform nhiều class | cao | model gần như không biết |
+
+Nhưng entropy thấp không có nghĩa model đúng. Một model có thể rất tự tin sai. Calibration hỏi câu khác:
+
+> Trong những dự đoán 90% confidence, model đúng khoảng 90% thật không?
+
+Entropy nói model có uncertain không; calibration nói uncertainty đó có đáng tin không.
+
+## Entropy regularization
+
+Đôi khi ta thêm entropy vào objective để điều khiển độ chắc chắn của policy/distribution.
+
+Trong reinforcement learning, entropy bonus khuyến khích policy khám phá:
+
+$$
+\mathcal{L} = \mathcal{L}_{\text{reward}} - \alpha H(\pi(\cdot\mid s))
+$$
+
+Entropy cao nghĩa là policy chưa dồn hết xác suất vào một action, nên còn exploration.
+
+Trong classification, label smoothing cũng có thể được nhìn như cách tránh target distribution quá sắc. Thay vì one-hot tuyệt đối, ta cho một lượng nhỏ probability mass sang class khác. Điều này giảm overconfidence và có thể cải thiện calibration.
+
+## Minimum description length và generalization
+
+Compression cũng nối với generalization qua một trực giác lâu đời: mô hình giải thích dữ liệu bằng mô tả ngắn hơn thường đáng tin hơn mô hình phải ghi nhớ quá nhiều chi tiết ngẫu nhiên.
+
+**Minimum Description Length (MDL)** đọc learning như bài toán mã hóa:
+
+$$
+\text{total length} = \text{model description} + \text{data description given model}
+$$
+
+Một model quá đơn giản có description ngắn nhưng không nén data tốt. Một model quá phức tạp có thể nén train data tốt nhưng model description dài hoặc học cả noise. Điểm tốt là trade-off giữa hai phần.
+
+Trong deep learning hiện đại, connection này không chuyển thành một công thức đơn giản cho mọi model lớn. Nhưng lens compression vẫn hữu ích khi đọc:
+
+- regularization
+- flat minima
+- pruning/quantization
+- representation bottleneck
+- self-supervised pretraining
+
+## Những hiểu nhầm thường gặp
+
+**Entropy cao không luôn xấu.** Nếu task thật sự ambiguous, entropy cao là trung thực. Ép model tự tin trong dữ liệu mơ hồ có thể làm calibration tệ hơn.
+
+**Mutual information cao không luôn tốt.** Representation giữ quá nhiều thông tin về input có thể giữ cả noise, background, shortcut hoặc thông tin riêng tư.
+
+**Compression không đồng nghĩa với dimensionality reduction.** Một vector cùng chiều vẫn có thể ít thông tin hơn nếu bị noise, dropout, quantization hoặc bottleneck objective kiểm soát.
+
+**Information theory lens không thay thế evaluation.** MI và entropy cho trực giác mạnh, nhưng estimator trong high-dimensional neural networks có thể khó và bias.
+
+## Bức tranh chung
+
+| Khái niệm | Câu hỏi |
+|---|---|
+| Self-information | Outcome này bất ngờ đến mức nào? |
+| Entropy | Trước khi quan sát, ta bất định bao nhiêu? |
+| Conditional entropy | Biết $X$ rồi còn bất định bao nhiêu về $Y$? |
+| Mutual information | Biết $X$ giảm uncertainty về $Y$ bao nhiêu? |
+| Compression | Có thể mã hóa dữ liệu/representation ngắn hơn bằng cách nào? |
+| Information bottleneck | Representation giữ gì về target và bỏ gì từ input? |
+
+Từ góc nhìn này, learning không chỉ là giảm loss. Nó còn là quá trình tổ chức thông tin: giữ tín hiệu, bỏ nhiễu, nén chi tiết thừa, và tạo representation đủ giàu để dự đoán nhưng không cần copy toàn bộ input.
+
+## Papers tham khảo
+
+| Paper | |
+|---|---|
+| Shannon (1948) | A Mathematical Theory of Communication |
+| Kullback & Leibler (1951) | On Information and Sufficiency |
+| Tishby et al. (1999) | The Information Bottleneck Method |
+| Hinton & Van Camp (1993) | Keeping the Neural Networks Simple by Minimizing the Description Length of the Weights |
+| van den Oord et al. (2018) | Representation Learning with Contrastive Predictive Coding |
+| Chen et al. (2020) | A Simple Framework for Contrastive Learning of Visual Representations |

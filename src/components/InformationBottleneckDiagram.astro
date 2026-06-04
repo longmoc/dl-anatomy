@@ -1,0 +1,110 @@
+---
+interface Props {
+  lang?: 'vi' | 'en';
+}
+const { lang = 'vi' } = Astro.props;
+
+const L = lang === 'en'
+  ? {
+      title: 'Information view: keep what predicts Y, compress what is irrelevant',
+      x: 'input X',
+      z: 'representation Z',
+      y: 'target Y',
+      noise: 'nuisance / noise',
+      keep: 'keep useful info',
+      drop: 'drop irrelevant detail',
+      mi1: 'high I(Z;Y)',
+      mi2: 'controlled I(Z;X)',
+      cap: 'A representation should preserve information about the target while discarding irrelevant variation. This is the intuition behind compression, bottlenecks, and many self-supervised objectives.',
+    }
+  : {
+      title: 'Góc nhìn thông tin: giữ phần dự đoán Y, nén phần không liên quan',
+      x: 'input X',
+      z: 'representation Z',
+      y: 'target Y',
+      noise: 'nhiễu / chi tiết phụ',
+      keep: 'giữ thông tin hữu ích',
+      drop: 'bỏ chi tiết không cần',
+      mi1: 'I(Z;Y) cao',
+      mi2: 'I(Z;X) được kiểm soát',
+      cap: 'Representation tốt nên giữ thông tin liên quan đến target, đồng thời bỏ bớt biến thiên không cần thiết. Đây là trực giác phía sau compression, bottleneck và nhiều objective self-supervised.',
+    };
+---
+
+<figure class="ibd" data-lang={lang}>
+  <svg viewBox="0 0 720 330" role="img" aria-label="Information bottleneck diagram" class="ibd-svg">
+    <defs>
+      <marker id="ibd-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" class="ibd-head" />
+      </marker>
+      <marker id="ibd-arrow2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" class="ibd-head2" />
+      </marker>
+    </defs>
+
+    <text x="360" y="28" class="ibd-title">{L.title}</text>
+
+    <rect x="62" y="122" width="128" height="62" rx="10" class="ibd-box" />
+    <text x="126" y="158" class="ibd-label">{L.x}</text>
+
+    <line x1="190" y1="153" x2="302" y2="153" class="ibd-line" marker-end="url(#ibd-arrow)" />
+    <text x="246" y="137" class="ibd-small">{L.keep}</text>
+
+    <rect x="304" y="112" width="128" height="82" rx="12" class="ibd-z" />
+    <text x="368" y="151" class="ibd-label">{L.z}</text>
+    <text x="368" y="172" class="ibd-small">{L.mi2}</text>
+
+    <line x1="432" y1="153" x2="540" y2="153" class="ibd-line2" marker-end="url(#ibd-arrow2)" />
+    <text x="486" y="137" class="ibd-small">{L.mi1}</text>
+
+    <rect x="542" y="122" width="116" height="62" rx="10" class="ibd-target" />
+    <text x="600" y="158" class="ibd-label">{L.y}</text>
+
+    <path d="M126,184 C145,238 204,262 276,250" class="ibd-noise-line" fill="none" marker-end="url(#ibd-arrow)" />
+    <rect x="206" y="238" width="138" height="38" rx="8" class="ibd-noise" />
+    <text x="275" y="261" class="ibd-small">{L.noise}</text>
+    <text x="188" y="228" class="ibd-small">{L.drop}</text>
+
+    <path d="M368,194 C368,226 368,242 368,268" class="ibd-compress" fill="none" marker-end="url(#ibd-arrow2)" />
+    <rect x="320" y="270" width="96" height="32" rx="8" class="ibd-bottle" />
+    <text x="368" y="290" class="ibd-small">bottleneck</text>
+  </svg>
+  <figcaption class="ibd-cap">{L.cap}</figcaption>
+</figure>
+
+<style>
+  .ibd {
+    margin: 1.75rem 0;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg2);
+    padding: 0.75rem 0 0.2rem;
+  }
+  .ibd-svg { display: block; width: 100%; max-width: 780px; height: auto; margin: 0 auto; }
+  .ibd-title { fill: var(--text); font-family: var(--mono); font-size: 13px; font-weight: 600; text-anchor: middle; }
+  .ibd-box { fill: var(--bg); stroke: var(--accent); stroke-width: 1.8; }
+  .ibd-z { fill: var(--bg); stroke: var(--accent2); stroke-width: 2; }
+  .ibd-target { fill: var(--bg); stroke: var(--amber); stroke-width: 1.8; }
+  .ibd-noise { fill: var(--bg); stroke: var(--border); stroke-width: 1.3; }
+  .ibd-bottle { fill: var(--bg); stroke: var(--muted); stroke-width: 1.3; }
+  .ibd-line { stroke: var(--accent2); stroke-width: 1.7; }
+  .ibd-line2 { stroke: var(--amber); stroke-width: 1.7; }
+  .ibd-noise-line { stroke: var(--muted); stroke-width: 1.5; opacity: 0.7; }
+  .ibd-compress { stroke: var(--muted); stroke-width: 1.4; stroke-dasharray: 4 4; }
+  .ibd-head { fill: var(--muted); }
+  .ibd-head2 { fill: var(--amber); }
+  .ibd-label, .ibd-small {
+    font-family: var(--mono);
+    text-anchor: middle;
+  }
+  .ibd-label { fill: var(--text); font-size: 13px; font-weight: 700; }
+  .ibd-small { fill: var(--muted); font-size: 10px; }
+  .ibd-cap {
+    font-size: 0.78rem;
+    color: var(--muted);
+    text-align: center;
+    padding: 0.5rem 1rem 0.65rem;
+    font-style: italic;
+    line-height: 1.5;
+  }
+</style>

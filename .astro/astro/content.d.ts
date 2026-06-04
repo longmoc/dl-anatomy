@@ -324,6 +324,20 @@ declare module 'astro:content' {
 } & { render(): Render[".mdx"] };
 };
 "foundations": {
+"entropy-mutual-information-compression-en.mdx": {
+	id: "entropy-mutual-information-compression-en.mdx";
+  slug: "entropy-mutual-information-compression-en";
+  body: string;
+  collection: "foundations";
+  data: InferEntrySchema<"foundations">
+} & { render(): Render[".mdx"] };
+"entropy-mutual-information-compression.mdx": {
+	id: "entropy-mutual-information-compression.mdx";
+  slug: "entropy-mutual-information-compression";
+  body: string;
+  collection: "foundations";
+  data: InferEntrySchema<"foundations">
+} & { render(): Render[".mdx"] };
 "expectation-monte-carlo-en.mdx": {
 	id: "expectation-monte-carlo-en.mdx";
   slug: "expectation-monte-carlo-en";
