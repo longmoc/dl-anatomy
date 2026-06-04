@@ -60,8 +60,14 @@ Các thành phần:
 Bayesian learning là quá trình chuyển:
 
 $$
-\text{prior} + \text{data} \rightarrow \text{posterior}
+\underbrace{p(\theta)}_{\text{prior}}
+\;\xrightarrow{\;\times\,p(\mathcal{D}\mid\theta)\;}\;
+\underbrace{p(\theta\mid\mathcal{D})}_{\text{posterior}}
+\;\xrightarrow{\;\int(\cdot)\,d\theta\;}\;
+\underbrace{p(y\mid x,\mathcal{D})}_{\text{predictive}}
 $$
+
+Mũi tên đầu là Bayes' rule (nhân prior với likelihood rồi chuẩn hóa); mũi tên sau là posterior predictive (trung bình hóa qua $\theta$). Hai bước này tương ứng hai phần của hình minh họa trên.
 
 <Note type="intuition">
 Frequentist training thường hỏi "tham số nào tốt nhất?". Bayesian learning hỏi "những tham số nào còn hợp lý sau khi thấy data, và ta nên tin mỗi tham số bao nhiêu?".
