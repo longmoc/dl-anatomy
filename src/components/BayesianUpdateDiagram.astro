@@ -6,53 +6,80 @@ const { lang = 'vi' } = Astro.props;
 
 const L = lang === 'en'
   ? {
-      title: 'Bayesian learning: update belief after seeing data',
-      prior: 'prior p(θ)',
-      likelihood: 'likelihood p(D|θ)',
-      posterior: 'posterior p(θ|D)',
-      predictive: 'posterior predictive',
-      average: 'average predictions over plausible parameters',
-      cap: 'Bayesian learning does not keep only one best parameter value. It updates a prior belief into a posterior distribution, then predicts by averaging over parameter uncertainty.',
+      title: 'Bayesian learning: update a belief, then predict by averaging',
+      subA: 'updating belief over θ',
+      subB: 'predict: average over θ',
+      prior: 'prior', likelihood: 'likelihood', posterior: 'posterior',
+      propto: 'posterior ∝ prior × likelihood',
+      data: 'data', preds: 'one curve per θ', mean: 'mean',
+      cap: 'Bayesian learning keeps a distribution, not one best parameter. Left: data turns a broad prior p(θ) into a narrower posterior p(θ|D) — posterior ∝ prior × likelihood. Right: instead of one θ, predictions are averaged over plausible θ; near the data they agree, far from it they diverge — that spread is predictive uncertainty.',
     }
   : {
-      title: 'Bayesian learning: cập nhật niềm tin sau khi thấy dữ liệu',
-      prior: 'prior p(θ)',
-      likelihood: 'likelihood p(D|θ)',
-      posterior: 'posterior p(θ|D)',
-      predictive: 'posterior predictive',
-      average: 'lấy trung bình dự đoán qua các tham số còn hợp lý',
-      cap: 'Bayesian learning không chỉ giữ một bộ tham số tốt nhất. Nó cập nhật prior thành posterior distribution, rồi dự đoán bằng cách trung bình hóa qua uncertainty của tham số.',
+      title: 'Bayesian learning: cập nhật niềm tin, rồi dự đoán bằng trung bình',
+      subA: 'cập nhật niềm tin về θ',
+      subB: 'dự đoán: trung bình qua θ',
+      prior: 'prior', likelihood: 'likelihood', posterior: 'posterior',
+      propto: 'posterior ∝ prior × likelihood',
+      data: 'dữ liệu', preds: 'mỗi θ một đường', mean: 'trung bình',
+      cap: 'Bayesian learning giữ cả một phân phối, không chỉ một tham số tốt nhất. Trái: dữ liệu biến prior p(θ) (rộng, mơ hồ) thành posterior p(θ|D) hẹp hơn — posterior ∝ prior × likelihood. Phải: thay vì một θ, ta trung bình dự đoán qua các θ còn hợp lý; gần dữ liệu chúng đồng thuận, càng xa càng phân kỳ — đó là uncertainty của dự đoán.',
     };
+
+const y0 = 236;
+const bump = (cx: number, w: number, h: number) =>
+  `M${cx - w},${y0} C${cx - w * 0.5},${y0} ${cx - w * 0.32},${y0 - h} ${cx},${y0 - h} C${cx + w * 0.32},${y0 - h} ${cx + w * 0.5},${y0} ${cx + w},${y0}`;
+
+// panel B fan of prediction curves (lines from a near-common left point, diverging right)
+const fanEnds = [104, 132, 158, 184];
 ---
 
 <figure class="bud" data-lang={lang}>
-  <svg viewBox="0 0 760 330" role="img" aria-label="Bayesian update diagram" class="bud-svg">
+  <svg viewBox="0 0 760 318" role="img" aria-label="Bayesian update diagram" class="bud-svg">
     <defs>
       <marker id="bud-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
         <path d="M0,0 L10,5 L0,10 z" class="bud-head" />
       </marker>
     </defs>
 
-    <text x="380" y="28" class="bud-title">{L.title}</text>
+    <text x="380" y="22" class="bud-title">{L.title}</text>
+    <line x1="380" y1="40" x2="380" y2="294" class="bud-div" />
 
-    <rect x="54" y="92" width="150" height="62" rx="10" class="bud-prior" />
-    <text x="129" y="128" class="bud-label">{L.prior}</text>
+    <!-- ===== Panel A: belief update over θ ===== -->
+    <text x="193" y="48" class="bud-sub">{L.subA}</text>
 
-    <rect x="54" y="188" width="150" height="62" rx="10" class="bud-like" />
-    <text x="129" y="224" class="bud-label">{L.likelihood}</text>
+    <path d={bump(150, 112, 56)} class="bud-prior-c" fill="none" />
+    <path d={bump(224, 70, 84)} class="bud-like-c" fill="none" />
+    <path d={bump(190, 46, 116)} class="bud-post-c" fill="none" />
 
-    <line x1="204" y1="123" x2="302" y2="154" class="bud-line" marker-end="url(#bud-arrow)" />
-    <line x1="204" y1="219" x2="302" y2="185" class="bud-line" marker-end="url(#bud-arrow)" />
+    <line x1="34" y1={y0} x2="350" y2={y0} class="bud-axis" marker-end="url(#bud-arrow)" />
+    <text x="356" y={y0 + 4} class="bud-axislbl">θ</text>
 
-    <rect x="304" y="128" width="166" height="82" rx="12" class="bud-post" />
-    <text x="387" y="164" class="bud-label">{L.posterior}</text>
-    <path d="M334,190 C348,160 370,150 386,174 C404,202 420,186 442,152" class="bud-curve" fill="none" />
+    <text x="92" y="178" class="bud-lbl" style="fill:var(--accent)">{L.prior}</text>
+    <text x="272" y="150" class="bud-lbl" style="fill:var(--amber)">{L.likelihood}</text>
+    <text x="190" y="108" class="bud-lbl" style="fill:var(--accent2)">{L.posterior}</text>
 
-    <line x1="470" y1="169" x2="560" y2="169" class="bud-line2" marker-end="url(#bud-arrow)" />
+    <text x="193" y="262" class="bud-note">{L.propto}</text>
 
-    <rect x="562" y="128" width="150" height="82" rx="12" class="bud-pred" />
-    <text x="637" y="158" class="bud-label">{L.predictive}</text>
-    <text x="637" y="183" class="bud-small">{L.average}</text>
+    <!-- ===== Panel B: posterior predictive ===== -->
+    <text x="575" y="48" class="bud-sub">{L.subB}</text>
+
+    <!-- uncertainty wedge -->
+    <path d={`M432,184 L730,${fanEnds[0]} L730,${fanEnds[fanEnds.length - 1]} Z`} class="bud-band" />
+    <!-- one prediction curve per sampled θ -->
+    {fanEnds.map(e => <line x1="432" y1="184" x2="730" y2={e} class="bud-fan" />)}
+    <!-- mean prediction -->
+    <line x1="432" y1="184" x2="730" y2="145" class="bud-mean" />
+
+    <!-- axes -->
+    <line x1="412" y1="72" x2="412" y2="236" class="bud-axis" />
+    <line x1="412" y1="236" x2="734" y2="236" class="bud-axis" marker-end="url(#bud-arrow)" />
+
+    <!-- data points -->
+    {[[448, 182], [470, 174], [492, 181], [514, 171], [536, 177]].map(([x, y]) => (
+      <circle cx={x} cy={y} r="3.4" class="bud-dot" />
+    ))}
+    <text x="492" y="204" class="bud-lbl2">{L.data}</text>
+    <text x="660" y="96" class="bud-lbl2" style="fill:var(--accent2)">{L.preds}</text>
+    <text x="690" y="158" class="bud-lbl2">{L.mean}</text>
   </svg>
   <figcaption class="bud-cap">{L.cap}</figcaption>
 </figure>
@@ -67,21 +94,22 @@ const L = lang === 'en'
   }
   .bud-svg { display: block; width: 100%; max-width: 820px; height: auto; margin: 0 auto; }
   .bud-title { fill: var(--text); font-family: var(--mono); font-size: 13px; font-weight: 600; text-anchor: middle; }
-  .bud-prior { fill: var(--bg); stroke: var(--accent); stroke-width: 1.8; }
-  .bud-like { fill: var(--bg); stroke: var(--amber); stroke-width: 1.8; }
-  .bud-post { fill: var(--bg); stroke: var(--accent2); stroke-width: 2; }
-  .bud-pred { fill: var(--bg); stroke: var(--muted); stroke-width: 1.8; }
-  .bud-line { stroke: var(--muted); stroke-width: 1.6; }
-  .bud-line2 { stroke: var(--accent2); stroke-width: 1.7; }
+  .bud-div { stroke: var(--border); stroke-width: 1.2; stroke-dasharray: 4 4; }
+  .bud-sub { fill: var(--text); font-family: var(--mono); font-size: 12px; font-weight: 600; text-anchor: middle; }
+  .bud-prior-c { stroke: var(--accent); stroke-width: 1.9; stroke-dasharray: 5 4; }
+  .bud-like-c { stroke: var(--amber); stroke-width: 1.9; }
+  .bud-post-c { stroke: var(--accent2); stroke-width: 2.2; }
+  .bud-axis { stroke: var(--muted); stroke-width: 1.4; }
   .bud-head { fill: var(--muted); }
-  .bud-curve { stroke: var(--accent2); stroke-width: 1.7; }
-  .bud-label, .bud-small {
-    fill: var(--text);
-    font-family: var(--mono);
-    text-anchor: middle;
-  }
-  .bud-label { font-size: 12px; font-weight: 700; }
-  .bud-small { fill: var(--muted); font-size: 9.2px; }
+  .bud-axislbl { fill: var(--text); font-family: var(--mono); font-size: 13px; font-style: italic; text-anchor: middle; }
+  .bud-band { fill: var(--accent2); fill-opacity: 0.12; stroke: none; }
+  .bud-fan { stroke: var(--accent2); stroke-width: 1.1; opacity: 0.4; }
+  .bud-mean { stroke: var(--accent2); stroke-width: 2.4; }
+  .bud-dot { fill: var(--text); stroke: var(--bg2); stroke-width: 1; }
+  .bud-lbl, .bud-lbl2, .bud-note { font-family: var(--mono); text-anchor: middle; }
+  .bud-lbl { font-size: 12px; font-weight: 700; }
+  .bud-lbl2 { fill: var(--muted); font-size: 10px; }
+  .bud-note { fill: var(--muted); font-size: 10px; }
   .bud-cap {
     font-size: 0.78rem;
     color: var(--muted);
