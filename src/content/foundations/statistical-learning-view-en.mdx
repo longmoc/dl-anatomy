@@ -1,0 +1,680 @@
+---
+title: "Statistical Learning View of Deep Learning"
+description: "Deep learning as learning from finite samples: true risk, empirical risk, generalization gap, capacity, inductive bias, double descent, and implicit regularization."
+lang: en
+category: foundations
+order: 1
+translation: statistical-learning-view
+tags: [statistical-learning, generalization, empirical-risk, overfitting, inductive-bias]
+---
+
+import Note from '../../components/Note.astro';
+import StatisticalLearningDiagram from '../../components/StatisticalLearningDiagram.astro';
+
+# Statistical Learning View of Deep Learning
+
+A large neural network can fit a training set almost perfectly. But the goal is not to memorize the training set. The goal is to predict well on data it has not seen.
+
+The statistical learning view starts from one foundational question:
+
+> Why can a function learned from finite samples work well on the whole data distribution?
+
+This is a different lens from architecture or optimization. Architecture asks which blocks build the model. Optimization asks how we find good parameters. Probability asks how the model assigns probabilities. Statistical learning asks:
+
+- how representative is the training set of the real distribution?
+- does minimizing train loss reduce test loss?
+- is the model class too broad?
+- how do regularization and inductive bias constrain the chosen solution?
+- why do overparameterized networks still generalize?
+
+In short: deep learning is not merely loss minimization. It is the process of selecting one function among many functions that could fit the data, and the hard question is why the selected function remains correct outside the training set.
+
+<StatisticalLearningDiagram lang="en" />
+
+## Setup: data comes from a distribution
+
+Assume there is a real data distribution:
+
+$$
+(x,y) \sim p_{\text{data}}(x,y)
+$$
+
+The training set is $n$ samples from that distribution:
+
+$$
+\mathcal{D}_{\text{train}}
+=
+\{(x_i,y_i)\}_{i=1}^{n}
+$$
+
+In the simplest setting, samples are assumed **i.i.d.**:
+
+$$
+(x_i,y_i) \overset{\text{i.i.d.}}{\sim} p_{\text{data}}(x,y)
+$$
+
+i.i.d. means independent and identically distributed:
+
+- independent: each sample is not directly dependent on another sample
+- identically distributed: all samples come from the same distribution
+
+This assumption is not always true in practice. Web data has duplicates, time series are correlated, user behavior changes over time, and deployment data can drift away from training data. But i.i.d. is the clean starting point for defining learning.
+
+## True risk
+
+A model $f$ is evaluated through a loss:
+
+$$
+\ell(f(x),y)
+$$
+
+The true risk, or population risk, is expected loss over the real data distribution:
+
+$$
+R(f)
+=
+\mathbb{E}_{(x,y)\sim p_{\text{data}}}
+[\ell(f(x),y)]
+$$
+
+This is what we actually care about. If $R(f)$ is low, the model performs well on data from the real world.
+
+The problem: we do not know $p_{\text{data}}$. We cannot compute an expectation over the entire world. We only have a finite training set.
+
+## Empirical risk
+
+Empirical risk is average loss on the training set:
+
+$$
+\hat{R}_{\mathcal{D}}(f)
+=
+\frac{1}{n}
+\sum_{i=1}^{n}
+\ell(f(x_i),y_i)
+$$
+
+Ordinary training minimizes empirical risk:
+
+$$
+\hat{f}
+=
+\arg\min_{f\in\mathcal{F}}
+\hat{R}_{\mathcal{D}}(f)
+$$
+
+This is **Empirical Risk Minimization**, ERM.
+
+For neural networks, we usually write $f_\theta$:
+
+$$
+\hat{\theta}
+=
+\arg\min_\theta
+\frac{1}{n}
+\sum_{i=1}^{n}
+\ell(f_\theta(x_i),y_i)
+$$
+
+In deep-learning language: training loss is an estimate of true risk. When the dataset is representative and the learning algorithm has the right bias, reducing train loss often reduces test loss. The word "often" hides a lot of theory.
+
+<Note type="intuition">
+ERM is like learning traffic rules from a finite set of driving videos. If the videos are representative, the learned rules work outside the videos. If the videos only show highways during the day, the model may look excellent on training data and behave poorly in narrow streets at night.
+</Note>
+
+## Generalization gap
+
+The generalization gap is the difference between true risk and empirical risk:
+
+$$
+R(\hat{f}) - \hat{R}_{\mathcal{D}}(\hat{f})
+$$
+
+In practice, we do not know $R(\hat{f})$, so we estimate it with validation or test risk:
+
+$$
+\hat{R}_{\text{test}}(\hat{f})
+-
+\hat{R}_{\text{train}}(\hat{f})
+$$
+
+If train loss is low but test loss is high, the model is overfitting. It has learned details specific to the training set instead of stable structure in the data distribution.
+
+But generalization is not only "small train-test gap." A model can have high train loss and high test loss: underfitting. Another model can have very low train loss and low test loss: good fitting. What we want is **low true risk**, not merely a small gap.
+
+## Three errors: approximation, estimation, optimization
+
+A useful decomposition separates three sources of error.
+
+Let $f^*$ be the best possible function in an ideal function space:
+
+$$
+f^* = \arg\min_f R(f)
+$$
+
+Let $f_{\mathcal{F}}^*$ be the best function inside the hypothesis class $\mathcal{F}$:
+
+$$
+f_{\mathcal{F}}^*
+=
+\arg\min_{f\in\mathcal{F}} R(f)
+$$
+
+Let $\hat{f}$ be the function found by training.
+
+There are three broad error sources:
+
+| Error type | Meaning | Common DL source |
+|---|---|---|
+| Approximation error | $\mathcal{F}$ does not contain a good enough function | weak architecture, poor representation |
+| Estimation error | finite training data makes us choose the wrong function | little data, noisy data, too broad a class |
+| Optimization error | the algorithm does not find the desired solution | loss landscape, lr, optimizer, batch size |
+
+Deep learning is interesting because increasing model size often reduces approximation error, but classical theory warns that it may increase estimation error. In modern practice, very large models can still generalize when data, architecture, optimizer, and regularization work together.
+
+## Hypothesis class
+
+A model does not choose from every imaginable function. It chooses inside a hypothesis class:
+
+$$
+\mathcal{F}
+=
+\{f_\theta : \theta \in \Theta\}
+$$
+
+For linear models, $\mathcal{F}$ is the set of linear functions. For CNNs, $\mathcal{F}$ contains functions structured by convolution, locality, and weight sharing. For Transformers, $\mathcal{F}$ contains functions that process tokens through attention, MLPs, residual paths, and normalization.
+
+A broader hypothesis class can fit more patterns. But broader is not automatically better. Without the right bias, a model can fit noise.
+
+In deep learning, architecture is one way to impose bias:
+
+- CNNs favor locality and translation equivariance
+- RNNs/SSMs favor sequential processing and state
+- Transformers favor content-based interactions between tokens
+- GNNs favor relational/message-passing structure
+
+These biases are not guaranteed to be correct. They merely make some functions easier to learn than others.
+
+## Inductive bias
+
+Inductive bias is what the model or training procedure assumes before seeing the data. Without inductive bias, learning from finite samples is impossible: infinitely many functions can fit the training set while behaving differently outside it.
+
+In deep learning, inductive bias comes from many sources:
+
+| Bias source | Examples |
+|---|---|
+| Architecture | convolution, attention masks, residual connections |
+| Loss | cross-entropy, contrastive loss, reconstruction loss |
+| Optimizer | SGD, AdamW, momentum, weight decay |
+| Initialization | scale, symmetry breaking, pretrained weights |
+| Data augmentation | crop, flip, mixup, noise |
+| Training schedule | learning rate, warmup, early stopping |
+| Dataset | scale, diversity, labeling convention |
+
+An easy point to miss: **the dataset is also inductive bias**. The model learns from the distribution represented by the dataset. If the dataset is biased, the model learns that bias.
+
+<Note type="intuition">
+Generalization is not magic. It comes from structure in the world and biases in the model/training recipe that match that structure. CNNs work well for images because images have locality. Language models work because text has statistical and semantic regularities at scale.
+</Note>
+
+## Overfitting and underfitting
+
+Underfitting happens when the model cannot learn the needed structure:
+
+- high train loss
+- high validation/test loss
+- model too simple or optimization not good enough
+
+Overfitting happens when the model learns noise or training-set-specific details:
+
+- low train loss
+- high validation/test loss
+- model too flexible for the data or regularization too weak
+
+But in modern deep learning, the story is no longer as simple as "large model means overfit." Many larger models generalize better, especially when data is large and training is done well.
+
+So overfitting should mean: the model learned patterns that do not remain stable outside the training distribution, not merely that it has many parameters.
+
+## Bias-variance view
+
+In classical statistics, prediction error can be read through bias and variance.
+
+**Bias** is error from restrictive assumptions. A linear model fit to strongly nonlinear data has high bias.
+
+**Variance** is sensitivity to the specific training set. If a small change in the training set produces a large change in the model, variance is high.
+
+Intuition:
+
+| State | Bias | Variance |
+|---|---|---|
+| Underfit | high | low |
+| Classical overfit | low | high |
+| Good model | moderate/low | controlled |
+
+Regularization is often read as reducing variance by constraining the model:
+
+- L2 weight decay avoids overly large weights
+- dropout prevents dependence on one path
+- augmentation forces invariances
+- early stopping avoids late-stage noise fitting
+
+In modern deep learning, bias-variance remains useful intuition, but it does not explain everything. Overparameterized models can have low variance in function space even when parameter space is huge.
+
+## Capacity: VC dimension and Rademacher complexity
+
+Classical statistical learning theory tries to measure the "size" of the hypothesis class.
+
+VC dimension measures the ability to shatter a set of points: a class has high VC dimension if it can assign arbitrary labels to many points.
+
+Rademacher complexity measures the ability to fit random noise. If a class can easily fit random signs, it has high complexity.
+
+Many bounds have the shape:
+
+$$
+R(f)
+\le
+\hat{R}_{\mathcal{D}}(f)
++
+\text{complexity}(\mathcal{F}, n)
+$$
+
+The complexity term usually decreases as $n$ grows and increases as $\mathcal{F}$ becomes more complex.
+
+A rough intuition:
+
+$$
+\text{generalization gap}
+\approx
+O\left(
+\sqrt{\frac{\text{capacity}}{n}}
+\right)
+$$
+
+Do not read this as a precise bound for modern neural networks. Read it as a warning: if the class is too flexible relative to the data, low train loss alone does not guarantee low test loss.
+
+## Uniform convergence
+
+Uniform convergence asks:
+
+> Is empirical risk close to true risk for every function in $\mathcal{F}$?
+
+If for all $f\in\mathcal{F}$:
+
+$$
+\left|
+R(f)-\hat{R}_{\mathcal{D}}(f)
+\right|
+$$
+
+is small, then choosing a function with low empirical risk becomes safer.
+
+This is the logic behind many generalization bounds. But for deep networks, classical uniform bounds are often too loose. Neural networks can fit random labels, so if we only measure rough capacity, theory predicts poor generalization. In practice, they still generalize on real data.
+
+This does not make statistical learning wrong. It says rough capacity is not enough. We also need to understand:
+
+- what structure the data distribution has
+- which solutions the optimizer selects
+- which functions the architecture favors
+- whether representation learning makes the problem simpler
+- how margin, flatness, norm, and stability matter
+
+## What generalization bounds say and do not say
+
+A generalization bound often has the form:
+
+$$
+R(\hat{f})
+\le
+\hat{R}_{\mathcal{D}}(\hat{f})
++
+\epsilon(n,\mathcal{F},\delta)
+$$
+
+with probability at least $1-\delta$.
+
+It says: if train risk is low and the complexity term is small, true risk is also low.
+
+But in modern deep learning, many bounds are:
+
+- theoretically correct but too loose to predict real performance
+- based on the worst-case hypothesis class rather than the actual solution found
+- not using enough structure of the data
+- hard to compare across large modern models
+
+So the lesson is not "ignore theory." The lesson is: classical theory gives vocabulary and warnings, while deep learning needs additional lenses about optimization, representation, and data scale.
+
+## No Free Lunch
+
+The No Free Lunch theorem roughly says: averaged over all possible tasks, no learning algorithm is better than another.
+
+This sounds pessimistic, but it is useful. It says learning is possible only because we are not learning in arbitrary random worlds. We learn in worlds with structure:
+
+- images have edges, textures, objects, composition
+- text has grammar, semantics, discourse
+- audio has frequency structure
+- graphs have relational patterns
+- physical systems have continuity and constraints
+
+Deep learning succeeds because architecture, data, and optimization exploit these structures.
+
+## Regularization
+
+Regularization makes some solutions preferred over others.
+
+A regularized objective often looks like:
+
+$$
+\min_\theta
+\hat{R}_{\mathcal{D}}(f_\theta)
++
+\lambda\Omega(\theta)
+$$
+
+For L2:
+
+$$
+\Omega(\theta)=\|\theta\|_2^2
+$$
+
+But in deep learning, regularization is not only a term in the loss. Many regularizers are implicit:
+
+- data augmentation
+- dropout
+- early stopping
+- batch-normalization noise
+- label smoothing
+- mixup/cutmix
+- optimizer dynamics
+- architectural constraints
+
+Good regularization does not merely raise train loss a little. It pushes the model toward patterns that remain stable outside the training set.
+
+## Stability view
+
+A learning algorithm is stable if replacing one training sample does not change the learned model too much.
+
+Intuition:
+
+> If a model depends extremely strongly on a few individual samples, it may be memorizing. If it learns patterns stable across many samples, it is more likely to generalize.
+
+Stability relates to:
+
+- smooth losses
+- regularization
+- learning rate
+- number of training steps
+- batch size
+- data augmentation
+
+In deep learning, stability is not the whole story, but it is a useful lens for why some training recipes are more robust than others.
+
+## Margin view
+
+In classification, margin measures how safely correct a model is.
+
+For a binary classifier, margin can be read as:
+
+$$
+y f(x)
+$$
+
+If the margin is large and positive, the model is not merely correct; it is correct with room to spare. If the margin is close to zero, a small perturbation can flip the prediction.
+
+Generalization often improves when the model achieves large margins on training data, especially if norms are controlled. This is why SVMs maximize margin, and why margin/norm terms appear in many neural-network analyses.
+
+In deep learning, cross-entropy tends to keep increasing confidence even after training accuracy reaches 100%. This is connected to margin dynamics and implicit optimization bias.
+
+## Flat minima
+
+A sharp minimum is one where loss rises quickly after small parameter changes. A flat minimum lies in a wider low-loss region.
+
+Common intuition:
+
+- flat minima may be more robust to perturbations
+- sharp minima may be more sensitive and generalize worse
+
+But caution is needed: "flatness" in parameter space depends on reparameterization. A network can be rescaled without changing the function while changing curvature. So flatness is most useful when tied to norms, scale, or function-space behavior.
+
+Still, the intuition is useful: good training recipes often find solutions that are not overly fragile.
+
+## Overparameterization
+
+Overparameterization means the model has many parameters, often more than the number of training samples.
+
+Classically, this is alarming: too many parameters make it easier to fit noise. And neural networks can indeed fit random labels.
+
+But on real data, overparameterization can help:
+
+- optimization becomes easier because there are many paths to low loss
+- the model can learn richer representations
+- interpolation does not necessarily mean harmful memorization
+- the optimizer may select simpler functions in function space
+
+The key point: parameter count is not the only measure of complexity. Two networks with the same number of parameters can represent very different functions, and the same network can learn different solutions depending on optimizer, data, and regularization.
+
+## Interpolation regime
+
+Interpolation happens when the model fits training data almost perfectly:
+
+$$
+\hat{R}_{\mathcal{D}}(\hat{f}) \approx 0
+$$
+
+In classical ML, interpolation was often treated as overfitting. But modern deep learning often operates in the interpolation regime and still performs well on test data.
+
+Why?
+
+One view: many functions fit the training data. Optimization and inductive bias do not choose randomly among them. They prefer functions that are "simple" or "aligned with data structure" in some sense.
+
+So the question is not:
+
+> Does the model fit the training data?
+
+but:
+
+> Which training-data-fitting function did training select?
+
+## Double descent
+
+The classical bias-variance curve says test error decreases and then increases as model complexity grows too much. Double descent adds a third phase.
+
+As model capacity increases:
+
+1. underparameterized: the model is too weak; train/test are both poor
+2. interpolation threshold: the model just becomes able to fit training data; test error can spike
+3. overparameterized: the model grows even larger; test error can decrease again
+
+This is double descent.
+
+It does not say "larger is always better." It says the generalization curve of modern models is not a simple U-shape. The result depends on data, noise, optimizer, regularization, and scale.
+
+Double descent helps explain why increasing model size can improve test performance even when the model could already fit the training data.
+
+## Benign overfitting
+
+Benign overfitting is the phenomenon where a model fits training data, including some noise, without severely hurting test performance.
+
+One intuition: in high-dimensional space, a model can spend part of its capacity interpolating training noise while still learning the main signal in important directions. If noise lies in directions that do not matter much for the test distribution, overfitting can be relatively "benign."
+
+This is subtle. Not all overfitting is benign. Label noise, spurious correlations, and leakage can still severely hurt a model.
+
+## Implicit regularization
+
+Implicit regularization is the bias of the training procedure even when the objective has no explicit regularization term.
+
+Classic example: in overparameterized linear regression, gradient descent from small initialization tends to choose the minimum-norm solution among infinitely many solutions that fit training data.
+
+For deep networks, implicit bias is more complex, but the idea is similar:
+
+- initialization affects the basin of solutions
+- SGD noise affects the path
+- large learning rates can favor flatter regions
+- batch size changes stochasticity
+- normalization changes optimization geometry
+- architecture makes some functions easier to reach
+
+So training does not only answer "which solution has low loss?". It answers "which low-loss solution is reached, from where, along which path, with which bias?".
+
+## SGD as more than an optimizer
+
+SGD is not only a cheap way to compute gradients. It uses mini-batch gradients:
+
+$$
+g_t
+=
+\frac{1}{B}
+\sum_{i\in\mathcal{B}_t}
+\nabla_\theta \ell(f_\theta(x_i),y_i)
+$$
+
+This gradient is noisy relative to the full gradient. That noise can affect the final solution.
+
+In practice:
+
+- smaller batches usually create more stochasticity
+- the learning-rate schedule decides which loss regions the model traverses
+- early stopping chooses a time before the model fits noise too deeply
+- weight decay and augmentation change which solutions are preferred
+
+So generalization is a property of the whole **model + data + optimizer + recipe**, not only architecture.
+
+## Data scale
+
+More data is often the strongest regularizer.
+
+As $n$ grows, empirical risk usually gets closer to true risk. But not all samples are equally valuable:
+
+- duplicates do not increase real coverage much
+- diverse data covers more modes
+- clean labels reduce irreducible noise
+- data matching deployment matters more than huge data from the wrong domain
+
+In foundation models, scale adds another effect: a large model can learn general representations from broad data, then transfer to specific tasks.
+
+The statistical learning view connects here to representation learning: if the representation turns a complex task into a linear or nearly linear one, the number of samples needed for downstream learning can drop sharply.
+
+## Distribution shift
+
+ERM formulas usually assume train and test come from the same distribution:
+
+$$
+p_{\text{train}}(x,y)
+=
+p_{\text{test}}(x,y)
+$$
+
+In deployment, this is often false:
+
+$$
+p_{\text{train}}(x,y)
+\neq
+p_{\text{test}}(x,y)
+$$
+
+Common shifts:
+
+| Shift | Meaning |
+|---|---|
+| Covariate shift | $p(x)$ changes, but $p(y\mid x)$ is relatively stable |
+| Label shift | $p(y)$ changes |
+| Concept shift | the relationship $p(y\mid x)$ changes |
+| Domain shift | data comes from a different environment |
+| Temporal shift | the distribution changes over time |
+
+Generalization on an i.i.d. test split does not guarantee robustness under distribution shift. This is why OOD evaluation, calibration, uncertainty, and monitoring matter.
+
+## Spurious correlation
+
+A spurious correlation is a pattern that helps on internal train/test data but is not causal or stable outside the domain.
+
+Examples:
+
+- an object classifier recognizes background instead of the object
+- a medical model learns scanner artifacts instead of disease
+- a toxicity model learns keywords instead of context
+- a hiring model learns historical bias
+
+The statistical learning view reminds us that a model will use shortcuts if they reduce empirical risk. Avoiding shortcuts requires data, augmentation, objectives, or architectures that push the model toward more stable signals.
+
+## Evaluation
+
+If the goal is low true risk, evaluation must represent the distribution that matters.
+
+A good validation set should be:
+
+- separate from training data
+- free of leakage
+- close enough to deployment distribution
+- diverse across important modes
+- measured with metrics that reflect real costs
+
+In deep learning, metrics are not merely reporting details. Metrics define behavior indirectly. If a metric misses a failure mode, the model can look good while failing in practice.
+
+## How deep learning differs from classical statistical learning
+
+The classical concepts still matter: risk, ERM, capacity, regularization, generalization gap. But deep learning adds several twists:
+
+| Classical view | Modern deep learning |
+|---|---|
+| small/medium model classes | huge overparameterized models |
+| features often hand-crafted | representations learned from data |
+| more convex optimization | nonconvex but large-scale |
+| explicit regularization | implicit and recipe-heavy |
+| rough capacity bounds more useful | classical bounds often too loose |
+| small/medium datasets | massive data scale |
+
+So classical theory should not be applied mechanically. But it should not be ignored either. It gives us the vocabulary for asking the right questions.
+
+## A statistical-learning map of deep learning
+
+| Lens | Question |
+|---|---|
+| True risk | Does the model work on the real distribution? |
+| Empirical risk | What estimate is train loss measuring? |
+| Generalization gap | How far apart are train and test? |
+| Capacity | What can the model class fit? |
+| Inductive bias | Why does the model prefer this solution over another? |
+| Regularization | How are we constraining or directing the solution? |
+| Optimization bias | Which solution does SGD/Adam choose among many good ones? |
+| Distribution shift | Do train/test/deployment share the same distribution? |
+
+## Common misunderstandings
+
+**Low train loss is not enough.** What matters is low true risk. Train loss is only an estimate on finite samples.
+
+**Many parameters do not automatically mean overfitting.** Parameter count is a crude measure. The learned function, optimizer, data, and regularization matter more.
+
+**Regularization is not only L2/dropout.** Augmentation, early stopping, architecture, and optimizer all regularize in a broad sense.
+
+**The test set is not the real world.** A test set is also a sample. If it is biased or too clean, deployment can still fail.
+
+**Generalization is not only a bound.** Bounds give insight, but real performance comes from data structure, representation, optimization, and scale.
+
+## Big picture
+
+The statistical learning view turns deep learning into a sharp question:
+
+> Among the many functions that can fit the training data, why does training select one that works on unseen data?
+
+The answer does not come from one factor. It is the combination of:
+
+- representative data
+- a hypothesis class with suitable inductive bias
+- optimization that finds a useful solution
+- regularization that avoids unstable patterns
+- representations that simplify the task
+- evaluation that measures the right distribution
+
+This is why deep learning is both mathematical and empirical. True risk is a theoretical concept, but reducing it in practice requires architecture, data pipelines, optimizers, augmentation, metrics, and deployment feedback to work together.
+
+## References
+
+| Paper | |
+|---|---|
+| Vapnik & Chervonenkis (1971) | On the Uniform Convergence of Relative Frequencies of Events to Their Probabilities |
+| Valiant (1984) | A Theory of the Learnable |
+| Blumer et al. (1989) | Learnability and the Vapnik-Chervonenkis Dimension |
+| Bartlett & Mendelson (2002) | Rademacher and Gaussian Complexities: Risk Bounds and Structural Results |
+| Zhang et al. (2017) | Understanding Deep Learning Requires Rethinking Generalization |
+| Neyshabur et al. (2017) | Exploring Generalization in Deep Learning |
+| Belkin et al. (2019) | Reconciling Modern Machine-Learning Practice and the Classical Bias-Variance Trade-Off |
+| Nakkiran et al. (2021) | Deep Double Descent: Where Bigger Models and More Data Hurt |

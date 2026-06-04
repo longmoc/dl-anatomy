@@ -1,0 +1,680 @@
+---
+title: "Statistical Learning View of Deep Learning"
+description: "Nhìn deep learning như bài toán học từ sample hữu hạn: true risk, empirical risk, generalization gap, capacity, inductive bias, double descent và implicit regularization."
+lang: vi
+category: foundations
+order: 1
+translation: statistical-learning-view-en
+tags: [statistical-learning, generalization, empirical-risk, overfitting, inductive-bias]
+---
+
+import Note from '../../components/Note.astro';
+import StatisticalLearningDiagram from '../../components/StatisticalLearningDiagram.astro';
+
+# Statistical Learning View of Deep Learning
+
+Một neural network lớn có thể fit train set gần như hoàn hảo. Nhưng điều ta thật sự cần không phải là nhớ train set. Ta cần model dự đoán tốt trên dữ liệu chưa thấy.
+
+Statistical learning view bắt đầu từ câu hỏi:
+
+> Vì sao một hàm học từ sample hữu hạn có thể hoạt động tốt trên toàn bộ phân phối dữ liệu?
+
+Đây là một lens khác với architecture hoặc optimizer. Architecture hỏi model được xây bằng block nào. Optimization hỏi làm sao tìm tham số tốt. Probability hỏi model gán xác suất thế nào. Statistical learning hỏi:
+
+- train set đại diện cho phân phối thật đến mức nào?
+- minimize train loss có kéo test loss xuống không?
+- model class có quá rộng không?
+- regularization và inductive bias đang giới hạn nghiệm ra sao?
+- tại sao overparameterized network vẫn generalize?
+
+Nếu nói ngắn gọn: deep learning không chỉ là minimize loss. Nó là quá trình chọn một hàm từ rất nhiều hàm có thể fit data, và câu hỏi khó là vì sao hàm được chọn lại đúng ngoài train set.
+
+<StatisticalLearningDiagram />
+
+## Setup: dữ liệu đến từ một phân phối
+
+Ta giả sử có một phân phối dữ liệu thật:
+
+$$
+(x,y) \sim p_{\text{data}}(x,y)
+$$
+
+Train set là $n$ sample từ phân phối đó:
+
+$$
+\mathcal{D}_{\text{train}}
+=
+\{(x_i,y_i)\}_{i=1}^{n}
+$$
+
+Trong setting đơn giản nhất, các sample được giả định **i.i.d.**:
+
+$$
+(x_i,y_i) \overset{\text{i.i.d.}}{\sim} p_{\text{data}}(x,y)
+$$
+
+i.i.d. nghĩa là independent and identically distributed:
+
+- independent: mỗi sample không phụ thuộc trực tiếp vào sample khác
+- identically distributed: tất cả sample đến từ cùng một phân phối
+
+Giả định này không luôn đúng trong thực tế. Data web có duplicate, time series có correlation, user behavior thay đổi theo thời gian, dữ liệu deployment có thể lệch khỏi dữ liệu train. Nhưng i.i.d. là điểm xuất phát sạch để định nghĩa learning.
+
+## True risk
+
+Một model $f$ được đánh giá bằng loss:
+
+$$
+\ell(f(x),y)
+$$
+
+True risk, hay population risk, là loss kỳ vọng trên phân phối dữ liệu thật:
+
+$$
+R(f)
+=
+\mathbb{E}_{(x,y)\sim p_{\text{data}}}
+[\ell(f(x),y)]
+$$
+
+Đây là quantity ta thật sự quan tâm. Nếu $R(f)$ thấp, model tốt trên dữ liệu đến từ thế giới thật.
+
+Vấn đề: ta không biết $p_{\text{data}}$. Ta cũng không thể tính kỳ vọng trên toàn bộ thế giới. Ta chỉ có train set hữu hạn.
+
+## Empirical risk
+
+Empirical risk là loss trung bình trên train set:
+
+$$
+\hat{R}_{\mathcal{D}}(f)
+=
+\frac{1}{n}
+\sum_{i=1}^{n}
+\ell(f(x_i),y_i)
+$$
+
+Training thông thường minimize empirical risk:
+
+$$
+\hat{f}
+=
+\arg\min_{f\in\mathcal{F}}
+\hat{R}_{\mathcal{D}}(f)
+$$
+
+Đây là **Empirical Risk Minimization**, ERM.
+
+Trong neural network, ta thường viết $f_\theta$:
+
+$$
+\hat{\theta}
+=
+\arg\min_\theta
+\frac{1}{n}
+\sum_{i=1}^{n}
+\ell(f_\theta(x_i),y_i)
+$$
+
+Nói bằng ngôn ngữ deep learning: train loss là một estimate của true risk. Khi dataset đủ đại diện và thuật toán học đúng bias, giảm train loss thường giúp giảm test loss. Nhưng từ "thường" ở đây là cả một lý thuyết.
+
+<Note type="intuition">
+ERM giống như học luật giao thông từ một tập video hữu hạn. Nếu video đủ đại diện, luật học được dùng tốt ngoài đời. Nếu video chỉ quay đường cao tốc ban ngày, model có thể rất giỏi trên train set nhưng vụng về ở ngõ nhỏ ban đêm.
+</Note>
+
+## Generalization gap
+
+Generalization gap là khoảng cách giữa true risk và empirical risk:
+
+$$
+R(\hat{f}) - \hat{R}_{\mathcal{D}}(\hat{f})
+$$
+
+Trong thực tế, ta không biết $R(\hat{f})$, nên dùng test/validation risk như estimate:
+
+$$
+\hat{R}_{\text{test}}(\hat{f})
+-
+\hat{R}_{\text{train}}(\hat{f})
+$$
+
+Nếu train loss thấp nhưng test loss cao, model đang overfit. Nó học chi tiết quá riêng của train set thay vì cấu trúc ổn định của phân phối dữ liệu.
+
+Tuy nhiên generalization không chỉ là "train-test gap nhỏ". Một model có thể train loss cao và test loss cao: underfit. Một model khác có train loss rất thấp và test loss cũng thấp: fit tốt. Điều ta muốn là **true risk thấp**, không chỉ gap thấp.
+
+## Three errors: approximation, estimation, optimization
+
+Một cách đọc rất hữu ích là tách lỗi thành ba phần.
+
+Gọi $f^*$ là hàm tốt nhất có thể trong toàn bộ không gian hàm lý tưởng:
+
+$$
+f^* = \arg\min_f R(f)
+$$
+
+Gọi $f_{\mathcal{F}}^*$ là hàm tốt nhất trong hypothesis class $\mathcal{F}$:
+
+$$
+f_{\mathcal{F}}^*
+=
+\arg\min_{f\in\mathcal{F}} R(f)
+$$
+
+Gọi $\hat{f}$ là hàm training tìm được.
+
+Ta có ba nguồn lỗi:
+
+| Loại lỗi | Ý nghĩa | Trong DL thường đến từ |
+|---|---|---|
+| Approximation error | $\mathcal{F}$ không chứa hàm đủ tốt | architecture quá yếu, representation nghèo |
+| Estimation error | train set hữu hạn làm ta chọn nhầm hàm | data ít, noise nhiều, model class quá rộng |
+| Optimization error | thuật toán không tìm được nghiệm mong muốn | loss landscape, lr, optimizer, batch size |
+
+Deep learning thú vị vì tăng model size thường giảm approximation error, nhưng theo lý thuyết cổ điển có thể tăng estimation error. Tuy nhiên trong thực tế hiện đại, model rất lớn vẫn generalize nếu data, architecture, optimizer và regularization phối hợp tốt.
+
+## Hypothesis class
+
+Model không chọn từ mọi hàm có thể tưởng tượng. Nó chọn trong một hypothesis class:
+
+$$
+\mathcal{F}
+=
+\{f_\theta : \theta \in \Theta\}
+$$
+
+Với linear model, $\mathcal{F}$ là các hàm tuyến tính. Với CNN, $\mathcal{F}$ là các hàm có cấu trúc convolution, locality và weight sharing. Với Transformer, $\mathcal{F}$ là các hàm xử lý token bằng attention, MLP, residual path và normalization.
+
+Hypothesis class càng rộng, model càng fit được nhiều pattern. Nhưng rộng hơn không tự động tốt hơn. Nếu không có bias đúng, model có thể fit noise.
+
+Trong deep learning, architecture chính là một cách đặt bias:
+
+- CNN ưu tiên locality và translation equivariance
+- RNN/SSM ưu tiên xử lý tuần tự và state
+- Transformer ưu tiên content-based interaction giữa token
+- GNN ưu tiên relational/message-passing structure
+
+Những bias này không đảm bảo đúng tuyệt đối. Chúng chỉ làm một số hàm dễ học hơn các hàm khác.
+
+## Inductive bias
+
+Inductive bias là điều model hoặc training procedure giả định trước khi nhìn data. Không có inductive bias, học từ sample hữu hạn là bất khả thi: có vô số hàm fit train set nhưng hành xử khác nhau ngoài train set.
+
+Trong DL, inductive bias đến từ nhiều nơi:
+
+| Nguồn bias | Ví dụ |
+|---|---|
+| Architecture | convolution, attention mask, residual connection |
+| Loss | cross-entropy, contrastive loss, reconstruction loss |
+| Optimizer | SGD, AdamW, momentum, weight decay |
+| Initialization | scale, symmetry breaking, pretrained weights |
+| Data augmentation | crop, flip, mixup, noise |
+| Training schedule | learning rate, warmup, early stopping |
+| Dataset | scale, diversity, labeling convention |
+
+Một điểm dễ bị bỏ qua: **dataset cũng là inductive bias**. Model học từ distribution mà dataset đại diện. Nếu dataset lệch, model học lệch.
+
+<Note type="intuition">
+Generalization không đến từ phép màu. Nó đến từ việc thế giới có cấu trúc và model/training có bias phù hợp với cấu trúc đó. CNN hoạt động tốt cho ảnh vì ảnh có locality. Language model hoạt động tốt vì text có regularity thống kê và semantic lặp lại ở quy mô lớn.
+</Note>
+
+## Overfitting và underfitting
+
+Underfitting xảy ra khi model không học được cấu trúc cần thiết:
+
+- train loss cao
+- validation/test loss cao
+- model quá đơn giản hoặc optimization chưa đủ tốt
+
+Overfitting xảy ra khi model học cả noise hoặc chi tiết riêng của train set:
+
+- train loss thấp
+- validation/test loss cao
+- model quá linh hoạt so với dữ liệu hoặc regularization yếu
+
+Nhưng trong deep learning hiện đại, câu chuyện không còn đơn giản là "model lớn thì overfit". Nhiều model lớn hơn lại generalize tốt hơn, đặc biệt khi data lớn và training đúng.
+
+Vì vậy overfitting nên được hiểu là: model học pattern không ổn định ngoài train distribution, không chỉ là model có nhiều tham số.
+
+## Bias-variance view
+
+Trong thống kê cổ điển, prediction error có thể đọc qua bias và variance.
+
+**Bias** là lỗi do model class hoặc assumption quá hạn chế. Model tuyến tính fit dữ liệu phi tuyến mạnh có high bias.
+
+**Variance** là độ nhạy của model với train set cụ thể. Nếu đổi train set một chút mà model thay đổi mạnh, variance cao.
+
+Trực giác:
+
+| Trạng thái | Bias | Variance |
+|---|---|---|
+| Underfit | cao | thấp |
+| Overfit cổ điển | thấp | cao |
+| Model tốt | vừa/thấp | kiểm soát được |
+
+Regularization thường được đọc như cách giảm variance bằng cách giới hạn model:
+
+- L2 weight decay tránh weights quá lớn
+- dropout làm model không phụ thuộc quá mạnh vào một path
+- augmentation buộc invariance
+- early stopping tránh fit noise muộn trong training
+
+Trong DL hiện đại, bias-variance vẫn hữu ích như intuition, nhưng không giải thích hết. Overparameterized models có thể có variance thấp theo nghĩa function space dù parameter space rất lớn.
+
+## Capacity: VC dimension và Rademacher complexity
+
+Lý thuyết học thống kê cổ điển cố đo "độ lớn" của hypothesis class.
+
+VC dimension đo khả năng shatter một tập điểm: một class có VC dimension cao nếu nó có thể gán label tùy ý cho nhiều điểm.
+
+Rademacher complexity đo khả năng fit noise ngẫu nhiên. Nếu một class fit được random signs dễ dàng, nó có complexity cao.
+
+Các bound thường có dạng:
+
+$$
+R(f)
+\le
+\hat{R}_{\mathcal{D}}(f)
++
+\text{complexity}(\mathcal{F}, n)
+$$
+
+Trong đó complexity term thường giảm khi $n$ tăng và tăng khi $\mathcal{F}$ phức tạp hơn.
+
+Một dạng trực giác:
+
+$$
+\text{generalization gap}
+\approx
+O\left(
+\sqrt{\frac{\text{capacity}}{n}}
+\right)
+$$
+
+Đừng đọc công thức này như một bound chính xác cho neural network hiện đại. Hãy đọc nó như một cảnh báo: nếu class quá linh hoạt so với data, train loss thấp chưa đủ đảm bảo test loss thấp.
+
+## Uniform convergence
+
+Uniform convergence hỏi:
+
+> Empirical risk có gần true risk cho mọi hàm trong $\mathcal{F}$ không?
+
+Nếu với mọi $f\in\mathcal{F}$:
+
+$$
+\left|
+R(f)-\hat{R}_{\mathcal{D}}(f)
+\right|
+$$
+
+đều nhỏ, thì chọn hàm có empirical risk thấp cũng an toàn hơn.
+
+Đây là logic nền của nhiều generalization bounds. Nhưng với deep networks, bound uniform cổ điển thường quá lỏng. Neural networks có thể fit random labels, nên nếu chỉ đo capacity thô, theory dự đoán chúng sẽ generalize kém. Thực tế thì chúng vẫn generalize trên data thật.
+
+Điều này không làm statistical learning sai. Nó nói rằng capacity thô chưa đủ. Ta cần hiểu thêm:
+
+- data distribution có structure gì?
+- optimizer chọn nghiệm nào?
+- architecture ưu tiên hàm nào?
+- representation học được có làm bài toán đơn giản hơn không?
+- margin, flatness, norm, stability đóng vai trò gì?
+
+## Generalization bound nói gì và không nói gì?
+
+Một generalization bound thường có dạng:
+
+$$
+R(\hat{f})
+\le
+\hat{R}_{\mathcal{D}}(\hat{f})
++
+\epsilon(n,\mathcal{F},\delta)
+$$
+
+với xác suất ít nhất $1-\delta$.
+
+Nó nói: nếu train risk thấp và complexity term nhỏ, true risk cũng thấp.
+
+Nhưng trong DL hiện đại, nhiều bound:
+
+- đúng về lý thuyết nhưng quá lỏng để dự đoán performance thực tế
+- phụ thuộc vào worst-case hypothesis class thay vì nghiệm thật optimizer tìm được
+- không tận dụng đủ structure của data
+- khó so sánh giữa model lớn hiện đại
+
+Vì vậy bài học không phải là "bỏ qua theory". Bài học là: theory cổ điển cho vocabulary và cảnh báo, còn deep learning cần thêm lens về optimization, representation và data scale.
+
+## No Free Lunch
+
+No Free Lunch theorem nói đại ý: nếu trung bình trên mọi bài toán có thể, không có thuật toán học nào tốt hơn thuật toán khác.
+
+Nghe bi quan, nhưng thực ra rất hữu ích. Nó nói rằng learning chỉ khả thi vì ta không học trên mọi thế giới ngẫu nhiên. Ta học trên thế giới có cấu trúc:
+
+- ảnh có cạnh, texture, object, composition
+- text có grammar, semantic, discourse
+- audio có frequency structure
+- graph có relational pattern
+- physical systems có continuity và constraints
+
+Deep learning thành công vì architecture, data và optimization khai thác các structure này.
+
+## Regularization
+
+Regularization là cách làm một số nghiệm được ưu tiên hơn các nghiệm khác.
+
+Objective có regularization thường viết:
+
+$$
+\min_\theta
+\hat{R}_{\mathcal{D}}(f_\theta)
++
+\lambda\Omega(\theta)
+$$
+
+Với L2:
+
+$$
+\Omega(\theta)=\|\theta\|_2^2
+$$
+
+Nhưng trong DL, regularization không chỉ là term trong loss. Nhiều regularizer là implicit:
+
+- data augmentation
+- dropout
+- early stopping
+- batch normalization noise
+- label smoothing
+- mixup/cutmix
+- optimizer dynamics
+- architecture constraints
+
+Regularization tốt không chỉ làm train loss cao hơn một chút. Nó làm model chọn pattern bền hơn ngoài train set.
+
+## Stability view
+
+Một thuật toán học stable nếu thay một sample trong train set không làm output model thay đổi quá mạnh.
+
+Trực giác:
+
+> Nếu model phụ thuộc cực mạnh vào một vài sample riêng lẻ, nó có thể đang memorize. Nếu model học pattern ổn định qua nhiều sample, nó dễ generalize hơn.
+
+Stability liên quan đến:
+
+- smooth loss
+- regularization
+- learning rate
+- number of training steps
+- batch size
+- data augmentation
+
+Trong deep learning, stability không phải toàn bộ câu chuyện, nhưng nó là lens tốt để đọc vì sao một số training recipe robust hơn recipe khác.
+
+## Margin view
+
+Trong classification, margin đo model tự tin đúng đến mức nào.
+
+Với binary classifier, margin có thể đọc như:
+
+$$
+y f(x)
+$$
+
+Nếu margin lớn và dương, model không chỉ đúng mà còn đúng với khoảng cách an toàn. Nếu margin gần 0, một perturbation nhỏ có thể đổi prediction.
+
+Generalization thường tốt hơn khi model đạt margin lớn trên train data, nhất là nếu norm được kiểm soát. Đây là lý do SVM tối đa hóa margin, và cũng là lý do margin/norm xuất hiện trong nhiều phân tích neural network.
+
+Trong DL, cross-entropy có xu hướng tiếp tục tăng confidence ngay cả sau khi train accuracy đạt 100%. Điều này liên quan đến margin dynamics và implicit bias của optimization.
+
+## Flat minima
+
+Một nghiệm sharp là nghiệm mà loss tăng nhanh khi tham số thay đổi nhỏ. Một nghiệm flat là nghiệm nằm trong vùng loss thấp rộng hơn.
+
+Trực giác phổ biến:
+
+- flat minima có thể robust hơn với perturbation
+- sharp minima có thể nhạy hơn và generalize kém hơn
+
+Nhưng cần cẩn thận: "flatness" trong parameter space phụ thuộc vào reparameterization. Một network có thể được rescale mà function không đổi nhưng curvature đổi. Vì vậy flatness hữu ích nhất khi gắn với norm, scale, hoặc function-space behavior.
+
+Dù vậy, intuition vẫn có giá trị: training recipe tốt thường tìm nghiệm không quá mong manh.
+
+## Overparameterization
+
+Overparameterization nghĩa là model có rất nhiều tham số, thường nhiều hơn số sample train.
+
+Theo trực giác cổ điển, điều này đáng sợ: quá nhiều tham số thì fit noise dễ hơn. Và đúng là neural networks lớn có thể fit random labels.
+
+Nhưng trên data thật, overparameterization cũng có lợi:
+
+- optimization dễ hơn vì có nhiều đường đến loss thấp
+- model có thể học representation giàu hơn
+- interpolation không nhất thiết đồng nghĩa memorize độc hại
+- optimizer có thể chọn nghiệm đơn giản hơn trong function space
+
+Điểm then chốt: parameter count không phải thước đo complexity duy nhất. Hai network có cùng số tham số có thể biểu diễn function rất khác, và cùng một network có thể học nghiệm khác nhau tùy optimizer/data/regularization.
+
+## Interpolation regime
+
+Interpolation xảy ra khi model fit train data gần như hoàn hảo:
+
+$$
+\hat{R}_{\mathcal{D}}(\hat{f}) \approx 0
+$$
+
+Trong ML cổ điển, interpolation thường bị xem là overfit. Nhưng DL hiện đại thường hoạt động trong interpolation regime và vẫn test tốt.
+
+Vì sao?
+
+Một cách đọc: có rất nhiều hàm fit train data. Optimization và inductive bias không chọn ngẫu nhiên trong số đó. Chúng ưu tiên các hàm "đơn giản" hoặc "phù hợp cấu trúc data" theo một nghĩa nào đó.
+
+Vậy câu hỏi không phải:
+
+> Model có fit train data không?
+
+mà là:
+
+> Trong số các hàm fit train data, training đã chọn hàm nào?
+
+## Double descent
+
+Classical bias-variance curve nói test error giảm rồi tăng khi model quá phức tạp. Double descent thêm một pha thứ ba.
+
+Khi model capacity tăng:
+
+1. underparameterized: model quá yếu, train/test đều kém
+2. interpolation threshold: model vừa đủ fit train data, test error có thể tăng mạnh
+3. overparameterized: model lớn hơn nữa, test error có thể giảm lại
+
+Đây là double descent.
+
+Nó không nói "model càng lớn luôn càng tốt". Nó nói curve generalization của model hiện đại không còn là hình chữ U đơn giản. Kết quả phụ thuộc vào data, noise, optimizer, regularization và scale.
+
+Double descent giúp ta hiểu vì sao tăng model size đôi khi cải thiện test performance dù model đã fit được train data.
+
+## Benign overfitting
+
+Benign overfitting là hiện tượng model fit train data, kể cả noise, nhưng phần overfit đó không phá test performance quá nhiều.
+
+Một trực giác: trong không gian cao chiều, model có thể dùng một phần capacity để nội suy noise training, trong khi vẫn học signal chính ở hướng quan trọng. Nếu noise nằm ở hướng ít ảnh hưởng đến test distribution, overfitting có thể tương đối "lành".
+
+Đây là chủ đề tinh tế. Không phải overfitting nào cũng benign. Label noise, spurious correlation hoặc leakage vẫn có thể làm model tệ nghiêm trọng.
+
+## Implicit regularization
+
+Implicit regularization là bias của training procedure ngay cả khi objective không thêm regularization rõ ràng.
+
+Ví dụ kinh điển: trong linear regression overparameterized, gradient descent từ initialization nhỏ có xu hướng chọn nghiệm minimum-norm trong số vô số nghiệm fit train data.
+
+Trong deep networks, implicit bias phức tạp hơn, nhưng ý tưởng tương tự:
+
+- initialization ảnh hưởng vùng nghiệm
+- SGD noise ảnh hưởng đường đi
+- learning rate lớn có thể ưu tiên vùng flat hơn
+- batch size đổi stochasticity
+- normalization đổi geometry của optimization
+- architecture làm một số function dễ đi tới hơn
+
+Do đó training không chỉ trả lời "loss nào thấp?". Nó trả lời "loss thấp theo đường nào, từ đâu, với bias gì?".
+
+## SGD as more than an optimizer
+
+SGD không chỉ là cách tính gradient rẻ. Nó lấy gradient trên mini-batch:
+
+$$
+g_t
+=
+\frac{1}{B}
+\sum_{i\in\mathcal{B}_t}
+\nabla_\theta \ell(f_\theta(x_i),y_i)
+$$
+
+Gradient này nhiễu so với full gradient. Nhiễu đó có thể ảnh hưởng nghiệm cuối.
+
+Trong thực tế:
+
+- batch nhỏ thường tạo nhiều stochasticity hơn
+- learning rate schedule quyết định model đi qua vùng loss nào
+- early stopping chọn thời điểm trước khi model fit noise quá sâu
+- weight decay và augmentation đổi nghiệm ưu tiên
+
+Vì vậy generalization là thuộc tính của cả **model + data + optimizer + recipe**, không chỉ architecture.
+
+## Data scale
+
+Tăng data thường là regularization mạnh nhất.
+
+Khi $n$ lớn hơn, empirical risk thường gần true risk hơn. Nhưng không phải mọi sample đều có giá trị như nhau:
+
+- duplicate nhiều không tăng coverage thật nhiều
+- data đa dạng giúp phủ nhiều mode
+- label sạch giảm irreducible noise
+- data đúng deployment distribution quan trọng hơn data rất nhiều nhưng lệch domain
+
+Trong foundation models, scale tạo ra một hiệu ứng khác: model lớn có thể học representation tổng quát từ dữ liệu rất rộng, rồi transfer sang task cụ thể.
+
+Statistical learning view ở đây nối sang representation learning: nếu representation biến task phức tạp thành task tuyến tính hoặc gần tuyến tính, số sample cần cho downstream task giảm mạnh.
+
+## Distribution shift
+
+Các công thức ERM thường giả định train và test cùng phân phối:
+
+$$
+p_{\text{train}}(x,y)
+=
+p_{\text{test}}(x,y)
+$$
+
+Trong deployment, điều này thường sai:
+
+$$
+p_{\text{train}}(x,y)
+\neq
+p_{\text{test}}(x,y)
+$$
+
+Một số dạng shift:
+
+| Shift | Ý nghĩa |
+|---|---|
+| Covariate shift | $p(x)$ đổi, nhưng $p(y\mid x)$ tương đối ổn |
+| Label shift | $p(y)$ đổi |
+| Concept shift | quan hệ $p(y\mid x)$ đổi |
+| Domain shift | dữ liệu đến từ môi trường khác |
+| Temporal shift | phân phối đổi theo thời gian |
+
+Generalization trên test split i.i.d. chưa đảm bảo robustness dưới distribution shift. Đây là lý do OOD evaluation, calibration, uncertainty và monitoring quan trọng.
+
+## Spurious correlation
+
+Spurious correlation là pattern giúp train/test nội bộ nhưng không phải causal hoặc ổn định ngoài domain.
+
+Ví dụ:
+
+- classifier nhận diện vật thể nhờ background
+- medical model học dấu hiệu scanner thay vì bệnh
+- toxicity model học từ khóa thay vì ngữ cảnh
+- hiring model học bias lịch sử
+
+Statistical learning view nhắc ta rằng model sẽ dùng shortcut nếu shortcut giảm empirical risk. Muốn tránh shortcut, cần data, augmentation, objective hoặc architecture buộc model học signal bền hơn.
+
+## Evaluation
+
+Nếu mục tiêu là true risk thấp, evaluation phải đại diện cho phân phối dùng thật.
+
+Một validation set tốt cần:
+
+- tách khỏi train set
+- không leakage
+- đủ gần deployment distribution
+- đủ đa dạng mode quan trọng
+- metric phản ánh chi phí sai lầm thật
+
+Trong DL, metric không chỉ là detail báo cáo. Metric định nghĩa hành vi model được tối ưu gián tiếp. Nếu metric thiếu một failure mode, model có thể trông tốt nhưng fail trong thực tế.
+
+## Deep learning khác gì statistical learning cổ điển?
+
+Các khái niệm cổ điển vẫn đúng: risk, ERM, capacity, regularization, generalization gap. Nhưng deep learning thêm vài twist:
+
+| Cổ điển | Deep learning hiện đại |
+|---|---|
+| Model class nhỏ/vừa | model cực lớn, overparameterized |
+| Feature thường hand-crafted | representation học từ data |
+| Optimization convex nhiều hơn | nonconvex nhưng scale lớn |
+| Regularization explicit | implicit + recipe-heavy |
+| Bound capacity thô hữu ích hơn | bound cổ điển thường quá lỏng |
+| Dataset nhỏ/vừa | data scale rất lớn |
+
+Vì vậy không nên áp theory cổ điển một cách máy móc. Nhưng cũng không nên bỏ qua nó. Nó cho ta vocabulary để hỏi đúng câu hỏi.
+
+## Một bản đồ đọc deep learning bằng statistical learning
+
+| Lens | Câu hỏi |
+|---|---|
+| True risk | Model có tốt trên phân phối thật không? |
+| Empirical risk | Train loss đang đo estimate nào? |
+| Generalization gap | Train và test lệch bao nhiêu? |
+| Capacity | Model class có thể fit những gì? |
+| Inductive bias | Vì sao model ưu tiên nghiệm này hơn nghiệm khác? |
+| Regularization | Ta đang giới hạn hoặc định hướng nghiệm bằng gì? |
+| Optimization bias | SGD/Adam chọn nghiệm nào trong số nhiều nghiệm tốt? |
+| Distribution shift | Train/test/deployment có cùng phân phối không? |
+
+## Những hiểu nhầm thường gặp
+
+**Train loss thấp không đủ.** Điều cần là true risk thấp. Train loss chỉ là estimate trên sample hữu hạn.
+
+**Nhiều tham số không tự động overfit.** Parameter count là thước đo thô. Function được học, optimizer, data và regularization quan trọng hơn.
+
+**Regularization không chỉ là L2/dropout.** Augmentation, early stopping, architecture và optimizer đều regularize theo nghĩa rộng.
+
+**Test set không phải thế giới thật.** Test set cũng là sample. Nếu test set lệch hoặc quá sạch, deployment vẫn có thể fail.
+
+**Generalization không chỉ là một bound.** Bound cho insight, nhưng performance thực tế đến từ data structure, representation, optimization và scale.
+
+## Bức tranh chung
+
+Statistical learning view biến deep learning thành một câu hỏi rất sắc:
+
+> Trong số rất nhiều hàm có thể fit train data, vì sao training chọn được một hàm hoạt động tốt trên dữ liệu chưa thấy?
+
+Câu trả lời không nằm ở một yếu tố duy nhất. Nó là tổng hợp của:
+
+- data đủ đại diện
+- hypothesis class có inductive bias phù hợp
+- optimization tìm được nghiệm tốt
+- regularization tránh pattern không bền
+- representation làm bài toán dễ hơn
+- evaluation đo đúng distribution quan trọng
+
+Đây là lý do bài toán deep learning vừa toán học vừa thực nghiệm. True risk là khái niệm lý thuyết, nhưng để giảm nó trong thực tế, ta cần architecture, data pipeline, optimizer, augmentation, metric và deployment feedback cùng làm việc.
+
+## Papers tham khảo
+
+| Paper | |
+|---|---|
+| Vapnik & Chervonenkis (1971) | On the Uniform Convergence of Relative Frequencies of Events to Their Probabilities |
+| Valiant (1984) | A Theory of the Learnable |
+| Blumer et al. (1989) | Learnability and the Vapnik-Chervonenkis Dimension |
+| Bartlett & Mendelson (2002) | Rademacher and Gaussian Complexities: Risk Bounds and Structural Results |
+| Zhang et al. (2017) | Understanding Deep Learning Requires Rethinking Generalization |
+| Neyshabur et al. (2017) | Exploring Generalization in Deep Learning |
+| Belkin et al. (2019) | Reconciling Modern Machine-Learning Practice and the Classical Bias-Variance Trade-Off |
+| Nakkiran et al. (2021) | Deep Double Descent: Where Bigger Models and More Data Hurt |
