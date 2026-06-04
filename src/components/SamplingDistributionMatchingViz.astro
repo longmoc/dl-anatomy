@@ -1,0 +1,204 @@
+---
+interface Props {
+  lang?: 'vi' | 'en';
+}
+const { lang = 'vi' } = Astro.props;
+
+const ui = lang === 'en'
+  ? {
+      caption: 'A generative model draws simple noise and pushes it through Gθ to sample from pθ. Training adjusts θ so the model distribution (green) morphs to match the real data distribution (blue) — the divergence D(p_data ‖ pθ) shrinks toward 0. The falling dots are samples drawn from the current pθ; watch them migrate under the data peaks as the match improves.',
+      training: 'training…',
+      matched: 'matched ✓',
+    }
+  : {
+      caption: 'Generative model lấy nhiễu đơn giản rồi đẩy qua Gθ để sample từ pθ. Training chỉnh θ sao cho phân phối model (xanh lá) biến dạng để khớp phân phối dữ liệu thật (xanh dương) — divergence D(p_data ‖ pθ) co dần về 0. Các chấm rơi là sample lấy từ pθ hiện tại; chúng dồn về dưới các đỉnh của dữ liệu khi độ khớp tăng.',
+      training: 'đang train…',
+      matched: 'đã khớp ✓',
+    };
+---
+
+<div class="dmv" data-lang={lang}>
+  <canvas class="dmv-canvas"></canvas>
+  <p class="dmv-caption">{ui.caption}</p>
+</div>
+
+<script>
+document.querySelectorAll('.dmv').forEach(root => {
+  const canvas = root.querySelector('.dmv-canvas') as HTMLCanvasElement;
+  const ctx = canvas.getContext('2d')!;
+  const isEn = (root as HTMLElement).dataset.lang === 'en';
+  const T = {
+    training: isEn ? 'training…' : 'đang train…',
+    matched: isEn ? 'matched ✓' : 'đã khớp ✓',
+    data: 'p_data', model: 'pθ',
+  };
+
+  const cv = (n: string) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+  // ---- densities over x ∈ [0,1] ----
+  const N = 150;
+  const gx = (i: number) => i / (N - 1);
+  const g = (x: number, mu: number, sig: number) => Math.exp(-0.5 * ((x - mu) / sig) ** 2);
+  const norm = (a: number[]) => { const dx = 1 / (N - 1); let s = 0; for (const v of a) s += v * dx; return a.map(v => v / s); };
+
+  const target = norm(Array.from({ length: N }, (_, i) => 0.62 * g(gx(i), 0.30, 0.072) + 0.52 * g(gx(i), 0.69, 0.060)));
+  const start  = norm(Array.from({ length: N }, (_, i) => 0.70 * g(gx(i), 0.50, 0.175)));
+  let D0 = 0; { const dx = 1 / (N - 1); for (let i = 0; i < N; i++) D0 += Math.abs(target[i] - start[i]) * dx; D0 *= 0.5; }
+  const PEAK = Math.max(...target);
+
+  // ---- falling sample particles ----
+  type P = { x: number; y: number; vy: number };
+  const NP = 28;
+  let parts: P[] = [];
+
+  const PL = 14, PR = 14, PT = 36, PB = 26;
+  let W = 0, H = 0;
+  const tx = (x: number) => PL + x * (W - PL - PR);
+  const baseY = () => H - PB;
+  const ty = (d: number) => baseY() - (d / PEAK) * (H - PT - PB) * 0.9;
+
+  const easeInOut = (p: number) => (p < 0.5 ? 2 * p * p : 1 - (-2 * p + 2) ** 2 / 2);
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // sample x from a CDF built over the grid
+  const sampleX = (cur: number[]) => {
+    const dx = 1 / (N - 1);
+    const u = Math.random();
+    let c = 0;
+    for (let i = 0; i < N; i++) { c += cur[i] * dx; if (c >= u) return gx(i) + (Math.random() - 0.5) * dx; }
+    return 0.5;
+  };
+
+  let last = performance.now();
+  let started = false;
+
+  function frame(now: number) {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+
+    const rect = canvas.getBoundingClientRect();
+    W = rect.width; H = rect.height;
+    if (W && H) {
+      const dpr = window.devicePixelRatio || 1;
+      if (canvas.width !== Math.round(W * dpr)) { canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr); }
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      // training progress s (loops: train → hold → quick reset)
+      const trainDur = 3.6, holdDur = 1.3, resetDur = 0.7, cycle = trainDur + holdDur + resetDur;
+      let s: number;
+      if (reduce) {
+        s = 0.5;
+      } else {
+        const t = (now / 1000) % cycle;
+        if (t < trainDur) s = easeInOut(t / trainDur);
+        else if (t < trainDur + holdDur) s = 1;
+        else s = 1 - easeInOut((t - trainDur - holdDur) / resetDur);
+      }
+
+      const cur = new Array(N);
+      for (let i = 0; i < N; i++) cur[i] = (1 - s) * start[i] + s * target[i];
+      const D = (1 - s) * D0;
+
+      // init particles once
+      if (!started) {
+        parts = Array.from({ length: NP }, () => ({ x: sampleX(cur), y: PT + Math.random() * (H - PT - PB), vy: 70 + Math.random() * 70 }));
+        started = true;
+      }
+
+      const bg = cv('--bg'), border = cv('--border'), muted = cv('--muted');
+      const data = cv('--accent'), model = cv('--accent2'), text = cv('--text');
+
+      ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+
+      // baseline
+      ctx.strokeStyle = border; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(PL, baseY()); ctx.lineTo(W - PR, baseY()); ctx.stroke();
+
+      const area = (arr: number[], stroke: string, fillA: string) => {
+        ctx.beginPath();
+        ctx.moveTo(tx(0), baseY());
+        for (let i = 0; i < N; i++) ctx.lineTo(tx(gx(i)), ty(arr[i]));
+        ctx.lineTo(tx(1), baseY()); ctx.closePath();
+        ctx.fillStyle = fillA; ctx.fill();
+        ctx.beginPath();
+        for (let i = 0; i < N; i++) { const X = tx(gx(i)), Y = ty(arr[i]); i === 0 ? ctx.moveTo(X, Y) : ctx.lineTo(X, Y); }
+        ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.stroke();
+      };
+
+      // target (fixed) then model (morphing) on top
+      area(target, data, data + '22');
+      area(cur, model, model + '33');
+
+      // falling samples drawn from current pθ
+      ctx.fillStyle = model;
+      for (const p of parts) {
+        if (!reduce) {
+          p.y += p.vy * dt;
+          if (p.y >= baseY()) { p.y = PT - Math.random() * 26; p.x = sampleX(cur); p.vy = 70 + Math.random() * 70; }
+        }
+        const X = tx(p.x);
+        const fade = p.y > baseY() - 20 ? Math.max(0, (baseY() - p.y) / 20) : 1;
+        ctx.globalAlpha = 0.85 * fade;
+        ctx.beginPath(); ctx.arc(X, p.y, 2.6, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+
+      // legend
+      ctx.font = '11px var(--mono, monospace)'; ctx.textAlign = 'left';
+      ctx.fillStyle = data; ctx.fillRect(PL + 2, PT - 24, 12, 4);
+      ctx.fillStyle = muted; ctx.fillText(T.data, PL + 18, PT - 20);
+      ctx.fillStyle = model; ctx.fillRect(PL + 78, PT - 24, 12, 4);
+      ctx.fillStyle = muted; ctx.fillText(T.model, PL + 94, PT - 20);
+
+      // divergence + status (top-right)
+      ctx.textAlign = 'right';
+      ctx.fillStyle = muted;
+      ctx.fillText(`D(p_data ‖ pθ) = ${D.toFixed(2)}`, W - PR - 2, PT - 20);
+      const done = s > 0.985;
+      ctx.fillStyle = done ? model : muted;
+      ctx.font = 'bold 11px var(--mono, monospace)';
+      ctx.fillText(done ? T.matched : T.training, W - PR - 2, PT - 6);
+
+      // x axis label
+      ctx.fillStyle = muted; ctx.font = '10px var(--mono, monospace)'; ctx.textAlign = 'center';
+      ctx.fillText('x', PL + (W - PL - PR) / 2, H - 6);
+    }
+
+    if (!reduce) rafId = requestAnimationFrame(frame);
+  }
+
+  let rafId = 0;
+  const io = new IntersectionObserver(entries => {
+    for (const e of entries) {
+      if (e.isIntersecting && !rafId) { last = performance.now(); rafId = requestAnimationFrame(frame); }
+      else if (!e.isIntersecting && rafId) { cancelAnimationFrame(rafId); rafId = 0; }
+    }
+  }, { threshold: 0.05 });
+  io.observe(canvas);
+  const ro = new ResizeObserver(() => { if (!rafId) requestAnimationFrame(frame); });
+  ro.observe(canvas);
+});
+</script>
+
+<style>
+  .dmv {
+    margin: 1.5rem 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--bg2);
+  }
+  .dmv-canvas {
+    width: 100%;
+    height: 220px;
+    display: block;
+    background: var(--bg);
+  }
+  .dmv-caption {
+    font-size: 0.78rem;
+    color: var(--muted);
+    text-align: center;
+    padding: 0.5rem 1rem 0.65rem;
+    font-style: italic;
+    line-height: 1.5;
+  }
+</style>
