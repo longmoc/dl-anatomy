@@ -1,0 +1,89 @@
+---
+interface Props {
+  lang?: 'vi' | 'en';
+}
+const { lang = 'vi' } = Astro.props;
+
+const L = lang === 'en'
+  ? {
+      gcn: 'GCN', gat: 'GAT',
+      subGcn: 'fixed degree-based weights',
+      subGat: 'learned attention αᵥᵤ',
+      cap: 'GCN vs GAT. GCN aggregates neighbors with fixed degree-based weights — every edge is roughly equal. GAT learns an attention weight αᵥᵤ per edge (edge thickness ∝ αᵥᵤ, summing to 1), so each node decides which neighbors to listen to based on content.',
+    }
+  : {
+      gcn: 'GCN', gat: 'GAT',
+      subGcn: 'trọng số cố định theo degree',
+      subGat: 'attention αᵥᵤ học được',
+      cap: 'GCN vs GAT. GCN tổng hợp hàng xóm với trọng số cố định theo degree — mọi cạnh gần như đều nhau. GAT học trọng số attention αᵥᵤ cho từng cạnh (độ dày cạnh ∝ αᵥᵤ, tổng bằng 1), nên node tự quyết nghe hàng xóm nào nhiều hơn theo nội dung.',
+    };
+
+// 4 neighbours around v; GAT edges carry learned weights (sum = 1)
+const gcn = [
+  { x1: 106, y1: 95, x2: 146, y2: 132 },
+  { x1: 224, y1: 95, x2: 184, y2: 132 },
+  { x1: 106, y1: 205, x2: 146, y2: 168 },
+  { x1: 224, y1: 205, x2: 184, y2: 168 },
+];
+const gat = [
+  { x1: 436, y1: 95, x2: 476, y2: 132, a: 0.45, lx: 446, ly: 104 },
+  { x1: 554, y1: 95, x2: 514, y2: 132, a: 0.07, lx: 546, ly: 104 },
+  { x1: 436, y1: 205, x2: 476, y2: 168, a: 0.30, lx: 446, ly: 198 },
+  { x1: 554, y1: 205, x2: 514, y2: 168, a: 0.18, lx: 546, ly: 198 },
+];
+const aw = (a: number) => 1.2 + a * 7.5;
+
+const gcnNodes = [{ x: 92, y: 82, t: 'u₁' }, { x: 238, y: 82, t: 'u₂' }, { x: 92, y: 218, t: 'u₃' }, { x: 238, y: 218, t: 'u₄' }];
+const gatNodes = gcnNodes.map(n => ({ ...n, x: n.x + 330 }));
+---
+
+<figure class="gad">
+  <svg viewBox="0 0 660 292" role="img" aria-label="GCN vs GAT edge weights" class="gad-svg">
+    <defs>
+      <marker id="gad-fix" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" class="gad-fix-h" />
+      </marker>
+      <marker id="gad-att" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" class="gad-att-h" />
+      </marker>
+    </defs>
+
+    <text x="165" y="28" class="gad-h">{L.gcn}</text>
+    <text x="495" y="28" class="gad-h">{L.gat}</text>
+    <line x1="330" y1="42" x2="330" y2="258" class="gad-div" />
+
+    <!-- ===== GCN: uniform edges ===== -->
+    {gcn.map(e => <line x1={e.x1} y1={e.y1} x2={e.x2} y2={e.y2} class="gad-fix" marker-end="url(#gad-fix)" />)}
+    {gcnNodes.map(n => (<g><circle cx={n.x} cy={n.y} r="18" class="gad-node" /><text x={n.x} y={n.y + 4} class="gad-nt">{n.t}</text></g>))}
+    <circle cx="165" cy="150" r="26" class="gad-center" />
+    <text x="165" y="156" class="gad-ct">v</text>
+    <text x="165" y="278" class="gad-sub">{L.subGcn}</text>
+
+    <!-- ===== GAT: weighted edges ===== -->
+    {gat.map(e => <line x1={e.x1} y1={e.y1} x2={e.x2} y2={e.y2} class="gad-att" style={`stroke-width:${aw(e.a)}`} marker-end="url(#gad-att)" />)}
+    {gat.map(e => <text x={e.lx} y={e.ly} class="gad-aw">{e.a.toFixed(2)}</text>)}
+    {gatNodes.map(n => (<g><circle cx={n.x} cy={n.y} r="18" class="gad-node" /><text x={n.x} y={n.y + 4} class="gad-nt">{n.t}</text></g>))}
+    <circle cx="495" cy="150" r="26" class="gad-center" />
+    <text x="495" y="156" class="gad-ct">v</text>
+    <text x="495" y="278" class="gad-sub">{L.subGat}</text>
+  </svg>
+  <figcaption class="gad-cap">{L.cap}</figcaption>
+</figure>
+
+<style>
+  .gad { margin: 1.75rem 0; border: 1px solid var(--border); border-radius: 10px; background: var(--bg2); padding: 0.75rem 0 0.2rem; }
+  .gad-svg { display: block; width: 100%; max-width: 700px; height: auto; margin: 0 auto; }
+  .gad-h { fill: var(--text); font-family: var(--mono); font-size: 14px; font-weight: 600; text-anchor: middle; }
+  .gad-div { stroke: var(--border); stroke-width: 1.2; stroke-dasharray: 4 4; }
+  .gad-node { fill: var(--bg); stroke: var(--accent2); stroke-width: 1.8; }
+  .gad-center { fill: var(--bg); stroke: var(--accent); stroke-width: 2.2; }
+  .gad-fix { stroke: var(--muted); stroke-width: 2.2; }
+  .gad-fix-h { fill: var(--muted); }
+  .gad-att { stroke: var(--accent); }
+  .gad-att-h { fill: var(--accent); }
+  .gad-nt { fill: var(--text); font-family: var(--mono); font-size: 12px; text-anchor: middle; }
+  .gad-ct { fill: var(--text); font-family: var(--mono); font-size: 16px; font-weight: 700; text-anchor: middle; }
+  .gad-aw { fill: var(--accent); font-family: var(--mono); font-size: 11px; font-weight: 600; text-anchor: middle; }
+  .gad-sub { fill: var(--muted); font-family: var(--mono); font-size: 11px; text-anchor: middle; }
+  .gad-cap { font-size: 0.78rem; color: var(--muted); text-align: center; padding: 0.5rem 1rem 0.65rem; font-style: italic; line-height: 1.5; }
+</style>

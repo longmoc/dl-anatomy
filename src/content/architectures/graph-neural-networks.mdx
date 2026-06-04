@@ -11,6 +11,7 @@ tags: [gnn, gcn, gat, message-passing, graph]
 
 import Note from '../../components/Note.astro';
 import GraphMessagePassingDiagram from '../../components/GraphMessagePassingDiagram.astro';
+import GraphAttentionDiagram from '../../components/GraphAttentionDiagram.astro';
 
 # Graph Neural Networks
 
@@ -150,6 +151,8 @@ h_v^{(k+1)} = \sigma\!\Big( \sum_{u \in \mathcal{N}(v)} \alpha_{vu}\, W h_u^{(k)
 $$
 
 Trực giác: GAT cho node tự quyết nên nghe hàng xóm nào nhiều hơn. Nếu GCN là "lấy trung bình có chuẩn hóa", GAT là "weighted aggregation học được".
+
+<GraphAttentionDiagram lang="vi" />
 
 Giống Transformer, GAT thường dùng multi-head attention để ổn định và tăng capacity:
 

@@ -11,6 +11,7 @@ tags: [gnn, gcn, gat, message-passing, graph]
 
 import Note from '../../components/Note.astro';
 import GraphMessagePassingDiagram from '../../components/GraphMessagePassingDiagram.astro';
+import GraphAttentionDiagram from '../../components/GraphAttentionDiagram.astro';
 
 # Graph Neural Networks
 
@@ -150,6 +151,8 @@ h_v^{(k+1)} = \sigma\!\Big( \sum_{u \in \mathcal{N}(v)} \alpha_{vu}\, W h_u^{(k)
 $$
 
 Intuitively, GAT lets a node decide which neighbors to listen to more. If GCN is a normalized average, GAT is a learned weighted aggregation.
+
+<GraphAttentionDiagram lang="en" />
 
 Like Transformers, GAT often uses multi-head attention for stability and capacity:
 
