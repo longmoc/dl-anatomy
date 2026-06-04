@@ -1,0 +1,313 @@
+---
+title: "Expectation & Monte Carlo"
+description: "Expectation là ngôn ngữ của loss trung bình; Monte Carlo là cách deep learning ước lượng kỳ vọng bằng dataset, mini-batch, sampling và stochastic gradient."
+lang: vi
+category: foundations
+order: 2
+parent: probability
+translation: expectation-monte-carlo-en
+tags: [probability, expectation, monte-carlo, empirical-risk, stochastic-gradient]
+---
+
+import Note from '../../components/Note.astro';
+import MonteCarloExpectationDiagram from '../../components/MonteCarloExpectationDiagram.astro';
+
+# Expectation & Monte Carlo
+
+Bài [Likelihood, Cross-Entropy & KL Divergence](/dl-anatomy/foundations/likelihood-cross-entropy-kl) nhìn training như cách kéo phân phối model lại gần phân phối dữ liệu. Nhưng khi train thật, ta không có toàn bộ phân phối dữ liệu. Ta chỉ có dataset, mini-batch, sample, noise, augmentation.
+
+Đây là nơi **expectation** và **Monte Carlo** xuất hiện.
+
+Trong deep learning, loss hiếm khi là một giá trị đơn lẻ. Nó thường là **trung bình kỳ vọng** của một đại lượng ngẫu nhiên:
+
+$$
+\mathcal{R}(\theta) = \mathbb{E}_{(x,y)\sim p_{\text{data}}}\left[\ell(f_\theta(x), y)\right]
+$$
+
+Ta muốn minimize risk thật $\mathcal{R}(\theta)$, nhưng không biết $p_{\text{data}}$. Vì vậy ta ước lượng kỳ vọng bằng trung bình trên dữ liệu quan sát được.
+
+<MonteCarloExpectationDiagram />
+
+## Expectation là gì?
+
+Nếu $X$ là một random variable rời rạc, expectation của một hàm $g(X)$ là:
+
+$$
+\mathbb{E}_{X\sim p}[g(X)] = \sum_x p(x)g(x)
+$$
+
+Nếu $X$ liên tục:
+
+$$
+\mathbb{E}_{X\sim p}[g(X)] = \int p(x)g(x)\,dx
+$$
+
+Trực giác: expectation là giá trị trung bình dài hạn nếu ta sample từ phân phối rất nhiều lần.
+
+| Ký hiệu | Đọc là |
+|---|---|
+| $X \sim p$ | $X$ được sample từ phân phối $p$ |
+| $g(X)$ | đại lượng ta đo trên sample |
+| $\mathbb{E}[g(X)]$ | trung bình lý thuyết của đại lượng đó |
+
+<Note type="intuition">
+Expectation không phải "giá trị thường gặp nhất". Nó là trung bình có trọng số theo xác suất. Một phân phối lệch mạnh có thể có expectation nằm ở vùng không phải sample điển hình.
+</Note>
+
+## Loss là một expectation
+
+Trong supervised learning, mỗi sample $(x,y)$ tạo ra một loss:
+
+$$
+\ell(f_\theta(x), y)
+$$
+
+Nhưng model không chỉ cần làm tốt trên một sample. Nó cần làm tốt trung bình trên phân phối dữ liệu:
+
+$$
+\mathcal{R}(\theta) = \mathbb{E}_{(x,y)\sim p_{\text{data}}}\left[\ell(f_\theta(x), y)\right]
+$$
+
+Đây gọi là **expected risk** hoặc **population risk**.
+
+Vấn đề: $p_{\text{data}}$ là phân phối thật ngoài đời, ta không biết đầy đủ. Dataset chỉ là một tập sample hữu hạn từ phân phối đó:
+
+$$
+\mathcal{D} = \{(x_i,y_i)\}_{i=1}^{n}
+$$
+
+Vì vậy ta thay expected risk bằng **empirical risk**:
+
+$$
+\hat{\mathcal{R}}(\theta) = \frac{1}{n}\sum_{i=1}^{n}\ell(f_\theta(x_i), y_i)
+$$
+
+Training supervised cơ bản chính là empirical risk minimization:
+
+$$
+\theta^\* = \arg\min_\theta \hat{\mathcal{R}}(\theta)
+$$
+
+## Monte Carlo — lấy trung bình mẫu để ước lượng kỳ vọng
+
+Monte Carlo là ý tưởng rất đơn giản:
+
+> Nếu không tính được kỳ vọng đúng, hãy sample nhiều lần rồi lấy trung bình.
+
+Giả sử ta muốn tính:
+
+$$
+\mu = \mathbb{E}_{X\sim p}[g(X)]
+$$
+
+Lấy $m$ sample độc lập:
+
+$$
+x_1,\dots,x_m \sim p
+$$
+
+Ước lượng Monte Carlo:
+
+$$
+\hat{\mu}_m = \frac{1}{m}\sum_{i=1}^{m}g(x_i)
+$$
+
+Nếu sample độc lập và đúng phân phối, $\hat{\mu}_m$ là unbiased estimator:
+
+$$
+\mathbb{E}[\hat{\mu}_m] = \mu
+$$
+
+Phương sai giảm theo số sample:
+
+$$
+\text{Var}(\hat{\mu}_m) = \frac{\text{Var}(g(X))}{m}
+$$
+
+Nói cách khác, sai số chuẩn giảm theo $1/\sqrt{m}$, không phải $1/m$. Muốn giảm noise 10 lần, thường cần khoảng 100 lần số sample.
+
+<Note type="result">
+Dataset loss, validation loss, mini-batch loss, gradient estimate, dropout average, data augmentation average — rất nhiều thứ trong deep learning là Monte Carlo estimate dưới một tên khác.
+</Note>
+
+## Dataset là Monte Carlo estimate của data distribution
+
+Empirical risk:
+
+$$
+\hat{\mathcal{R}}(\theta) = \frac{1}{n}\sum_{i=1}^{n}\ell(f_\theta(x_i), y_i)
+$$
+
+là Monte Carlo estimate của:
+
+$$
+\mathcal{R}(\theta) = \mathbb{E}_{(x,y)\sim p_{\text{data}}}\left[\ell(f_\theta(x), y)\right]
+$$
+
+Khi dataset lớn và sample đại diện tốt, empirical risk gần population risk hơn. Nhưng nếu dataset lệch, thiếu vùng quan trọng, hoặc train/test distribution khác nhau, empirical risk có thể đánh lừa model.
+
+Đây là cách xác suất nối sang generalization:
+
+| Đại lượng | Ý nghĩa |
+|---|---|
+| Population risk | loss trung bình trên phân phối thật |
+| Empirical risk | loss trung bình trên dataset |
+| Generalization gap | chênh lệch giữa performance train và data mới |
+| Distribution shift | train distribution khác test/deploy distribution |
+
+## Mini-batch là Monte Carlo estimate của gradient
+
+Full-batch gradient của empirical risk:
+
+$$
+\nabla_\theta \hat{\mathcal{R}}(\theta)
+=
+\frac{1}{n}\sum_{i=1}^{n}\nabla_\theta \ell_i(\theta)
+$$
+
+Nếu dataset lớn, tính gradient trên toàn bộ $n$ sample mỗi step rất đắt. Mini-batch SGD lấy một batch $B$:
+
+$$
+\tilde{g}_B
+=
+\frac{1}{|B|}\sum_{i\in B}\nabla_\theta \ell_i(\theta)
+$$
+
+Đây là Monte Carlo estimate của full gradient. Nếu batch được sample đều:
+
+$$
+\mathbb{E}[\tilde{g}_B] = \nabla_\theta \hat{\mathcal{R}}(\theta)
+$$
+
+Gradient mini-batch vì vậy là **unbiased nhưng noisy**.
+
+<Note type="intuition">
+SGD không "đi sai hướng" một cách ngẫu nhiên vô nghĩa. Mỗi mini-batch gradient là một ước lượng nhiễu của hướng gradient trung bình. Noise này vừa giúp scale training, vừa ảnh hưởng đến generalization.
+</Note>
+
+## Batch size và noise
+
+Batch size điều khiển độ nhiễu của estimate:
+
+| Batch size | Gradient estimate | Hành vi |
+|---|---|---|
+| nhỏ | noisy, rẻ | update nhiều, regularization ngầm mạnh hơn |
+| vừa | cân bằng | thường là vùng thực dụng |
+| rất lớn | ít noise, đắt | cần tune learning rate, dễ sharp minima hơn trong nhiều setting |
+
+Về mặt Monte Carlo, tăng batch size làm giảm phương sai gradient. Nhưng giảm noise không luôn tốt hơn. Một chút noise có thể giúp model không bám quá cứng vào vùng sharp hoặc pattern ngẫu nhiên của batch.
+
+Đây là cầu nối sang [SGD Deep Dive](/dl-anatomy/training/sgd-deep-dive): SGD là optimization method, nhưng noise của nó có nguồn gốc xác suất từ mini-batch sampling.
+
+## Data augmentation cũng là expectation
+
+Data augmentation thêm một nguồn ngẫu nhiên nữa. Thay vì chỉ có sample $(x,y)$, ta có transformation ngẫu nhiên $a \sim \mathcal{A}$:
+
+$$
+\tilde{x} = a(x)
+$$
+
+Objective trở thành:
+
+$$
+\mathbb{E}_{(x,y)\sim p_{\text{data}}}\mathbb{E}_{a\sim\mathcal{A}}
+\left[\ell(f_\theta(a(x)), y)\right]
+$$
+
+Khi mỗi epoch dùng crop/color jitter/noise khác nhau, training đang lấy Monte Carlo estimate của kỳ vọng qua augmentation distribution.
+
+Điều này giải thích vì sao augmentation không chỉ là "thêm data". Nó định nghĩa những biến đổi mà model nên invariant hoặc robust.
+
+## Dropout là expectation qua mask
+
+Dropout cũng thêm randomness. Với một dropout mask $m$:
+
+$$
+h' = m \odot h
+$$
+
+Training loss có thể được nhìn như expectation qua mask:
+
+$$
+\mathbb{E}_{m}\left[\ell(f_{\theta,m}(x), y)\right]
+$$
+
+Mỗi forward pass sample một network con. Training tối ưu trung bình qua nhiều mask. Khi inference, dropout thường được tắt hoặc dùng scaling để xấp xỉ ensemble average.
+
+<Note type="paper">
+Dropout, data augmentation và mini-batch SGD có vẻ là ba trick khác nhau, nhưng đều có chung một pattern: thêm randomness rồi tối ưu một kỳ vọng được ước lượng bằng sample.
+</Note>
+
+## Latent variables và reparameterization
+
+Trong VAE và nhiều generative model, loss có expectation qua latent variable:
+
+$$
+\mathbb{E}_{z\sim q_\phi(z\mid x)}[\log p_\theta(x\mid z)]
+$$
+
+Ta thường không tính được expectation này chính xác, nên sample $z$ và lấy Monte Carlo estimate.
+
+Vấn đề: nếu $z$ được sample từ distribution phụ thuộc tham số $\phi$, làm sao backprop qua sampling?
+
+VAE dùng **reparameterization trick**:
+
+$$
+z = \mu_\phi(x) + \sigma_\phi(x)\odot \epsilon,\qquad \epsilon\sim\mathcal{N}(0,I)
+$$
+
+Thay vì sample trực tiếp từ $q_\phi(z\mid x)$, ta sample noise $\epsilon$ độc lập với tham số, rồi biến đổi nó bằng $\mu_\phi,\sigma_\phi$. Nhờ vậy gradient có thể đi qua $\mu,\sigma$.
+
+## Train, validation và test đều là estimate
+
+Validation metric cũng là Monte Carlo estimate của performance trên một distribution:
+
+$$
+\hat{M}_{\text{val}} = \frac{1}{n_{\text{val}}}\sum_i M(x_i,y_i)
+$$
+
+Nếu validation set nhỏ, metric có noise. Một model hơn model khác 0.1% accuracy chưa chắc thật sự tốt hơn nếu variance lớn.
+
+Điều này đặc biệt quan trọng khi:
+
+- dataset nhỏ
+- class imbalance mạnh
+- benchmark có nhiều subset
+- metric không mượt như accuracy/F1
+- test distribution khác validation distribution
+
+## Những hiểu nhầm thường gặp
+
+**Expectation không phải một sample.** Một sample loss cao không có nghĩa expected loss cao; ngược lại, expected loss thấp vẫn có thể có tail cases tệ.
+
+**Unbiased không có nghĩa là tốt nhất.** Một estimator unbiased nhưng variance rất lớn có thể kém thực dụng hơn estimator hơi bias nhưng ổn định hơn.
+
+**Batch lớn không tự động tốt hơn.** Nó giảm gradient noise, nhưng có thể cần điều chỉnh learning rate, warmup, regularization và training recipe.
+
+**Validation score cũng có noise.** Đừng đọc mọi chênh lệch nhỏ như sự thật tuyệt đối.
+
+## Bức tranh chung
+
+| Deep learning object | Probability view |
+|---|---|
+| Training loss | expectation trên data distribution |
+| Dataset loss | Monte Carlo estimate của population risk |
+| Mini-batch gradient | Monte Carlo estimate của full gradient |
+| Data augmentation | expectation qua transformation distribution |
+| Dropout | expectation qua mask distribution |
+| VAE latent sample | Monte Carlo estimate qua latent variable |
+| Validation metric | estimate của performance trên data mới |
+
+Một khi nhìn deep learning qua expectation, nhiều thứ trở nên thống nhất hơn: dataset là sample từ thế giới thật, mini-batch là sample từ dataset, augmentation là sample từ transformation, dropout là sample từ network mask, latent variable là sample từ distribution ẩn.
+
+Training không chỉ là "tính loss rồi update". Nó là quá trình tối ưu các kỳ vọng mà ta chỉ nhìn thấy qua những sample hữu hạn và noisy.
+
+## Papers tham khảo
+
+| Paper | |
+|---|---|
+| Metropolis & Ulam (1949) | The Monte Carlo Method |
+| Robbins & Monro (1951) | A Stochastic Approximation Method |
+| Bottou (2010) | Large-Scale Machine Learning with Stochastic Gradient Descent |
+| Srivastava et al. (2014) | Dropout: A Simple Way to Prevent Neural Networks from Overfitting |
+| Kingma & Welling (2013) | Auto-Encoding Variational Bayes |

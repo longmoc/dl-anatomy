@@ -324,6 +324,20 @@ declare module 'astro:content' {
 } & { render(): Render[".mdx"] };
 };
 "foundations": {
+"expectation-monte-carlo-en.mdx": {
+	id: "expectation-monte-carlo-en.mdx";
+  slug: "expectation-monte-carlo-en";
+  body: string;
+  collection: "foundations";
+  data: InferEntrySchema<"foundations">
+} & { render(): Render[".mdx"] };
+"expectation-monte-carlo.mdx": {
+	id: "expectation-monte-carlo.mdx";
+  slug: "expectation-monte-carlo";
+  body: string;
+  collection: "foundations";
+  data: InferEntrySchema<"foundations">
+} & { render(): Render[".mdx"] };
 "likelihood-cross-entropy-kl-en.mdx": {
 	id: "likelihood-cross-entropy-kl-en.mdx";
   slug: "likelihood-cross-entropy-kl-en";

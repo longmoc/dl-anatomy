@@ -1,0 +1,313 @@
+---
+title: "Expectation & Monte Carlo"
+description: "Expectation is the language of average loss; Monte Carlo is how deep learning estimates expectations with datasets, mini-batches, sampling, and stochastic gradients."
+lang: en
+category: foundations
+order: 2
+parent: probability
+translation: expectation-monte-carlo
+tags: [probability, expectation, monte-carlo, empirical-risk, stochastic-gradient]
+---
+
+import Note from '../../components/Note.astro';
+import MonteCarloExpectationDiagram from '../../components/MonteCarloExpectationDiagram.astro';
+
+# Expectation & Monte Carlo
+
+The [Likelihood, Cross-Entropy & KL Divergence](/dl-anatomy/foundations/likelihood-cross-entropy-kl-en) article viewed training as pulling the model distribution toward the data distribution. But in real training, we do not have the full data distribution. We only have datasets, mini-batches, samples, noise, and augmentation.
+
+This is where **expectation** and **Monte Carlo** enter.
+
+In deep learning, a loss is rarely a single value. It is usually the **expected average** of a random quantity:
+
+$$
+\mathcal{R}(\theta) = \mathbb{E}_{(x,y)\sim p_{\text{data}}}\left[\ell(f_\theta(x), y)\right]
+$$
+
+We want to minimize the true risk $\mathcal{R}(\theta)$, but we do not know $p_{\text{data}}$. So we estimate the expectation by averaging over observed data.
+
+<MonteCarloExpectationDiagram lang="en" />
+
+## What is expectation?
+
+If $X$ is a discrete random variable, the expectation of a function $g(X)$ is:
+
+$$
+\mathbb{E}_{X\sim p}[g(X)] = \sum_x p(x)g(x)
+$$
+
+If $X$ is continuous:
+
+$$
+\mathbb{E}_{X\sim p}[g(X)] = \int p(x)g(x)\,dx
+$$
+
+Intuitively, expectation is the long-run average value if we sample from the distribution many times.
+
+| Notation | Meaning |
+|---|---|
+| $X \sim p$ | $X$ is sampled from distribution $p$ |
+| $g(X)$ | the quantity measured on the sample |
+| $\mathbb{E}[g(X)]$ | the theoretical average of that quantity |
+
+<Note type="intuition">
+Expectation is not "the most common value". It is a probability-weighted average. In a heavily skewed distribution, the expectation may lie in a region that is not typical of individual samples.
+</Note>
+
+## Loss is an expectation
+
+In supervised learning, each sample $(x,y)$ creates a loss:
+
+$$
+\ell(f_\theta(x), y)
+$$
+
+But the model should not only work well on one sample. It should work well on average over the data distribution:
+
+$$
+\mathcal{R}(\theta) = \mathbb{E}_{(x,y)\sim p_{\text{data}}}\left[\ell(f_\theta(x), y)\right]
+$$
+
+This is called **expected risk** or **population risk**.
+
+The problem: $p_{\text{data}}$ is the real-world distribution, and we do not know it fully. A dataset is only a finite set of samples from that distribution:
+
+$$
+\mathcal{D} = \{(x_i,y_i)\}_{i=1}^{n}
+$$
+
+So we replace expected risk with **empirical risk**:
+
+$$
+\hat{\mathcal{R}}(\theta) = \frac{1}{n}\sum_{i=1}^{n}\ell(f_\theta(x_i), y_i)
+$$
+
+Basic supervised training is empirical risk minimization:
+
+$$
+\theta^\* = \arg\min_\theta \hat{\mathcal{R}}(\theta)
+$$
+
+## Monte Carlo — averaging samples to estimate an expectation
+
+Monte Carlo is a simple idea:
+
+> If an expectation cannot be computed exactly, sample many times and average.
+
+Suppose we want:
+
+$$
+\mu = \mathbb{E}_{X\sim p}[g(X)]
+$$
+
+Draw $m$ independent samples:
+
+$$
+x_1,\dots,x_m \sim p
+$$
+
+The Monte Carlo estimate is:
+
+$$
+\hat{\mu}_m = \frac{1}{m}\sum_{i=1}^{m}g(x_i)
+$$
+
+If samples are independent and from the right distribution, $\hat{\mu}_m$ is unbiased:
+
+$$
+\mathbb{E}[\hat{\mu}_m] = \mu
+$$
+
+Its variance decreases with the number of samples:
+
+$$
+\text{Var}(\hat{\mu}_m) = \frac{\text{Var}(g(X))}{m}
+$$
+
+In other words, standard error decreases as $1/\sqrt{m}$, not $1/m$. To reduce noise by 10x, we usually need about 100x more samples.
+
+<Note type="result">
+Dataset loss, validation loss, mini-batch loss, gradient estimates, dropout averages, data augmentation averages — many things in deep learning are Monte Carlo estimates under another name.
+</Note>
+
+## A dataset is a Monte Carlo estimate of the data distribution
+
+Empirical risk:
+
+$$
+\hat{\mathcal{R}}(\theta) = \frac{1}{n}\sum_{i=1}^{n}\ell(f_\theta(x_i), y_i)
+$$
+
+is a Monte Carlo estimate of:
+
+$$
+\mathcal{R}(\theta) = \mathbb{E}_{(x,y)\sim p_{\text{data}}}\left[\ell(f_\theta(x), y)\right]
+$$
+
+When the dataset is large and representative, empirical risk becomes closer to population risk. But if the dataset is biased, missing important regions, or differs from the test distribution, empirical risk can mislead the model.
+
+This is how probability connects to generalization:
+
+| Quantity | Meaning |
+|---|---|
+| Population risk | average loss on the true distribution |
+| Empirical risk | average loss on the dataset |
+| Generalization gap | gap between train performance and new-data performance |
+| Distribution shift | train distribution differs from test/deploy distribution |
+
+## A mini-batch is a Monte Carlo estimate of the gradient
+
+The full-batch gradient of empirical risk is:
+
+$$
+\nabla_\theta \hat{\mathcal{R}}(\theta)
+=
+\frac{1}{n}\sum_{i=1}^{n}\nabla_\theta \ell_i(\theta)
+$$
+
+If the dataset is large, computing this over all $n$ samples every step is expensive. Mini-batch SGD takes a batch $B$:
+
+$$
+\tilde{g}_B
+=
+\frac{1}{|B|}\sum_{i\in B}\nabla_\theta \ell_i(\theta)
+$$
+
+This is a Monte Carlo estimate of the full gradient. If the batch is sampled uniformly:
+
+$$
+\mathbb{E}[\tilde{g}_B] = \nabla_\theta \hat{\mathcal{R}}(\theta)
+$$
+
+So the mini-batch gradient is **unbiased but noisy**.
+
+<Note type="intuition">
+SGD is not moving in a meaningless random direction. Each mini-batch gradient is a noisy estimate of the average gradient direction. That noise both makes training scalable and affects generalization.
+</Note>
+
+## Batch size and noise
+
+Batch size controls the noise of the estimate:
+
+| Batch size | Gradient estimate | Behavior |
+|---|---|---|
+| small | noisy, cheap | many updates, stronger implicit regularization |
+| medium | balanced | often the practical region |
+| very large | low noise, expensive | needs LR tuning, can prefer sharper minima in many settings |
+
+From the Monte Carlo view, increasing batch size reduces gradient variance. But reducing noise is not always better. Some noise can prevent the model from sticking too closely to sharp regions or random batch-specific patterns.
+
+This connects to [SGD Deep Dive](/dl-anatomy/training/sgd-deep-dive-en): SGD is an optimization method, but its noise comes from mini-batch sampling.
+
+## Data augmentation is also an expectation
+
+Data augmentation adds another source of randomness. Instead of only sampling $(x,y)$, we sample a random transformation $a \sim \mathcal{A}$:
+
+$$
+\tilde{x} = a(x)
+$$
+
+The objective becomes:
+
+$$
+\mathbb{E}_{(x,y)\sim p_{\text{data}}}\mathbb{E}_{a\sim\mathcal{A}}
+\left[\ell(f_\theta(a(x)), y)\right]
+$$
+
+When each epoch uses different crops, color jitter, or noise, training is taking a Monte Carlo estimate of an expectation over the augmentation distribution.
+
+This explains why augmentation is not only "more data". It defines transformations the model should become invariant or robust to.
+
+## Dropout is an expectation over masks
+
+Dropout also adds randomness. With a dropout mask $m$:
+
+$$
+h' = m \odot h
+$$
+
+Training loss can be viewed as an expectation over masks:
+
+$$
+\mathbb{E}_{m}\left[\ell(f_{\theta,m}(x), y)\right]
+$$
+
+Each forward pass samples a sub-network. Training optimizes an average over many masks. At inference, dropout is usually disabled or scaled to approximate the ensemble average.
+
+<Note type="paper">
+Dropout, data augmentation, and mini-batch SGD look like three different tricks, but they share the same pattern: add randomness, then optimize an expectation estimated by samples.
+</Note>
+
+## Latent variables and reparameterization
+
+In VAEs and many generative models, the loss contains an expectation over a latent variable:
+
+$$
+\mathbb{E}_{z\sim q_\phi(z\mid x)}[\log p_\theta(x\mid z)]
+$$
+
+We often cannot compute this expectation exactly, so we sample $z$ and use a Monte Carlo estimate.
+
+The problem: if $z$ is sampled from a distribution that depends on parameter $\phi$, how do we backpropagate through sampling?
+
+VAEs use the **reparameterization trick**:
+
+$$
+z = \mu_\phi(x) + \sigma_\phi(x)\odot \epsilon,\qquad \epsilon\sim\mathcal{N}(0,I)
+$$
+
+Instead of sampling directly from $q_\phi(z\mid x)$, we sample noise $\epsilon$ independent of the parameters, then transform it with $\mu_\phi,\sigma_\phi$. This lets gradients flow through $\mu,\sigma$.
+
+## Train, validation, and test are all estimates
+
+Validation metrics are also Monte Carlo estimates of performance on a distribution:
+
+$$
+\hat{M}_{\text{val}} = \frac{1}{n_{\text{val}}}\sum_i M(x_i,y_i)
+$$
+
+If the validation set is small, the metric has noise. A model beating another by 0.1% accuracy may not truly be better if variance is large.
+
+This matters especially when:
+
+- datasets are small
+- class imbalance is strong
+- benchmarks have many subsets
+- metrics are not smooth, such as accuracy/F1
+- the test distribution differs from validation
+
+## Common misunderstandings
+
+**Expectation is not one sample.** One high-loss sample does not imply high expected loss; low expected loss can still hide bad tail cases.
+
+**Unbiased does not mean best.** An unbiased estimator with huge variance can be less useful than a slightly biased but stable estimator.
+
+**Large batches are not automatically better.** They reduce gradient noise, but may require changes to learning rate, warmup, regularization, and the training recipe.
+
+**Validation scores also have noise.** Do not treat every tiny difference as absolute truth.
+
+## The Big Picture
+
+| Deep learning object | Probability view |
+|---|---|
+| Training loss | expectation over the data distribution |
+| Dataset loss | Monte Carlo estimate of population risk |
+| Mini-batch gradient | Monte Carlo estimate of the full gradient |
+| Data augmentation | expectation over a transformation distribution |
+| Dropout | expectation over a mask distribution |
+| VAE latent sample | Monte Carlo estimate over a latent variable |
+| Validation metric | estimate of performance on new data |
+
+Once we view deep learning through expectation, many things become unified: a dataset is a sample from the world, a mini-batch is a sample from the dataset, augmentation is a sample from transformations, dropout is a sample from network masks, and a latent variable is a sample from a hidden distribution.
+
+Training is not just "compute loss and update". It is the process of optimizing expectations that we only observe through finite, noisy samples.
+
+## References
+
+| Paper | |
+|---|---|
+| Metropolis & Ulam (1949) | The Monte Carlo Method |
+| Robbins & Monro (1951) | A Stochastic Approximation Method |
+| Bottou (2010) | Large-Scale Machine Learning with Stochastic Gradient Descent |
+| Srivastava et al. (2014) | Dropout: A Simple Way to Prevent Neural Networks from Overfitting |
+| Kingma & Welling (2013) | Auto-Encoding Variational Bayes |

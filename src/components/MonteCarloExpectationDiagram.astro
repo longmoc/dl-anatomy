@@ -1,0 +1,104 @@
+---
+interface Props {
+  lang?: 'vi' | 'en';
+}
+const { lang = 'vi' } = Astro.props;
+
+const L = lang === 'en'
+  ? {
+      title: 'Monte Carlo: estimate an expectation by averaging samples',
+      dist: 'unknown data distribution',
+      samples: 'samples',
+      avg: 'sample average',
+      target: 'true expectation',
+      note1: 'few samples: noisy estimate',
+      note2: 'more samples: lower variance',
+      cap: 'Deep learning losses are expectations over data. A dataset, mini-batch, or sampled latent variable gives a Monte Carlo estimate of that expectation.',
+    }
+  : {
+      title: 'Monte Carlo: ước lượng kỳ vọng bằng trung bình mẫu',
+      dist: 'phân phối dữ liệu không biết đầy đủ',
+      samples: 'samples',
+      avg: 'trung bình mẫu',
+      target: 'kỳ vọng thật',
+      note1: 'ít mẫu: ước lượng nhiễu',
+      note2: 'nhiều mẫu: phương sai thấp hơn',
+      cap: 'Loss trong deep learning thường là kỳ vọng trên dữ liệu. Dataset, mini-batch hoặc latent sample đều cho ta một ước lượng Monte Carlo của kỳ vọng đó.',
+    };
+---
+
+<figure class="mce" data-lang={lang}>
+  <svg viewBox="0 0 720 330" role="img" aria-label="Monte Carlo expectation diagram" class="mce-svg">
+    <defs>
+      <marker id="mce-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" class="mce-head" />
+      </marker>
+    </defs>
+
+    <text x="360" y="28" class="mce-title">{L.title}</text>
+
+    <!-- distribution curve -->
+    <path d="M70,220 C112,218 122,150 160,150 C206,150 210,220 250,220 C295,220 306,82 356,82 C414,82 424,220 472,220 C515,220 526,160 566,160 C606,160 616,218 650,220" class="mce-curve" fill="none" />
+    <line x1="70" y1="220" x2="650" y2="220" class="mce-axis" />
+    <text x="360" y="252" class="mce-small">{L.dist}</text>
+
+    <!-- true expectation -->
+    <line x1="386" y1="74" x2="386" y2="230" class="mce-target" />
+    <rect x="318" y="52" width="136" height="28" rx="7" class="mce-target-box" />
+    <text x="386" y="70" class="mce-box-text">{L.target}</text>
+
+    <!-- samples -->
+    {[130, 178, 336, 365, 401, 530, 586].map((x, i) => (
+      <g>
+        <circle cx={x} cy={212 - (i % 3) * 8} r="5" class="mce-dot" />
+        <line x1={x} y1={215} x2={x} y2="268" class="mce-drop" />
+      </g>
+    ))}
+    <text x="216" y="292" class="mce-note">{L.note1}</text>
+
+    <!-- sample average arrow -->
+    <line x1="370" y1="268" x2="430" y2="268" class="mce-line" marker-end="url(#mce-arrow)" />
+    <rect x="438" y="249" width="142" height="38" rx="8" class="mce-box" />
+    <text x="509" y="272" class="mce-box-text">{L.avg}</text>
+
+    <text x="514" y="312" class="mce-note">{L.note2}</text>
+    <text x="212" y="118" class="mce-small">{L.samples}</text>
+  </svg>
+  <figcaption class="mce-cap">{L.cap}</figcaption>
+</figure>
+
+<style>
+  .mce {
+    margin: 1.75rem 0;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg2);
+    padding: 0.75rem 0 0.2rem;
+  }
+  .mce-svg { display: block; width: 100%; max-width: 780px; height: auto; margin: 0 auto; }
+  .mce-title { fill: var(--text); font-family: var(--mono); font-size: 13px; font-weight: 600; text-anchor: middle; }
+  .mce-curve { stroke: var(--accent); stroke-width: 2; }
+  .mce-axis { stroke: var(--border); stroke-width: 1.4; }
+  .mce-target { stroke: var(--amber); stroke-width: 1.7; stroke-dasharray: 5 4; }
+  .mce-target-box { fill: var(--bg); stroke: var(--amber); stroke-width: 1.4; }
+  .mce-dot { fill: var(--accent2); stroke: var(--bg); stroke-width: 1.4; }
+  .mce-drop { stroke: var(--accent2); stroke-width: 1; opacity: 0.35; }
+  .mce-line { stroke: var(--muted); stroke-width: 1.5; }
+  .mce-head { fill: var(--muted); }
+  .mce-box { fill: var(--bg); stroke: var(--accent2); stroke-width: 1.5; }
+  .mce-box-text, .mce-small, .mce-note {
+    font-family: var(--mono);
+    text-anchor: middle;
+  }
+  .mce-box-text { fill: var(--text); font-size: 10.5px; font-weight: 600; }
+  .mce-small { fill: var(--muted); font-size: 10px; }
+  .mce-note { fill: var(--muted); font-size: 9.5px; }
+  .mce-cap {
+    font-size: 0.78rem;
+    color: var(--muted);
+    text-align: center;
+    padding: 0.5rem 1rem 0.65rem;
+    font-style: italic;
+    line-height: 1.5;
+  }
+</style>
