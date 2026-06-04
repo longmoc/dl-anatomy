@@ -11,7 +11,7 @@ const L = lang === 'en'
       z: 'representation Z',
       y: 'target Y',
       noise: 'nuisance / noise',
-      keep: 'keep useful info',
+      keep: ['keep useful info'],
       drop: 'drop irrelevant detail',
       mi1: 'high I(Z;Y)',
       mi2: 'controlled I(Z;X)',
@@ -23,7 +23,7 @@ const L = lang === 'en'
       z: 'representation Z',
       y: 'target Y',
       noise: 'nhiễu / chi tiết phụ',
-      keep: 'giữ thông tin hữu ích',
+      keep: ['giữ thông tin', 'hữu ích'],
       drop: 'bỏ chi tiết không cần',
       mi1: 'I(Z;Y) cao',
       mi2: 'I(Z;X) được kiểm soát',
@@ -49,7 +49,9 @@ const L = lang === 'en'
     <text x="123" y="148" class="ibd-label">{L.x}</text>
 
     <line x1="182" y1="143" x2="298" y2="143" class="ibd-line" marker-end="url(#ibd-arrow)" />
-    <text x="240" y="127" class="ibd-small">{L.keep}</text>
+    {L.keep.map((ln, i) => (
+      <text x="240" y={127 - (L.keep.length - 1) * 6.5 + i * 13} class="ibd-small">{ln}</text>
+    ))}
 
     <rect x="300" y="108" width="132" height="70" rx="12" class="ibd-z" />
     <text x="366" y="148" class="ibd-label">{L.z}</text>
