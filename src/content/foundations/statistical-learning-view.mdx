@@ -10,6 +10,7 @@ tags: [statistical-learning, generalization, empirical-risk, overfitting, induct
 
 import Note from '../../components/Note.astro';
 import StatisticalLearningViz from '../../components/StatisticalLearningViz.astro';
+import GeneralizationGapDiagram from '../../components/GeneralizationGapDiagram.astro';
 
 # Statistical Learning View of Deep Learning
 
@@ -29,7 +30,7 @@ Statistical learning view bắt đầu từ câu hỏi:
 
 Nếu nói ngắn gọn: deep learning không chỉ là minimize loss. Nó là quá trình chọn một hàm từ rất nhiều hàm có thể fit data, và câu hỏi khó là vì sao hàm được chọn lại đúng ngoài train set.
 
-<StatisticalLearningViz />
+<GeneralizationGapDiagram />
 
 ## Bài toán học từ sample hữu hạn
 
@@ -237,6 +238,8 @@ Overfitting xảy ra khi model học cả noise hoặc chi tiết riêng của t
 Nhưng trong deep learning hiện đại, câu chuyện không còn đơn giản là "model lớn thì overfit". Nhiều model lớn hơn lại generalize tốt hơn, đặc biệt khi data lớn và training đúng.
 
 Vì vậy overfitting nên được hiểu là: model học pattern không ổn định ngoài train distribution, không chỉ là model có nhiều tham số.
+
+<StatisticalLearningViz />
 
 ### Bias-variance view
 

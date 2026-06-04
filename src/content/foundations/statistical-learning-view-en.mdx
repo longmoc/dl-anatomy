@@ -10,6 +10,7 @@ tags: [statistical-learning, generalization, empirical-risk, overfitting, induct
 
 import Note from '../../components/Note.astro';
 import StatisticalLearningViz from '../../components/StatisticalLearningViz.astro';
+import GeneralizationGapDiagram from '../../components/GeneralizationGapDiagram.astro';
 
 # Statistical Learning View of Deep Learning
 
@@ -29,7 +30,7 @@ This is a different lens from architecture or optimization. Architecture asks wh
 
 In short: deep learning is not merely loss minimization. It is the process of selecting one function among many functions that could fit the data, and the hard question is why the selected function remains correct outside the training set.
 
-<StatisticalLearningViz lang="en" />
+<GeneralizationGapDiagram lang="en" />
 
 ## Learning from finite samples
 
@@ -237,6 +238,8 @@ Overfitting happens when the model learns noise or training-set-specific details
 But in modern deep learning, the story is no longer as simple as "large model means overfit." Many larger models generalize better, especially when data is large and training is done well.
 
 So overfitting should mean: the model learned patterns that do not remain stable outside the training distribution, not merely that it has many parameters.
+
+<StatisticalLearningViz lang="en" />
 
 ### Bias-variance view
 
