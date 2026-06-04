@@ -21,10 +21,10 @@ Các bài trước nhìn training qua likelihood, expectation, entropy và infor
 Trong deep learning thông thường, ta train một bộ tham số:
 
 $$
-\theta^\* = \arg\min_\theta \mathcal{L}(\theta)
+\theta^* = \arg\min_\theta \mathcal{L}(\theta)
 $$
 
-Sau training, model dùng đúng một $\theta^\*$ để dự đoán. Bayesian view không xem tham số là một điểm duy nhất. Nó xem tham số là đại lượng bất định:
+Sau training, model dùng đúng một $\theta^*$ để dự đoán. Bayesian view không xem tham số là một điểm duy nhất. Nó xem tham số là đại lượng bất định:
 
 $$
 \theta \sim p(\theta)
@@ -165,9 +165,9 @@ $$
 Bayesian prediction không chỉ dùng một tham số. Nó trung bình hóa qua posterior:
 
 $$
-p(y_\* \mid x_\*, \mathcal{D})
+p(y_* \mid x_*, \mathcal{D})
 =
-\int p(y_\*\mid x_\*,\theta)p(\theta\mid\mathcal{D})\,d\theta
+\int p(y_*\mid x_*,\theta)p(\theta\mid\mathcal{D})\,d\theta
 $$
 
 Đây gọi là **posterior predictive distribution**.
@@ -177,10 +177,10 @@ Trực giác: nếu còn nhiều bộ tham số hợp lý sau khi thấy data, p
 Trong thực tế deep learning, tích phân này gần như không tính được chính xác. Ta thường xấp xỉ bằng samples hoặc ensemble:
 
 $$
-p(y_\* \mid x_\*, \mathcal{D})
+p(y_* \mid x_*, \mathcal{D})
 \approx
 \frac{1}{S}\sum_{s=1}^{S}
-p(y_\*\mid x_\*,\theta_s),
+p(y_*\mid x_*,\theta_s),
 \qquad \theta_s \sim p(\theta\mid\mathcal{D})
 $$
 

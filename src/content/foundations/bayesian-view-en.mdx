@@ -21,10 +21,10 @@ The previous articles viewed training through likelihood, expectation, entropy, 
 In ordinary deep learning, we train one parameter setting:
 
 $$
-\theta^\* = \arg\min_\theta \mathcal{L}(\theta)
+\theta^* = \arg\min_\theta \mathcal{L}(\theta)
 $$
 
-After training, the model predicts with that one $\theta^\*$. The Bayesian view does not treat parameters as a single point. It treats parameters as uncertain quantities:
+After training, the model predicts with that one $\theta^*$. The Bayesian view does not treat parameters as a single point. It treats parameters as uncertain quantities:
 
 $$
 \theta \sim p(\theta)
@@ -165,9 +165,9 @@ This is negative log-likelihood plus L2 regularization.
 Bayesian prediction does not use only one parameter value. It averages over the posterior:
 
 $$
-p(y_\* \mid x_\*, \mathcal{D})
+p(y_* \mid x_*, \mathcal{D})
 =
-\int p(y_\*\mid x_\*,\theta)p(\theta\mid\mathcal{D})\,d\theta
+\int p(y_*\mid x_*,\theta)p(\theta\mid\mathcal{D})\,d\theta
 $$
 
 This is the **posterior predictive distribution**.
@@ -177,10 +177,10 @@ Intuitively: if many parameter settings remain plausible after seeing data, pred
 In deep learning, this integral is almost never exactly tractable. We usually approximate it with samples or ensembles:
 
 $$
-p(y_\* \mid x_\*, \mathcal{D})
+p(y_* \mid x_*, \mathcal{D})
 \approx
 \frac{1}{S}\sum_{s=1}^{S}
-p(y_\*\mid x_\*,\theta_s),
+p(y_*\mid x_*,\theta_s),
 \qquad \theta_s \sim p(\theta\mid\mathcal{D})
 $$
 
