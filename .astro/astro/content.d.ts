@@ -324,6 +324,20 @@ declare module 'astro:content' {
 } & { render(): Render[".mdx"] };
 };
 "foundations": {
+"bayesian-view-en.mdx": {
+	id: "bayesian-view-en.mdx";
+  slug: "bayesian-view-en";
+  body: string;
+  collection: "foundations";
+  data: InferEntrySchema<"foundations">
+} & { render(): Render[".mdx"] };
+"bayesian-view.mdx": {
+	id: "bayesian-view.mdx";
+  slug: "bayesian-view";
+  body: string;
+  collection: "foundations";
+  data: InferEntrySchema<"foundations">
+} & { render(): Render[".mdx"] };
 "entropy-mutual-information-compression-en.mdx": {
 	id: "entropy-mutual-information-compression-en.mdx";
   slug: "entropy-mutual-information-compression-en";

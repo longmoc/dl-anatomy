@@ -1,0 +1,424 @@
+---
+title: "Bayesian View of Deep Learning"
+description: "Bayesian view đọc learning như quá trình cập nhật niềm tin: prior, likelihood, posterior, MAP, posterior predictive, uncertainty và các xấp xỉ Bayesian trong deep learning."
+lang: vi
+category: foundations
+order: 4
+parent: probability
+translation: bayesian-view-en
+tags: [probability, bayesian, posterior, uncertainty, calibration]
+---
+
+import Note from '../../components/Note.astro';
+import BayesianUpdateDiagram from '../../components/BayesianUpdateDiagram.astro';
+
+# Bayesian View of Deep Learning
+
+Các bài trước nhìn training qua likelihood, expectation, entropy và information. Bayesian view đổi câu hỏi thêm một bước:
+
+> Sau khi thấy dữ liệu, ta nên tin điều gì về tham số, prediction và uncertainty?
+
+Trong deep learning thông thường, ta train một bộ tham số:
+
+$$
+\theta^\* = \arg\min_\theta \mathcal{L}(\theta)
+$$
+
+Sau training, model dùng đúng một $\theta^\*$ để dự đoán. Bayesian view không xem tham số là một điểm duy nhất. Nó xem tham số là đại lượng bất định:
+
+$$
+\theta \sim p(\theta)
+$$
+
+Sau khi quan sát dữ liệu $\mathcal{D}$, niềm tin về $\theta$ được cập nhật thành posterior:
+
+$$
+p(\theta \mid \mathcal{D})
+$$
+
+<BayesianUpdateDiagram />
+
+## Bayes' rule
+
+Bayes' rule là:
+
+$$
+p(\theta \mid \mathcal{D})
+=
+\frac{p(\mathcal{D}\mid \theta)p(\theta)}{p(\mathcal{D})}
+$$
+
+Các thành phần:
+
+| Thành phần | Ý nghĩa |
+|---|---|
+| $p(\theta)$ | prior — ta tin gì về tham số trước khi thấy data |
+| $p(\mathcal{D}\mid\theta)$ | likelihood — tham số này giải thích data tốt không |
+| $p(\theta\mid\mathcal{D})$ | posterior — ta tin gì về tham số sau khi thấy data |
+| $p(\mathcal{D})$ | evidence — xác suất của data dưới toàn bộ model |
+
+Bayesian learning là quá trình chuyển:
+
+$$
+\text{prior} + \text{data} \rightarrow \text{posterior}
+$$
+
+<Note type="intuition">
+Frequentist training thường hỏi "tham số nào tốt nhất?". Bayesian learning hỏi "những tham số nào còn hợp lý sau khi thấy data, và ta nên tin mỗi tham số bao nhiêu?".
+</Note>
+
+## Likelihood không phải posterior
+
+Likelihood:
+
+$$
+p(\mathcal{D}\mid\theta)
+$$
+
+là xác suất của data nếu $\theta$ đã cho. Nó là hàm theo $\theta$, nhưng không phải phân phối xác suất của $\theta$.
+
+Posterior:
+
+$$
+p(\theta\mid\mathcal{D})
+$$
+
+mới là phân phối của tham số sau khi thấy data.
+
+Đây là nhầm lẫn rất phổ biến:
+
+- likelihood: data có hợp với tham số này không?
+- posterior: tham số này còn đáng tin bao nhiêu sau khi thấy data?
+
+Để biến likelihood thành posterior, ta cần prior và evidence.
+
+## Prior — niềm tin trước khi thấy data
+
+Prior $p(\theta)$ mã hóa điều ta tin về tham số trước khi quan sát dataset hiện tại.
+
+Ví dụ:
+
+| Prior | Trực giác |
+|---|---|
+| Gaussian quanh 0 | tham số nhỏ hợp lý hơn tham số rất lớn |
+| Sparse prior | nhiều tham số nên gần 0 |
+| Smoothness prior | hàm không nên dao động quá gắt |
+| Architecture prior | CNN giả định locality, GNN giả định graph relation |
+
+Trong deep learning, prior không chỉ nằm ở công thức $p(\theta)$. Nó còn nằm trong architecture, initialization, data augmentation, optimizer, normalization và training recipe.
+
+<Note type="result">
+Weight decay có thể được đọc như một Gaussian prior trên tham số. Khi ta phạt $\|\theta\|^2$, ta đang nói: trước khi thấy data, tham số nhỏ đáng tin hơn tham số lớn.
+</Note>
+
+## MAP — cầu nối giữa Bayesian và training thường
+
+Maximum a posteriori (MAP) chọn tham số có posterior lớn nhất:
+
+$$
+\theta_{\text{MAP}}
+=
+\arg\max_\theta p(\theta\mid\mathcal{D})
+$$
+
+Dùng Bayes' rule:
+
+$$
+\theta_{\text{MAP}}
+=
+\arg\max_\theta p(\mathcal{D}\mid\theta)p(\theta)
+$$
+
+Lấy log:
+
+$$
+\theta_{\text{MAP}}
+=
+\arg\max_\theta \log p(\mathcal{D}\mid\theta) + \log p(\theta)
+$$
+
+Nếu prior là Gaussian:
+
+$$
+p(\theta) \propto \exp\left(-\lambda\|\theta\|^2\right)
+$$
+
+thì:
+
+$$
+\log p(\theta) = -\lambda\|\theta\|^2 + C
+$$
+
+MAP trở thành:
+
+$$
+\arg\min_\theta
+\left[
+-\log p(\mathcal{D}\mid\theta) + \lambda\|\theta\|^2
+\right]
+$$
+
+Đây chính là negative log-likelihood cộng L2 regularization.
+
+## Posterior predictive — dự đoán bằng cách trung bình hóa uncertainty
+
+Bayesian prediction không chỉ dùng một tham số. Nó trung bình hóa qua posterior:
+
+$$
+p(y_\* \mid x_\*, \mathcal{D})
+=
+\int p(y_\*\mid x_\*,\theta)p(\theta\mid\mathcal{D})\,d\theta
+$$
+
+Đây gọi là **posterior predictive distribution**.
+
+Trực giác: nếu còn nhiều bộ tham số hợp lý sau khi thấy data, prediction nên phản ánh sự không chắc chắn đó. Một điểm prediction duy nhất có thể che mất uncertainty.
+
+Trong thực tế deep learning, tích phân này gần như không tính được chính xác. Ta thường xấp xỉ bằng samples hoặc ensemble:
+
+$$
+p(y_\* \mid x_\*, \mathcal{D})
+\approx
+\frac{1}{S}\sum_{s=1}^{S}
+p(y_\*\mid x_\*,\theta_s),
+\qquad \theta_s \sim p(\theta\mid\mathcal{D})
+$$
+
+## Aleatoric và epistemic uncertainty
+
+Bayesian view giúp tách hai loại uncertainty:
+
+| Loại | Ý nghĩa | Có giảm bằng thêm data không? |
+|---|---|---|
+| Aleatoric uncertainty | nhiễu/bất định vốn có trong dữ liệu | thường không |
+| Epistemic uncertainty | model thiếu hiểu biết vì thiếu data | có thể |
+
+Ví dụ:
+
+- Ảnh mờ đến mức không thể phân biệt class: aleatoric.
+- Model gặp vùng input rất khác train distribution: epistemic.
+
+Deep learning thường trả softmax probability, nhưng softmax confidence không tự động tách được hai loại uncertainty này. Một model có thể rất tự tin ở vùng ngoài distribution.
+
+<Note type="warning">
+Softmax probability không phải uncertainty đáng tin theo nghĩa Bayesian. Nó là xác suất có điều kiện dưới một model đã train, không phải posterior uncertainty về tham số hay distribution shift.
+</Note>
+
+## Calibration — xác suất nói ra có đáng tin không?
+
+Calibration hỏi:
+
+> Trong các prediction model nói 80% confidence, nó đúng khoảng 80% thật không?
+
+Một model có accuracy cao vẫn có thể calibration kém. Deep networks thường overconfident: dự đoán sai nhưng confidence rất cao.
+
+Các cách đọc calibration:
+
+| Khái niệm | Ý nghĩa |
+|---|---|
+| Reliability diagram | so confidence với accuracy theo bucket |
+| Expected Calibration Error | trung bình chênh lệch confidence-accuracy |
+| Temperature scaling | chia logits cho temperature để làm distribution mềm hơn |
+| Bayesian averaging | trung bình nhiều model/samples để giảm overconfidence |
+
+Bayesian view tự nhiên dẫn đến calibration tốt hơn nếu posterior predictive được xấp xỉ tốt, vì prediction không đến từ một điểm tham số duy nhất.
+
+## Vì sao Bayesian deep learning khó?
+
+Với neural network hiện đại, $\theta$ có hàng triệu hoặc hàng tỉ tham số. Posterior:
+
+$$
+p(\theta\mid\mathcal{D})
+$$
+
+là phân phối cực kỳ high-dimensional, phức tạp, nhiều mode, khó chuẩn hóa.
+
+Evidence:
+
+$$
+p(\mathcal{D}) = \int p(\mathcal{D}\mid\theta)p(\theta)\,d\theta
+$$
+
+cũng là tích phân gần như không thể tính chính xác.
+
+Vì vậy Bayesian deep learning chủ yếu là câu chuyện xấp xỉ:
+
+- variational inference
+- Laplace approximation
+- Monte Carlo dropout
+- deep ensembles
+- stochastic gradient MCMC
+- Bayesian last layer
+
+## Variational inference — xấp xỉ posterior bằng một phân phối dễ hơn
+
+Variational inference chọn một họ phân phối dễ tính $q_\phi(\theta)$ để xấp xỉ posterior thật:
+
+$$
+q_\phi(\theta) \approx p(\theta\mid\mathcal{D})
+$$
+
+Ta tối ưu để $q_\phi$ gần posterior bằng cách minimize KL:
+
+$$
+D_{\text{KL}}(q_\phi(\theta)\|p(\theta\mid\mathcal{D}))
+$$
+
+Trực tiếp tối ưu biểu thức này khó vì posterior chứa evidence. Thay vào đó ta maximize ELBO:
+
+$$
+\mathcal{L}_{\text{ELBO}}
+=
+\mathbb{E}_{q_\phi(\theta)}[\log p(\mathcal{D}\mid\theta)]
+-
+D_{\text{KL}}(q_\phi(\theta)\|p(\theta))
+$$
+
+Hai phần có trực giác rõ:
+
+- fit data tốt dưới các tham số sample từ $q_\phi$
+- không để $q_\phi$ lệch quá xa prior
+
+Đây là cùng tinh thần xuất hiện trong VAE, chỉ khác latent variable là $z$ thay vì tham số $\theta$.
+
+## Laplace approximation — posterior gần mode như Gaussian
+
+Laplace approximation bắt đầu từ MAP solution $\theta_{\text{MAP}}$, rồi xấp xỉ posterior quanh mode bằng Gaussian:
+
+$$
+p(\theta\mid\mathcal{D})
+\approx
+\mathcal{N}(\theta_{\text{MAP}}, H^{-1})
+$$
+
+Trong đó $H$ là Hessian của negative log posterior quanh mode.
+
+Trực giác:
+
+- nếu loss basin hẹp, posterior uncertainty nhỏ ở hướng đó
+- nếu loss basin phẳng, posterior uncertainty lớn hơn
+
+Vấn đề là Hessian của deep network rất lớn. Thực tế phải dùng diagonal, low-rank, K-FAC hoặc chỉ áp dụng cho last layer.
+
+## Monte Carlo dropout
+
+Dropout thường được xem là regularization. Nhưng có một cách đọc Bayesian: giữ dropout bật khi inference, chạy model nhiều lần với nhiều dropout mask, rồi lấy trung bình prediction.
+
+$$
+p(y\mid x,\mathcal{D})
+\approx
+\frac{1}{S}\sum_{s=1}^{S}p(y\mid x, m_s)
+$$
+
+Nếu các mask tạo ra prediction khác nhau nhiều, model có uncertainty cao hơn.
+
+Monte Carlo dropout rẻ hơn nhiều so với full Bayesian neural network, nhưng chỉ là xấp xỉ thô. Nó không thay thế posterior thật.
+
+## Deep ensembles — Bayesian-ish nhưng rất thực dụng
+
+Deep ensemble train nhiều model độc lập:
+
+$$
+\theta_1,\dots,\theta_M
+$$
+
+thường với initialization khác nhau, shuffle data khác nhau hoặc recipe khác nhau. Prediction:
+
+$$
+p(y\mid x)
+\approx
+\frac{1}{M}\sum_{m=1}^{M}p(y\mid x,\theta_m)
+$$
+
+Ensemble không phải Bayesian posterior đúng nghĩa, nhưng hoạt động rất mạnh trong thực tế:
+
+- cải thiện accuracy
+- cải thiện calibration
+- phát hiện uncertainty tốt hơn single model
+- đơn giản hơn nhiều xấp xỉ Bayesian phức tạp
+
+Đổi lại, chi phí train/inference tăng theo số model.
+
+## Bayesian last layer
+
+Một compromise thực dụng: giữ feature extractor deep network cố định, chỉ đặt Bayesian posterior lên layer cuối.
+
+Nếu:
+
+$$
+z = f_\theta(x)
+$$
+
+thì ta làm Bayesian inference cho classifier/regressor trên $z$.
+
+Ưu điểm:
+
+- rẻ hơn full Bayesian neural network
+- tận dụng representation mạnh
+- uncertainty tốt hơn ở head
+
+Nhược điểm: uncertainty trong feature extractor không được mô hình hóa đầy đủ.
+
+## Bayesian view và regularization
+
+Nhiều regularization quen thuộc có thể đọc như prior hoặc Bayesian approximation:
+
+| Kỹ thuật | Bayesian/probability lens |
+|---|---|
+| L2 weight decay | Gaussian prior trên weights |
+| L1 regularization | Laplace/sparse prior |
+| Dropout | approximate model averaging |
+| Data augmentation | prior về invariance |
+| Early stopping | implicit regularization, tránh fit noise |
+| Ensemble | xấp xỉ trung bình qua nhiều hypothesis |
+
+Điều này không có nghĩa mọi trick đều "thật sự Bayesian" theo nghĩa chặt. Nhưng Bayesian lens cho ta ngôn ngữ để hỏi: prior là gì, uncertainty ở đâu, và prediction có đang trung bình hóa qua các khả năng hợp lý không?
+
+## OOD và epistemic uncertainty
+
+Một lý do Bayesian view quan trọng là out-of-distribution (OOD).
+
+Nếu input nằm xa train distribution, model nên nói "tôi không biết". Nhưng neural network thường vẫn trả softmax confidence cao.
+
+Bayesian intuition: ở vùng có ít data, posterior over functions nên rộng hơn. Nhiều hàm vẫn hợp với train data nhưng dự đoán khác nhau ở vùng chưa thấy. Vì vậy posterior predictive nên uncertain.
+
+Deep ensembles thường bắt được phần nào hiện tượng này: các model khác nhau đồng ý ở vùng data quen thuộc, nhưng phân kỳ ở vùng lạ.
+
+## Những hiểu nhầm thường gặp
+
+**Bayesian không có nghĩa là luôn tốt hơn.** Xấp xỉ posterior kém có thể tệ hơn một model deterministic được train tốt.
+
+**Prior không phải chỉ là công thức.** Architecture, augmentation và optimizer cũng đưa bias vào model.
+
+**Uncertainty không chỉ là entropy của softmax.** Entropy output nói model phân vân dưới một bộ tham số; Bayesian uncertainty còn hỏi tham số/hàm nào còn hợp lý.
+
+**MAP không phải full Bayesian.** MAP vẫn chọn một điểm tham số. Nó dùng prior, nhưng không giữ posterior uncertainty.
+
+**Ensemble không phải posterior chính xác.** Nó là xấp xỉ thực dụng, thường tốt, nhưng không tự động có diễn giải Bayesian chặt chẽ.
+
+## Bức tranh chung
+
+| Khái niệm | Câu hỏi |
+|---|---|
+| Prior | Ta tin gì trước khi thấy data? |
+| Likelihood | Tham số này giải thích data tốt không? |
+| Posterior | Sau khi thấy data, tham số nào còn hợp lý? |
+| MAP | Điểm posterior lớn nhất là gì? |
+| Posterior predictive | Dự đoán sau khi trung bình hóa uncertainty là gì? |
+| Aleatoric uncertainty | Dữ liệu vốn bất định bao nhiêu? |
+| Epistemic uncertainty | Model thiếu hiểu biết vì thiếu data bao nhiêu? |
+| Calibration | Xác suất model nói ra có khớp tần suất thật không? |
+
+Bayesian view không bắt ta phải biến mọi neural network thành Bayesian neural network đầy đủ. Giá trị lớn nhất của nó là lens: learning là cập nhật niềm tin, regularization là prior, prediction nên phản ánh uncertainty, và một điểm tham số duy nhất thường che mất nhiều điều model chưa biết.
+
+## Papers tham khảo
+
+| Paper | |
+|---|---|
+| Bayes (1763) | An Essay towards Solving a Problem in the Doctrine of Chances |
+| MacKay (1992) | A Practical Bayesian Framework for Backpropagation Networks |
+| Neal (1996) | Bayesian Learning for Neural Networks |
+| Blundell et al. (2015) | Weight Uncertainty in Neural Networks |
+| Gal & Ghahramani (2016) | Dropout as a Bayesian Approximation |
+| Lakshminarayanan et al. (2017) | Simple and Scalable Predictive Uncertainty Estimation using Deep Ensembles |
+| Guo et al. (2017) | On Calibration of Modern Neural Networks |

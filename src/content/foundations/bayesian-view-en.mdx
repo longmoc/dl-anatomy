@@ -1,0 +1,424 @@
+---
+title: "Bayesian View of Deep Learning"
+description: "The Bayesian view reads learning as belief updating: priors, likelihoods, posteriors, MAP, posterior predictive distributions, uncertainty, and Bayesian approximations in deep learning."
+lang: en
+category: foundations
+order: 4
+parent: probability
+translation: bayesian-view
+tags: [probability, bayesian, posterior, uncertainty, calibration]
+---
+
+import Note from '../../components/Note.astro';
+import BayesianUpdateDiagram from '../../components/BayesianUpdateDiagram.astro';
+
+# Bayesian View of Deep Learning
+
+The previous articles viewed training through likelihood, expectation, entropy, and information. The Bayesian view adds another question:
+
+> After seeing data, what should we believe about parameters, predictions, and uncertainty?
+
+In ordinary deep learning, we train one parameter setting:
+
+$$
+\theta^\* = \arg\min_\theta \mathcal{L}(\theta)
+$$
+
+After training, the model predicts with that one $\theta^\*$. The Bayesian view does not treat parameters as a single point. It treats parameters as uncertain quantities:
+
+$$
+\theta \sim p(\theta)
+$$
+
+After observing data $\mathcal{D}$, our belief about $\theta$ becomes the posterior:
+
+$$
+p(\theta \mid \mathcal{D})
+$$
+
+<BayesianUpdateDiagram lang="en" />
+
+## Bayes' rule
+
+Bayes' rule is:
+
+$$
+p(\theta \mid \mathcal{D})
+=
+\frac{p(\mathcal{D}\mid \theta)p(\theta)}{p(\mathcal{D})}
+$$
+
+The pieces:
+
+| Component | Meaning |
+|---|---|
+| $p(\theta)$ | prior — what we believe about parameters before seeing data |
+| $p(\mathcal{D}\mid\theta)$ | likelihood — how well these parameters explain the data |
+| $p(\theta\mid\mathcal{D})$ | posterior — what we believe after seeing data |
+| $p(\mathcal{D})$ | evidence — probability of data under the whole model |
+
+Bayesian learning is the move:
+
+$$
+\text{prior} + \text{data} \rightarrow \text{posterior}
+$$
+
+<Note type="intuition">
+Frequentist training often asks "which parameter value is best?". Bayesian learning asks "which parameter values remain plausible after seeing data, and how much should we believe each one?".
+</Note>
+
+## Likelihood is not posterior
+
+Likelihood:
+
+$$
+p(\mathcal{D}\mid\theta)
+$$
+
+is the probability of data given $\theta$. It is a function of $\theta$, but it is not a probability distribution over $\theta$.
+
+Posterior:
+
+$$
+p(\theta\mid\mathcal{D})
+$$
+
+is the distribution over parameters after seeing data.
+
+This is a common confusion:
+
+- likelihood: does the data fit this parameter value?
+- posterior: how plausible is this parameter value after seeing data?
+
+To turn likelihood into posterior, we need a prior and evidence.
+
+## Prior — belief before seeing data
+
+The prior $p(\theta)$ encodes what we believe about parameters before observing the current dataset.
+
+Examples:
+
+| Prior | Intuition |
+|---|---|
+| Gaussian around 0 | small weights are more plausible than huge weights |
+| Sparse prior | many parameters should be near 0 |
+| Smoothness prior | functions should not oscillate too sharply |
+| Architecture prior | CNN assumes locality, GNN assumes graph relations |
+
+In deep learning, priors do not live only in the formula $p(\theta)$. They also live in architecture, initialization, data augmentation, optimizer, normalization, and the training recipe.
+
+<Note type="result">
+Weight decay can be read as a Gaussian prior over parameters. When we penalize $\|\theta\|^2$, we are saying: before seeing data, smaller weights are more plausible than larger weights.
+</Note>
+
+## MAP — the bridge between Bayesian and ordinary training
+
+Maximum a posteriori (MAP) chooses the parameter value with the largest posterior:
+
+$$
+\theta_{\text{MAP}}
+=
+\arg\max_\theta p(\theta\mid\mathcal{D})
+$$
+
+Using Bayes' rule:
+
+$$
+\theta_{\text{MAP}}
+=
+\arg\max_\theta p(\mathcal{D}\mid\theta)p(\theta)
+$$
+
+Taking logs:
+
+$$
+\theta_{\text{MAP}}
+=
+\arg\max_\theta \log p(\mathcal{D}\mid\theta) + \log p(\theta)
+$$
+
+If the prior is Gaussian:
+
+$$
+p(\theta) \propto \exp\left(-\lambda\|\theta\|^2\right)
+$$
+
+then:
+
+$$
+\log p(\theta) = -\lambda\|\theta\|^2 + C
+$$
+
+MAP becomes:
+
+$$
+\arg\min_\theta
+\left[
+-\log p(\mathcal{D}\mid\theta) + \lambda\|\theta\|^2
+\right]
+$$
+
+This is negative log-likelihood plus L2 regularization.
+
+## Posterior predictive — predict by averaging uncertainty
+
+Bayesian prediction does not use only one parameter value. It averages over the posterior:
+
+$$
+p(y_\* \mid x_\*, \mathcal{D})
+=
+\int p(y_\*\mid x_\*,\theta)p(\theta\mid\mathcal{D})\,d\theta
+$$
+
+This is the **posterior predictive distribution**.
+
+Intuitively: if many parameter settings remain plausible after seeing data, prediction should reflect that uncertainty. A single point prediction can hide uncertainty.
+
+In deep learning, this integral is almost never exactly tractable. We usually approximate it with samples or ensembles:
+
+$$
+p(y_\* \mid x_\*, \mathcal{D})
+\approx
+\frac{1}{S}\sum_{s=1}^{S}
+p(y_\*\mid x_\*,\theta_s),
+\qquad \theta_s \sim p(\theta\mid\mathcal{D})
+$$
+
+## Aleatoric and epistemic uncertainty
+
+The Bayesian view helps separate two kinds of uncertainty:
+
+| Type | Meaning | Reduced by more data? |
+|---|---|---|
+| Aleatoric uncertainty | noise or ambiguity inherent in the data | usually no |
+| Epistemic uncertainty | model uncertainty due to lack of data | yes, often |
+
+Examples:
+
+- An image too blurry to distinguish the class: aleatoric.
+- A model sees an input region unlike training data: epistemic.
+
+Deep learning usually returns softmax probabilities, but softmax confidence does not automatically separate these uncertainty types. A model can be very confident out of distribution.
+
+<Note type="warning">
+Softmax probability is not reliable Bayesian uncertainty by itself. It is a conditional probability under one trained model, not posterior uncertainty over parameters or distribution shift.
+</Note>
+
+## Calibration — can we trust the probabilities?
+
+Calibration asks:
+
+> Among predictions made with 80% confidence, is the model correct about 80% of the time?
+
+A model can have high accuracy and poor calibration. Deep networks are often overconfident: wrong predictions can still have very high confidence.
+
+Ways to read calibration:
+
+| Concept | Meaning |
+|---|---|
+| Reliability diagram | compare confidence with accuracy by bucket |
+| Expected Calibration Error | average confidence-accuracy gap |
+| Temperature scaling | divide logits by a temperature to soften the distribution |
+| Bayesian averaging | average many models/samples to reduce overconfidence |
+
+The Bayesian view naturally points toward better calibration if posterior predictive inference is approximated well, because predictions do not come from a single parameter point.
+
+## Why Bayesian deep learning is hard
+
+Modern neural networks have millions or billions of parameters. The posterior:
+
+$$
+p(\theta\mid\mathcal{D})
+$$
+
+is extremely high-dimensional, complex, multimodal, and hard to normalize.
+
+The evidence:
+
+$$
+p(\mathcal{D}) = \int p(\mathcal{D}\mid\theta)p(\theta)\,d\theta
+$$
+
+is also an integral we almost never compute exactly.
+
+So Bayesian deep learning is mostly about approximation:
+
+- variational inference
+- Laplace approximation
+- Monte Carlo dropout
+- deep ensembles
+- stochastic gradient MCMC
+- Bayesian last layer
+
+## Variational inference — approximate posterior with an easier distribution
+
+Variational inference chooses a tractable family $q_\phi(\theta)$ to approximate the true posterior:
+
+$$
+q_\phi(\theta) \approx p(\theta\mid\mathcal{D})
+$$
+
+We optimize $q_\phi$ to be close to the posterior by minimizing:
+
+$$
+D_{\text{KL}}(q_\phi(\theta)\|p(\theta\mid\mathcal{D}))
+$$
+
+Directly optimizing this is hard because the posterior contains the evidence. Instead, we maximize the ELBO:
+
+$$
+\mathcal{L}_{\text{ELBO}}
+=
+\mathbb{E}_{q_\phi(\theta)}[\log p(\mathcal{D}\mid\theta)]
+-
+D_{\text{KL}}(q_\phi(\theta)\|p(\theta))
+$$
+
+The two parts have clear intuition:
+
+- fit the data well under parameters sampled from $q_\phi$
+- keep $q_\phi$ from drifting too far from the prior
+
+This is the same spirit that appears in VAEs, except the latent variable is $z$ instead of parameter $\theta$.
+
+## Laplace approximation — posterior near a mode as Gaussian
+
+Laplace approximation starts from the MAP solution $\theta_{\text{MAP}}$, then approximates the posterior around that mode with a Gaussian:
+
+$$
+p(\theta\mid\mathcal{D})
+\approx
+\mathcal{N}(\theta_{\text{MAP}}, H^{-1})
+$$
+
+where $H$ is the Hessian of the negative log posterior around the mode.
+
+Intuition:
+
+- if the loss basin is narrow, posterior uncertainty is small in that direction
+- if the loss basin is flat, posterior uncertainty is larger
+
+The problem is that the Hessian of a deep network is huge. Practical versions use diagonal, low-rank, K-FAC, or apply Laplace only to the last layer.
+
+## Monte Carlo dropout
+
+Dropout is usually treated as regularization. But one Bayesian reading is: keep dropout active at inference, run the model many times with different dropout masks, then average predictions.
+
+$$
+p(y\mid x,\mathcal{D})
+\approx
+\frac{1}{S}\sum_{s=1}^{S}p(y\mid x, m_s)
+$$
+
+If different masks produce very different predictions, uncertainty is higher.
+
+Monte Carlo dropout is much cheaper than a full Bayesian neural network, but it is only a rough approximation. It does not replace the true posterior.
+
+## Deep ensembles — Bayesian-ish but very practical
+
+Deep ensembles train several independent models:
+
+$$
+\theta_1,\dots,\theta_M
+$$
+
+often with different initializations, data shuffling, or training recipes. Prediction is:
+
+$$
+p(y\mid x)
+\approx
+\frac{1}{M}\sum_{m=1}^{M}p(y\mid x,\theta_m)
+$$
+
+An ensemble is not an exact Bayesian posterior, but it works very well in practice:
+
+- improves accuracy
+- improves calibration
+- captures uncertainty better than a single model
+- is simpler than many complex Bayesian approximations
+
+The cost is higher training and inference compute.
+
+## Bayesian last layer
+
+A practical compromise: keep the deep feature extractor fixed, and place a Bayesian posterior only on the final layer.
+
+If:
+
+$$
+z = f_\theta(x)
+$$
+
+then we do Bayesian inference for the classifier/regressor on top of $z$.
+
+Advantages:
+
+- cheaper than a full Bayesian neural network
+- uses strong learned representations
+- gives better uncertainty at the head
+
+Limitation: uncertainty in the feature extractor is not fully modeled.
+
+## Bayesian view and regularization
+
+Many familiar regularization techniques can be read as priors or Bayesian approximations:
+
+| Technique | Bayesian/probability lens |
+|---|---|
+| L2 weight decay | Gaussian prior over weights |
+| L1 regularization | Laplace/sparse prior |
+| Dropout | approximate model averaging |
+| Data augmentation | prior over invariances |
+| Early stopping | implicit regularization, avoids fitting noise |
+| Ensemble | approximate averaging over multiple hypotheses |
+
+This does not mean every trick is "truly Bayesian" in a strict sense. But the Bayesian lens gives us a language for asking: what is the prior, where is uncertainty, and are predictions averaging over plausible possibilities?
+
+## OOD and epistemic uncertainty
+
+One reason the Bayesian view matters is out-of-distribution (OOD) behavior.
+
+If an input lies far from the training distribution, the model should say "I do not know". But neural networks often still return high softmax confidence.
+
+Bayesian intuition: in regions with little data, the posterior over functions should be wider. Many functions may fit the training data but disagree in unseen regions. So the posterior predictive should be uncertain.
+
+Deep ensembles often capture part of this phenomenon: models agree in familiar data regions, but diverge in unfamiliar regions.
+
+## Common misunderstandings
+
+**Bayesian does not always mean better.** A poor posterior approximation can be worse than a well-trained deterministic model.
+
+**A prior is not only a formula.** Architecture, augmentation, and optimizer also inject bias into the model.
+
+**Uncertainty is not only softmax entropy.** Output entropy says the model is unsure under one parameter setting; Bayesian uncertainty asks which parameters or functions remain plausible.
+
+**MAP is not full Bayesian.** MAP still chooses one parameter point. It uses a prior, but it does not preserve posterior uncertainty.
+
+**An ensemble is not an exact posterior.** It is a practical approximation, often strong, but not automatically a strict Bayesian object.
+
+## The Big Picture
+
+| Concept | Question |
+|---|---|
+| Prior | What do we believe before seeing data? |
+| Likelihood | How well does this parameter value explain the data? |
+| Posterior | After seeing data, which parameters remain plausible? |
+| MAP | Which parameter point has the largest posterior? |
+| Posterior predictive | What is the prediction after averaging uncertainty? |
+| Aleatoric uncertainty | How much uncertainty is inherent in the data? |
+| Epistemic uncertainty | How much uncertainty comes from lack of data? |
+| Calibration | Do model probabilities match real frequencies? |
+
+The Bayesian view does not force every neural network to become a full Bayesian neural network. Its main value is the lens: learning is belief updating, regularization is a prior, prediction should reflect uncertainty, and a single parameter point often hides much of what the model does not know.
+
+## References
+
+| Paper | |
+|---|---|
+| Bayes (1763) | An Essay towards Solving a Problem in the Doctrine of Chances |
+| MacKay (1992) | A Practical Bayesian Framework for Backpropagation Networks |
+| Neal (1996) | Bayesian Learning for Neural Networks |
+| Blundell et al. (2015) | Weight Uncertainty in Neural Networks |
+| Gal & Ghahramani (2016) | Dropout as a Bayesian Approximation |
+| Lakshminarayanan et al. (2017) | Simple and Scalable Predictive Uncertainty Estimation using Deep Ensembles |
+| Guo et al. (2017) | On Calibration of Modern Neural Networks |

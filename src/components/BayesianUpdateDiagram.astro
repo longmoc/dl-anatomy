@@ -1,0 +1,93 @@
+---
+interface Props {
+  lang?: 'vi' | 'en';
+}
+const { lang = 'vi' } = Astro.props;
+
+const L = lang === 'en'
+  ? {
+      title: 'Bayesian learning: update belief after seeing data',
+      prior: 'prior p(θ)',
+      likelihood: 'likelihood p(D|θ)',
+      posterior: 'posterior p(θ|D)',
+      predictive: 'posterior predictive',
+      average: 'average predictions over plausible parameters',
+      cap: 'Bayesian learning does not keep only one best parameter value. It updates a prior belief into a posterior distribution, then predicts by averaging over parameter uncertainty.',
+    }
+  : {
+      title: 'Bayesian learning: cập nhật niềm tin sau khi thấy dữ liệu',
+      prior: 'prior p(θ)',
+      likelihood: 'likelihood p(D|θ)',
+      posterior: 'posterior p(θ|D)',
+      predictive: 'posterior predictive',
+      average: 'lấy trung bình dự đoán qua các tham số còn hợp lý',
+      cap: 'Bayesian learning không chỉ giữ một bộ tham số tốt nhất. Nó cập nhật prior thành posterior distribution, rồi dự đoán bằng cách trung bình hóa qua uncertainty của tham số.',
+    };
+---
+
+<figure class="bud" data-lang={lang}>
+  <svg viewBox="0 0 760 330" role="img" aria-label="Bayesian update diagram" class="bud-svg">
+    <defs>
+      <marker id="bud-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" class="bud-head" />
+      </marker>
+    </defs>
+
+    <text x="380" y="28" class="bud-title">{L.title}</text>
+
+    <rect x="54" y="92" width="150" height="62" rx="10" class="bud-prior" />
+    <text x="129" y="128" class="bud-label">{L.prior}</text>
+
+    <rect x="54" y="188" width="150" height="62" rx="10" class="bud-like" />
+    <text x="129" y="224" class="bud-label">{L.likelihood}</text>
+
+    <line x1="204" y1="123" x2="302" y2="154" class="bud-line" marker-end="url(#bud-arrow)" />
+    <line x1="204" y1="219" x2="302" y2="185" class="bud-line" marker-end="url(#bud-arrow)" />
+
+    <rect x="304" y="128" width="166" height="82" rx="12" class="bud-post" />
+    <text x="387" y="164" class="bud-label">{L.posterior}</text>
+    <path d="M334,190 C348,160 370,150 386,174 C404,202 420,186 442,152" class="bud-curve" fill="none" />
+
+    <line x1="470" y1="169" x2="560" y2="169" class="bud-line2" marker-end="url(#bud-arrow)" />
+
+    <rect x="562" y="128" width="150" height="82" rx="12" class="bud-pred" />
+    <text x="637" y="158" class="bud-label">{L.predictive}</text>
+    <text x="637" y="183" class="bud-small">{L.average}</text>
+  </svg>
+  <figcaption class="bud-cap">{L.cap}</figcaption>
+</figure>
+
+<style>
+  .bud {
+    margin: 1.75rem 0;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg2);
+    padding: 0.75rem 0 0.2rem;
+  }
+  .bud-svg { display: block; width: 100%; max-width: 820px; height: auto; margin: 0 auto; }
+  .bud-title { fill: var(--text); font-family: var(--mono); font-size: 13px; font-weight: 600; text-anchor: middle; }
+  .bud-prior { fill: var(--bg); stroke: var(--accent); stroke-width: 1.8; }
+  .bud-like { fill: var(--bg); stroke: var(--amber); stroke-width: 1.8; }
+  .bud-post { fill: var(--bg); stroke: var(--accent2); stroke-width: 2; }
+  .bud-pred { fill: var(--bg); stroke: var(--muted); stroke-width: 1.8; }
+  .bud-line { stroke: var(--muted); stroke-width: 1.6; }
+  .bud-line2 { stroke: var(--accent2); stroke-width: 1.7; }
+  .bud-head { fill: var(--muted); }
+  .bud-curve { stroke: var(--accent2); stroke-width: 1.7; }
+  .bud-label, .bud-small {
+    fill: var(--text);
+    font-family: var(--mono);
+    text-anchor: middle;
+  }
+  .bud-label { font-size: 12px; font-weight: 700; }
+  .bud-small { fill: var(--muted); font-size: 9.2px; }
+  .bud-cap {
+    font-size: 0.78rem;
+    color: var(--muted);
+    text-align: center;
+    padding: 0.5rem 1rem 0.65rem;
+    font-style: italic;
+    line-height: 1.5;
+  }
+</style>
