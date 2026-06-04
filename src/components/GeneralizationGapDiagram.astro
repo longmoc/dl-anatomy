@@ -37,11 +37,12 @@ const bw = 0.12;
 const fhat = (x: number) => { let sw = 0, swy = 0; for (const p of tpts) { const u = (x - p.x) / bw; const w = Math.exp(-(u * u)) + 1e-9; sw += w; swy += w * p.y; } return swy / sw; };
 
 // ---- geometry ----
-const Wv = 760, PL = 44, PRr = 18, baseY = 250, vTop = 72;
+const Wv = 760, PL = 44, PRr = 18, baseY = 250, vTop = 86;
 const TX = (x: number) => PL + x * (Wv - PL - PRr);
-const TY = (v: number) => baseY - v * (baseY - vTop);
 const N = 170;
 const grid = Array.from({ length: N }, (_, i) => i / (N - 1));
+const VS = Math.max(...grid.map(f)) * 1.08;            // scale so the tallest peak nearly fills the plot
+const TY = (v: number) => baseY - (v / VS) * (baseY - vTop);
 const truePath = grid.map((x, i) => `${i ? 'L' : 'M'}${TX(x).toFixed(1)},${TY(f(x)).toFixed(1)}`).join(' ');
 const trueArea = `M${TX(0).toFixed(1)},${baseY} ` + grid.map(x => `L${TX(x).toFixed(1)},${TY(f(x)).toFixed(1)}`).join(' ') + ` L${TX(1).toFixed(1)},${baseY} Z`;
 const fhatPath = grid.map((x, i) => `${i ? 'L' : 'M'}${TX(x).toFixed(1)},${TY(fhat(x)).toFixed(1)}`).join(' ');
@@ -55,7 +56,7 @@ const gapLabel = unseenCols[1]; // middle one for the "gap" label
     <text x="380" y="24" class="ggd-title">{L.title}</text>
 
     <!-- legend -->
-    <g transform="translate(44,40)">
+    <g transform="translate(44,58)">
       <line x1="0" y1="-3" x2="20" y2="-3" class="ggd-true-line" />
       <text x="26" y="0" class="ggd-leg">{L.truef}</text>
       <rect x="118" y="-9" width="12" height="11" class="ggd-train-sw" />
