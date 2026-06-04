@@ -394,6 +394,20 @@ declare module 'astro:content' {
   collection: "foundations";
   data: InferEntrySchema<"foundations">
 } & { render(): Render[".mdx"] };
+"sampling-distribution-matching-en.mdx": {
+	id: "sampling-distribution-matching-en.mdx";
+  slug: "sampling-distribution-matching-en";
+  body: string;
+  collection: "foundations";
+  data: InferEntrySchema<"foundations">
+} & { render(): Render[".mdx"] };
+"sampling-distribution-matching.mdx": {
+	id: "sampling-distribution-matching.mdx";
+  slug: "sampling-distribution-matching";
+  body: string;
+  collection: "foundations";
+  data: InferEntrySchema<"foundations">
+} & { render(): Render[".mdx"] };
 };
 "optimization": {
 "loss-landscape-en.mdx": {

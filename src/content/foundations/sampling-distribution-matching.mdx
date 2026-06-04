@@ -1,0 +1,669 @@
+---
+title: "Sampling & Distribution Matching"
+description: "Sampling biến phân phối thành dữ liệu cụ thể; distribution matching hỏi làm sao để sample từ model giống sample từ dữ liệu thật."
+lang: vi
+category: foundations
+order: 5
+parent: probability
+translation: sampling-distribution-matching-en
+tags: [probability, sampling, generative-models, mcmc, diffusion]
+---
+
+import Note from '../../components/Note.astro';
+import SamplingDistributionMatchingDiagram from '../../components/SamplingDistributionMatchingDiagram.astro';
+
+# Sampling & Distribution Matching
+
+Các bài trước nói nhiều về probability dưới dạng **đánh giá**:
+
+- likelihood: model gán xác suất bao nhiêu cho dữ liệu thật?
+- cross-entropy/KL: model lệch khỏi phân phối thật bao nhiêu?
+- expectation/Monte Carlo: loss là kỳ vọng nào?
+- entropy/mutual information: phân phối chứa bao nhiêu uncertainty hoặc information?
+- Bayesian view: sau khi thấy data, ta tin điều gì?
+
+Bài này đổi hướng từ đánh giá sang **sinh dữ liệu**:
+
+> Nếu ta có một phân phối, làm sao lấy sample từ nó? Và nếu ta chỉ có sample dữ liệu thật, làm sao train model để sample của model giống dữ liệu thật?
+
+Đây là cửa vào tự nhiên của generative modeling. Một language model sinh token. Một diffusion model sinh ảnh. Một VAE sinh latent rồi decode thành dữ liệu. Một GAN biến noise thành sample. Tất cả đều có cùng câu hỏi nền:
+
+$$
+x \sim p_\theta(x)
+$$
+
+Model không chỉ cần gán probability đúng. Nó còn cần tạo ra sample có cấu trúc giống dữ liệu thật.
+
+<SamplingDistributionMatchingDiagram />
+
+## Sampling là gì?
+
+Sampling là quá trình lấy giá trị cụ thể từ một phân phối:
+
+$$
+x \sim p(x)
+$$
+
+Nếu $p(x)$ là phân phối tung xúc xắc, sample là một mặt xúc xắc. Nếu $p(x)$ là phân phối ảnh tự nhiên, sample là một ảnh. Nếu $p(x_t\mid x_{<t})$ là phân phối token tiếp theo, sample là token kế tiếp trong câu.
+
+Một điểm nhỏ nhưng quan trọng: **biết công thức của phân phối** và **lấy được sample tốt** là hai việc khác nhau.
+
+| Tình huống | Ta có gì? | Sampling có dễ không? |
+|---|---|---|
+| Gaussian thấp chiều | density rõ ràng | dễ |
+| Categorical nhỏ | xác suất từng outcome | dễ |
+| Language model | phân phối token từng bước | tương đối dễ, nhưng quyết định decoding quan trọng |
+| Posterior Bayesian | density chỉ biết đến hằng số chuẩn hóa | khó |
+| Ảnh tự nhiên | chỉ có dataset sample | rất khó |
+
+Trong deep learning, phần khó thường nằm ở phân phối cao chiều. Một ảnh $256\times256\times3$ là điểm trong không gian gần 200k chiều. Dữ liệu thật không lấp đầy không gian đó; nó nằm trên một cấu trúc rất mỏng, có regularity mạnh, và model phải học cấu trúc này từ sample.
+
+## Distribution matching là gì?
+
+Gọi phân phối dữ liệu thật là:
+
+$$
+p_{\text{data}}(x)
+$$
+
+và phân phối model là:
+
+$$
+p_\theta(x)
+$$
+
+Distribution matching là train sao cho:
+
+$$
+p_\theta(x) \approx p_{\text{data}}(x)
+$$
+
+Nhưng ta thường không biết công thức của $p_{\text{data}}$. Ta chỉ có dataset:
+
+$$
+x_1,\dots,x_n \sim p_{\text{data}}(x)
+$$
+
+Vì vậy matching hiếm khi là so sánh trực tiếp hai công thức density. Thay vào đó, mỗi họ generative model chọn một cách gián tiếp:
+
+- maximize likelihood của dữ liệu thật
+- minimize KL hoặc biến thể của divergence
+- học một discriminator phân biệt real/fake
+- match score, tức gradient của log-density
+- vận chuyển noise distribution thành data distribution
+- học một reverse process từ noise về data
+
+<Note type="intuition">
+Distribution matching không hỏi từng sample fake có copy đúng sample real nào không. Nó hỏi toàn bộ đám sample của model có cùng cấu trúc thống kê với đám sample thật không: mode, tần suất, correlation, texture, syntax, semantic và long-range dependency.
+</Note>
+
+## Density, sampler và implicit distribution
+
+Một generative model có thể cho ta nhiều thứ khác nhau.
+
+**Explicit density model** cho phép tính hoặc xấp xỉ:
+
+$$
+p_\theta(x)
+$$
+
+Ví dụ: autoregressive model, normalizing flow, một số VAE bound.
+
+**Implicit generative model** cho phép sample:
+
+$$
+z \sim p(z), \quad x = G_\theta(z)
+$$
+
+nhưng không dễ tính $p_\theta(x)$ tại một điểm cụ thể. GAN là ví dụ kinh điển.
+
+Sự khác biệt này quan trọng:
+
+| Loại model | Tính likelihood? | Sample? | Ví dụ |
+|---|---|---|---|
+| Autoregressive | dễ/đúng | tuần tự | language model, PixelCNN |
+| Flow | đúng | song song hoặc gần song song | RealNVP, Glow |
+| VAE | lower bound | dễ | VAE, conditional VAE |
+| GAN | khó | dễ | DCGAN, StyleGAN |
+| Diffusion | qua variational/score objective | nhiều bước denoise | DDPM, score-based model |
+
+Không có lựa chọn nào miễn phí. Model tính likelihood tốt chưa chắc sample đẹp. Model sample đẹp chưa chắc có density dễ đọc. Model generate nhanh chưa chắc train dễ.
+
+## Sampling từ categorical distribution
+
+Trong classification hoặc language modeling, output thường là categorical distribution:
+
+$$
+p_\theta(x_t=i\mid x_{<t})
+=
+\text{softmax}(l_i)
+$$
+
+Sampling token nghĩa là chọn một index theo xác suất này.
+
+Nếu luôn chọn xác suất cao nhất:
+
+$$
+x_t = \arg\max_i p_\theta(i\mid x_{<t})
+$$
+
+ta có greedy decoding. Greedy ổn cho một số task, nhưng trong generation mở, nó dễ lặp, khô và bỏ qua các nhánh hợp lý khác.
+
+Sampling thật sự giữ lại stochasticity:
+
+$$
+x_t \sim p_\theta(\cdot\mid x_{<t})
+$$
+
+Các biến thể như temperature, top-k, top-p không đổi bản chất của model; chúng đổi phân phối dùng để decode.
+
+## Temperature
+
+Với logits $l_i$, temperature sampling dùng:
+
+$$
+p_T(i) =
+\frac{\exp(l_i/T)}{\sum_j \exp(l_j/T)}
+$$
+
+Nếu $T < 1$, phân phối sắc hơn: token mạnh càng mạnh, output chắc hơn nhưng ít đa dạng.
+
+Nếu $T > 1$, phân phối phẳng hơn: output đa dạng hơn nhưng dễ nhiễu.
+
+Temperature là ví dụ tốt để thấy rằng **sampling policy** khác với **trained model**. Cùng một model có thể cho hành vi rất khác chỉ vì ta chọn cách sample khác.
+
+## Top-k và top-p
+
+Top-k giữ lại $k$ token có xác suất cao nhất, rồi renormalize.
+
+Top-p, hay nucleus sampling, giữ tập token nhỏ nhất sao cho tổng xác suất vượt ngưỡng $p$:
+
+$$
+\sum_{i\in S} p_\theta(i\mid x_{<t}) \ge p
+$$
+
+Top-p thường linh hoạt hơn top-k: khi model chắc, tập candidate nhỏ; khi model phân vân, tập candidate rộng hơn.
+
+Trong language model, decoding là một phần của hệ thống. Training học phân phối token; decoding quyết định ta đi qua phân phối đó như thế nào.
+
+## Ancestral sampling
+
+Nhiều model sinh dữ liệu bằng cách factorize joint distribution:
+
+$$
+p(x_1,\dots,x_T)
+=
+\prod_{t=1}^{T}p(x_t\mid x_{<t})
+$$
+
+Sampling diễn ra tuần tự:
+
+$$
+x_1 \sim p(x_1)
+$$
+
+$$
+x_2 \sim p(x_2\mid x_1)
+$$
+
+$$
+\dots
+$$
+
+$$
+x_T \sim p(x_T\mid x_{<T})
+$$
+
+Đây là ancestral sampling. Nó rất tự nhiên cho sequence: text, audio, time series. Ưu điểm là likelihood đúng và rõ. Nhược điểm là sampling chậm vì phải đi từng bước.
+
+Autoregressive language model hiện đại nằm trong nhóm này: model học phân phối token tiếp theo, rồi sinh chuỗi bằng cách lặp lại bước sample.
+
+## Reparameterization trick
+
+Một số phân phối có thể sample bằng cách biến đổi noise đơn giản.
+
+Với Gaussian:
+
+$$
+z \sim \mathcal{N}(\mu,\sigma^2)
+$$
+
+ta có thể viết:
+
+$$
+\epsilon \sim \mathcal{N}(0,1), \quad z = \mu + \sigma\epsilon
+$$
+
+Điểm quan trọng: randomness nằm ở $\epsilon$, còn $\mu,\sigma$ là tham số differentiable. Điều này cho phép backprop đi qua quá trình sampling.
+
+Đây là mấu chốt của VAE:
+
+$$
+z \sim q_\phi(z\mid x), \quad x \sim p_\theta(x\mid z)
+$$
+
+Nếu sample trực tiếp từ $q_\phi$ làm gradient bị chặn, reparameterization biến sampling thành phép biến đổi differentiable của noise.
+
+## Rejection sampling
+
+Rejection sampling dùng một proposal distribution $q(x)$ dễ sample, rồi chấp nhận hoặc loại sample theo tỉ lệ với target $p(x)$.
+
+Ý tưởng:
+
+1. sample $x \sim q(x)$
+2. sample $u \sim \text{Uniform}(0,1)$
+3. accept nếu $u$ đủ nhỏ so với $\frac{p(x)}{Mq(x)}$
+
+Nó đẹp về mặt lý thuyết, nhưng ở high dimension thường kém hiệu quả. Phần lớn sample bị reject. Vì vậy rejection sampling hữu ích để hiểu nguyên lý hơn là recipe chính cho deep generative model lớn.
+
+## Importance sampling
+
+Importance sampling không nhất thiết sinh sample mới để dùng trực tiếp. Nó dùng sample từ $q(x)$ để ước lượng kỳ vọng dưới $p(x)$:
+
+$$
+\mathbb{E}_{p(x)}[f(x)]
+=
+\mathbb{E}_{q(x)}
+\left[
+f(x)\frac{p(x)}{q(x)}
+\right]
+$$
+
+Tỉ lệ:
+
+$$
+w(x)=\frac{p(x)}{q(x)}
+$$
+
+gọi là importance weight.
+
+Nếu $q$ gần $p$, estimate tốt. Nếu $q$ bỏ sót vùng quan trọng của $p$, weight có variance lớn và estimate rất nhiễu.
+
+Trong deep learning, ý tưởng importance xuất hiện trong off-policy RL, negative sampling, weighted datasets, particle methods và một số cách estimate likelihood.
+
+## MCMC — sample khi normalization khó
+
+Nhiều phân phối chỉ biết đến hằng số chuẩn hóa:
+
+$$
+p(x) = \frac{\tilde{p}(x)}{Z}
+$$
+
+Ta biết $\tilde{p}(x)$ nhưng không biết:
+
+$$
+Z = \int \tilde{p}(x)\,dx
+$$
+
+MCMC, Markov Chain Monte Carlo, xây một chuỗi:
+
+$$
+x_0 \rightarrow x_1 \rightarrow x_2 \rightarrow \dots
+$$
+
+sao cho sau đủ lâu, $x_t$ trông như sample từ $p(x)$.
+
+Metropolis-Hastings là ví dụ cổ điển:
+
+- đề xuất trạng thái mới $x' \sim q(x'\mid x)$
+- chấp nhận $x'$ với xác suất phụ thuộc vào tỉ lệ target density
+- nếu reject, giữ lại $x$
+
+Điểm hay: nhiều thuật toán MCMC chỉ cần tỉ lệ density, nên hằng số $Z$ bị triệt tiêu.
+
+Điểm khó:
+
+- chain cần thời gian burn-in
+- sample liên tiếp bị correlated
+- high-dimensional distribution có thể mixing rất chậm
+- mode xa nhau làm chain khó nhảy qua
+
+MCMC là nền của Bayesian computation và energy-based models, nhưng không phải lúc nào cũng scale dễ cho deep learning hiện đại.
+
+## Langevin dynamics và score
+
+Nếu ta biết score:
+
+$$
+\nabla_x \log p(x)
+$$
+
+ta biết hướng làm data trở nên có xác suất cao hơn. Langevin dynamics dùng gradient này cộng noise:
+
+$$
+x_{t+1}
+=
+x_t
++ \frac{\epsilon}{2}\nabla_x \log p(x_t)
++ \sqrt{\epsilon}\,\eta_t
+$$
+
+Trong đó:
+
+$$
+\eta_t \sim \mathcal{N}(0,I)
+$$
+
+Trực giác:
+
+- gradient kéo sample về vùng density cao
+- noise giữ quá trình không sụp vào một mode duy nhất
+
+Score-based generative models học score ở nhiều mức noise, rồi sample bằng cách đi từ noise về data. Diffusion models hiện đại có liên hệ rất gần với góc nhìn này.
+
+## Distribution matching bằng maximum likelihood
+
+Cách trực tiếp nhất để match distribution là maximize likelihood dữ liệu thật:
+
+$$
+\max_\theta
+\mathbb{E}_{x\sim p_{\text{data}}}
+[\log p_\theta(x)]
+$$
+
+Tương đương minimize:
+
+$$
+D_{\text{KL}}(p_{\text{data}}\|p_\theta)
+$$
+
+vì:
+
+$$
+D_{\text{KL}}(p_{\text{data}}\|p_\theta)
+=
+\mathbb{E}_{p_{\text{data}}}
+[\log p_{\text{data}}(x)-\log p_\theta(x)]
+$$
+
+Term $\mathbb{E}_{p_{\text{data}}}[\log p_{\text{data}}(x)]$ không phụ thuộc $\theta$, nên optimize likelihood kéo $p_\theta$ về $p_{\text{data}}$.
+
+Ưu điểm:
+
+- objective rõ ràng
+- đo được NLL/perplexity
+- ổn định hơn adversarial training
+
+Nhược điểm:
+
+- cần tính hoặc xấp xỉ density
+- có thể ưu tiên phủ hết mode, đôi khi sample bị trung bình hóa hoặc kém sắc
+
+Autoregressive models và normalizing flows là hai họ hưởng lợi mạnh từ likelihood trực tiếp.
+
+## Forward KL và reverse KL
+
+Hai chiều KL cho hành vi khác nhau:
+
+$$
+D_{\text{KL}}(p_{\text{data}}\|p_\theta)
+$$
+
+thường gọi là forward KL trong ngữ cảnh này. Nó phạt nặng nếu model gán xác suất thấp cho vùng data thật. Vì vậy nó có xu hướng **mode-covering**: cố phủ các mode của data.
+
+Ngược lại:
+
+$$
+D_{\text{KL}}(p_\theta\|p_{\text{data}})
+$$
+
+phạt model nếu nó đặt mass vào vùng data thật có xác suất thấp. Nó có xu hướng **mode-seeking**: chọn vài mode chắc ăn, tránh vùng không chắc.
+
+Đây là lý do chiều divergence không phải chi tiết kỹ thuật nhỏ. Nó thay đổi hành vi sample.
+
+## Adversarial matching
+
+GAN không yêu cầu tính density của $p_\theta(x)$. Nó train hai mạng:
+
+- generator $G_\theta(z)$ sinh sample fake
+- discriminator $D_\psi(x)$ phân biệt real/fake
+
+Generator học để làm discriminator nhầm:
+
+$$
+z\sim p(z), \quad x_{\text{fake}} = G_\theta(z)
+$$
+
+Discriminator học một tín hiệu so sánh giữa sample thật và sample fake. Nếu discriminator mạnh và training cân bằng, generator bị kéo về phía distribution tạo sample giống thật hơn.
+
+Ưu điểm:
+
+- sample có thể rất sắc
+- không cần explicit likelihood
+- sampler thường nhanh
+
+Nhược điểm:
+
+- training bất ổn
+- mode collapse
+- khó đo likelihood
+- phụ thuộc mạnh vào architecture và training recipe
+
+GAN dạy một bài học lớn: distribution matching có thể làm bằng **so sánh sample**, không nhất thiết bằng density.
+
+## Moment matching và MMD
+
+Một cách khác là match thống kê của hai phân phối.
+
+Ví dụ đơn giản: match mean và covariance. Nhưng phân phối phức tạp không được xác định đầy đủ chỉ bởi hai moment đầu.
+
+MMD, Maximum Mean Discrepancy, dùng kernel để so sánh expectation của feature map:
+
+$$
+\text{MMD}^2(p,q)
+=
+\left\|
+\mathbb{E}_{x\sim p}[\phi(x)]
+-
+\mathbb{E}_{x\sim q}[\phi(x)]
+\right\|^2
+$$
+
+Nếu kernel đủ expressive, MMD có thể phát hiện nhiều kiểu khác biệt giữa phân phối.
+
+Trong deep learning, moment matching xuất hiện trong domain adaptation, generative modeling, representation alignment và distillation.
+
+## Optimal transport và Wasserstein distance
+
+KL hỏi xác suất lệch bao nhiêu. Optimal transport hỏi:
+
+> Cần tốn bao nhiêu chi phí để chuyển mass từ phân phối này thành phân phối kia?
+
+Wasserstein distance có trực giác hình học hơn KL. Nếu hai phân phối không overlap, KL/JS có thể cho gradient kém hữu ích, còn Wasserstein vẫn đo được khoảng cách vận chuyển.
+
+WGAN dùng ý tưởng này để cải thiện tín hiệu training cho GAN:
+
+$$
+W(p_{\text{data}},p_\theta)
+$$
+
+Ưu điểm là gradient thường ý nghĩa hơn khi model distribution còn xa data distribution. Nhược điểm là cần ràng buộc Lipschitz cho critic, nên training vẫn có chi tiết kỹ thuật riêng.
+
+## Score matching
+
+Score matching không học density trực tiếp. Nó học gradient của log-density:
+
+$$
+s_\theta(x) \approx \nabla_x \log p_{\text{data}}(x)
+$$
+
+Vì score không phụ thuộc hằng số chuẩn hóa, score matching né được vấn đề $Z$ trong nhiều energy-based model.
+
+Denoising score matching thêm noise vào data rồi học hướng kéo sample nhiễu về vùng data sạch hơn. Đây là một cầu nối quan trọng đến diffusion:
+
+- thêm noise dần làm data thành Gaussian noise
+- học model denoise hoặc score ở từng mức noise
+- sampling đi ngược lại: từ noise về data
+
+## Diffusion view
+
+Diffusion models xây một forward process phá dữ liệu bằng noise:
+
+$$
+x_0 \rightarrow x_1 \rightarrow \dots \rightarrow x_T
+$$
+
+với $x_T$ gần Gaussian noise.
+
+Sau đó model học reverse process:
+
+$$
+x_T \rightarrow x_{T-1} \rightarrow \dots \rightarrow x_0
+$$
+
+Sampling bắt đầu từ:
+
+$$
+x_T \sim \mathcal{N}(0,I)
+$$
+
+rồi denoise nhiều bước để tạo sample.
+
+Về distribution matching, diffusion không so real/fake bằng discriminator như GAN. Nó học một chuỗi denoising objective liên quan đến score hoặc noise prediction. Ưu điểm là training ổn định và sample chất lượng cao. Nhược điểm truyền thống là sampling nhiều bước, dù các sampler hiện đại đã giảm đáng kể số bước cần thiết.
+
+## Flow view
+
+Normalizing flow học một biến đổi khả nghịch:
+
+$$
+z \sim p(z), \quad x = f_\theta(z)
+$$
+
+Vì $f_\theta$ invertible, ta tính được density bằng change of variables:
+
+$$
+\log p_\theta(x)
+=
+\log p(z)
++ \log \left|
+\det \frac{\partial f_\theta^{-1}(x)}{\partial x}
+\right|
+$$
+
+Flow hấp dẫn vì vừa sample được, vừa tính likelihood được. Nhưng invertibility và determinant tractable đặt ràng buộc lên architecture. Không phải mọi biến đổi expressive đều dễ dùng trong flow.
+
+## VAE view
+
+VAE giả định dữ liệu sinh từ latent variable:
+
+$$
+z \sim p(z), \quad x \sim p_\theta(x\mid z)
+$$
+
+Vấn đề là posterior thật:
+
+$$
+p_\theta(z\mid x)
+$$
+
+thường khó tính. VAE dùng encoder:
+
+$$
+q_\phi(z\mid x)
+$$
+
+để xấp xỉ posterior và optimize ELBO.
+
+Trong distribution matching, VAE học một latent space sao cho sample từ prior decode ra dữ liệu hợp lý. Ưu điểm là training ổn định, có latent representation rõ. Nhược điểm cổ điển là sample có thể blur nếu likelihood decoder quá đơn giản hoặc objective trung bình hóa nhiều khả năng.
+
+## Autoregressive view
+
+Autoregressive model factorize dữ liệu thành chuỗi điều kiện:
+
+$$
+p_\theta(x)
+=
+\prod_t p_\theta(x_t\mid x_{<t})
+$$
+
+Ưu điểm:
+
+- likelihood exact
+- training bằng teacher forcing hiệu quả
+- rất mạnh cho text và sequence
+
+Nhược điểm:
+
+- sampling tuần tự
+- lỗi đầu có thể ảnh hưởng các bước sau
+- chất lượng phụ thuộc decoding strategy
+
+Language model là ví dụ quan trọng nhất: distribution matching xảy ra qua next-token likelihood, còn sampling là quá trình chọn token lặp đi lặp lại.
+
+## Một bản đồ các họ generative model
+
+| Họ model | Matching objective | Sampling |
+|---|---|---|
+| Autoregressive | maximum likelihood | tuần tự từng token/pixel |
+| Flow | exact likelihood | biến đổi noise qua map khả nghịch |
+| VAE | ELBO: reconstruction + KL | sample latent rồi decode |
+| GAN | adversarial loss | noise qua generator |
+| Diffusion/score-based | denoising/score matching | bắt đầu từ noise, denoise nhiều bước |
+| Energy-based model | energy + MCMC/contrastive objective | MCMC hoặc Langevin |
+
+Bảng này không phải phân loại cứng tuyệt đối. Nhiều model hiện đại lai nhiều ý tưởng: latent diffusion dùng latent representation; diffusion có thể kết hợp classifier-free guidance; autoregressive model có thể dùng temperature/top-p; flow có thể đặt trong VAE.
+
+## Evaluation: sample đẹp chưa đủ
+
+Đánh giá generative model khó vì ta muốn nhiều thứ cùng lúc:
+
+- sample realistic
+- diversity cao
+- không mode collapse
+- likelihood tốt nếu model có density
+- controllability tốt
+- không memorize training data
+- sampling nhanh
+
+Một metric đơn lẻ hiếm khi đủ. NLL có thể tốt nhưng sample không đẹp. FID có thể tốt nhưng không nói hết semantic correctness. Human evaluation hữu ích nhưng tốn kém và không ổn định.
+
+Vì vậy khi đọc paper generative models, nên hỏi:
+
+| Câu hỏi | Vì sao quan trọng |
+|---|---|
+| Model có explicit likelihood không? | quyết định có đo NLL trực tiếp được không |
+| Sampling nhanh hay chậm? | ảnh hưởng deployment |
+| Có phủ đủ mode không? | tránh chỉ sinh vài kiểu sample đẹp |
+| Có kiểm soát được điều kiện không? | quan trọng cho text-to-image, editing, controllable generation |
+| Metric đang đo gì? | tránh nhầm sample quality với coverage hoặc likelihood |
+
+## Những hiểu nhầm thường gặp
+
+**Sample đẹp không có nghĩa likelihood cao.** GAN có thể sinh ảnh sắc nhưng không cho likelihood tractable. Ngược lại, model likelihood tốt có thể sinh sample kém hấp dẫn nếu objective hoặc decoder làm trung bình hóa.
+
+**Noise không phải chi tiết phụ.** Trong nhiều generative model, noise là nguồn randomness để sinh diversity. Cách đưa noise vào quyết định hình dạng distribution mà model học được.
+
+**Distribution matching không phải copy dataset.** Model tốt không chỉ memorize sample training. Nó học cấu trúc phân phối để sinh sample mới hợp lý.
+
+**Sampling strategy không phải training objective.** Temperature/top-p đổi cách decode từ một model đã train; chúng không tự sửa distribution đã học.
+
+**Một divergence không thống trị mọi bài toán.** KL, JS, Wasserstein, MMD, score matching nhấn mạnh các kiểu sai lệch khác nhau.
+
+## Bức tranh chung
+
+| Khái niệm | Câu hỏi |
+|---|---|
+| Sampling | Làm sao lấy sample cụ thể từ một phân phối? |
+| Sampler | Cơ chế nào biến randomness thành dữ liệu? |
+| Distribution matching | Làm sao để $p_\theta$ giống $p_{\text{data}}$? |
+| Explicit density | Có tính được $p_\theta(x)$ không? |
+| Implicit model | Có sample được dù không tính density không? |
+| MCMC | Làm sao sample khi normalization khó? |
+| Score | Hướng nào kéo sample về vùng density cao? |
+| Decoding | Khi model cho phân phối, ta chọn output cụ thể thế nào? |
+
+Sampling là nơi probability chạm vào trải nghiệm cuối cùng của generative AI. Người dùng không nhìn thấy KL, ELBO hay score; họ nhìn thấy câu văn, ảnh, âm thanh hoặc action được sample ra. Nhưng chất lượng sample đó đến từ cách model đã match distribution trong lúc training và cách ta đi qua distribution trong lúc inference.
+
+## Papers tham khảo
+
+| Paper | |
+|---|---|
+| Metropolis et al. (1953) | Equation of State Calculations by Fast Computing Machines |
+| Hastings (1970) | Monte Carlo Sampling Methods Using Markov Chains and Their Applications |
+| Neal (1993) | Probabilistic Inference Using Markov Chain Monte Carlo Methods |
+| Kingma & Welling (2013) | Auto-Encoding Variational Bayes |
+| Goodfellow et al. (2014) | Generative Adversarial Nets |
+| Rezende & Mohamed (2015) | Variational Inference with Normalizing Flows |
+| Arjovsky et al. (2017) | Wasserstein GAN |
+| Ho et al. (2020) | Denoising Diffusion Probabilistic Models |
+| Song et al. (2021) | Score-Based Generative Modeling through Stochastic Differential Equations |

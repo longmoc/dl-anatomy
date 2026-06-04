@@ -1,0 +1,669 @@
+---
+title: "Sampling & Distribution Matching"
+description: "Sampling turns a distribution into concrete data; distribution matching asks how to make model samples look like real data samples."
+lang: en
+category: foundations
+order: 5
+parent: probability
+translation: sampling-distribution-matching
+tags: [probability, sampling, generative-models, mcmc, diffusion]
+---
+
+import Note from '../../components/Note.astro';
+import SamplingDistributionMatchingDiagram from '../../components/SamplingDistributionMatchingDiagram.astro';
+
+# Sampling & Distribution Matching
+
+The previous articles mostly treated probability as **evaluation**:
+
+- likelihood: how much probability does the model assign to real data?
+- cross-entropy/KL: how far is the model from the true distribution?
+- expectation/Monte Carlo: which expectation is the loss estimating?
+- entropy/mutual information: how much uncertainty or information does a distribution contain?
+- Bayesian view: after seeing data, what should we believe?
+
+This article turns from evaluation to **generation**:
+
+> If we have a distribution, how do we draw samples from it? And if we only have real data samples, how do we train a model whose samples look like them?
+
+This is the natural doorway into generative modeling. A language model samples tokens. A diffusion model samples images. A VAE samples latents and decodes them. A GAN turns noise into samples. Underneath all of them sits the same question:
+
+$$
+x \sim p_\theta(x)
+$$
+
+The model should not only assign sensible probabilities. It should also produce samples with the structure of real data.
+
+<SamplingDistributionMatchingDiagram lang="en" />
+
+## What is sampling?
+
+Sampling means drawing a concrete value from a distribution:
+
+$$
+x \sim p(x)
+$$
+
+If $p(x)$ is a die-roll distribution, a sample is one face. If $p(x)$ is the distribution of natural images, a sample is an image. If $p(x_t\mid x_{<t})$ is the next-token distribution, a sample is the next token in a sequence.
+
+A small but important point: **knowing a distribution formula** and **being able to draw good samples** are different things.
+
+| Situation | What we have | Is sampling easy? |
+|---|---|---|
+| Low-dimensional Gaussian | clear density | easy |
+| Small categorical distribution | probability per outcome | easy |
+| Language model | next-token distribution | fairly easy, but decoding matters |
+| Bayesian posterior | density known only up to normalization | hard |
+| Natural images | only dataset samples | very hard |
+
+In deep learning, the hard part is usually high-dimensional structure. A $256\times256\times3$ image is a point in a space with almost 200k dimensions. Real data does not fill that space; it lies on a thin, highly structured subset, and the model must learn that structure from samples.
+
+## What is distribution matching?
+
+Call the real data distribution:
+
+$$
+p_{\text{data}}(x)
+$$
+
+and the model distribution:
+
+$$
+p_\theta(x)
+$$
+
+Distribution matching trains the model so that:
+
+$$
+p_\theta(x) \approx p_{\text{data}}(x)
+$$
+
+But we usually do not know the formula for $p_{\text{data}}$. We only have a dataset:
+
+$$
+x_1,\dots,x_n \sim p_{\text{data}}(x)
+$$
+
+So matching is rarely a direct comparison between two density formulas. Each generative family chooses an indirect route:
+
+- maximize likelihood of real data
+- minimize KL or another divergence
+- train a discriminator to distinguish real from fake
+- match the score, the gradient of log-density
+- transport a noise distribution into the data distribution
+- learn a reverse process from noise back to data
+
+<Note type="intuition">
+Distribution matching does not ask whether each fake sample copies one real sample. It asks whether the whole cloud of model samples has the same statistical structure as the real sample cloud: modes, frequencies, correlations, texture, syntax, semantics, and long-range dependencies.
+</Note>
+
+## Density, sampler, and implicit distribution
+
+A generative model can give us different things.
+
+An **explicit density model** lets us compute or approximate:
+
+$$
+p_\theta(x)
+$$
+
+Examples include autoregressive models, normalizing flows, and VAE bounds.
+
+An **implicit generative model** lets us sample:
+
+$$
+z \sim p(z), \quad x = G_\theta(z)
+$$
+
+but does not make it easy to evaluate $p_\theta(x)$ at a specific point. GANs are the classic example.
+
+This distinction matters:
+
+| Model type | Likelihood? | Sampling? | Examples |
+|---|---|---|---|
+| Autoregressive | exact/easy | sequential | language models, PixelCNN |
+| Flow | exact | parallel or near-parallel | RealNVP, Glow |
+| VAE | lower bound | easy | VAE, conditional VAE |
+| GAN | hard | easy | DCGAN, StyleGAN |
+| Diffusion | through variational/score objectives | multi-step denoising | DDPM, score-based models |
+
+No option is free. A model with good likelihood may not produce beautiful samples. A model with beautiful samples may not expose a readable density. A fast sampler may be harder to train.
+
+## Sampling from categorical distributions
+
+In classification or language modeling, the output is often a categorical distribution:
+
+$$
+p_\theta(x_t=i\mid x_{<t})
+=
+\text{softmax}(l_i)
+$$
+
+Sampling a token means choosing an index according to this probability distribution.
+
+If we always choose the most likely token:
+
+$$
+x_t = \arg\max_i p_\theta(i\mid x_{<t})
+$$
+
+we get greedy decoding. Greedy decoding is fine for some tasks, but in open-ended generation it can become repetitive, dry, and overly committed to one path.
+
+True sampling keeps stochasticity:
+
+$$
+x_t \sim p_\theta(\cdot\mid x_{<t})
+$$
+
+Temperature, top-k, and top-p do not change the trained model itself. They change the distribution used at decoding time.
+
+## Temperature
+
+Given logits $l_i$, temperature sampling uses:
+
+$$
+p_T(i) =
+\frac{\exp(l_i/T)}{\sum_j \exp(l_j/T)}
+$$
+
+If $T < 1$, the distribution becomes sharper: strong tokens become stronger, outputs become more certain but less diverse.
+
+If $T > 1$, the distribution becomes flatter: outputs become more diverse but noisier.
+
+Temperature is a useful reminder that the **sampling policy** is different from the **trained model**. The same model can behave very differently depending on how we sample from it.
+
+## Top-k and top-p
+
+Top-k keeps the $k$ highest-probability tokens, then renormalizes.
+
+Top-p, or nucleus sampling, keeps the smallest token set whose total probability exceeds a threshold $p$:
+
+$$
+\sum_{i\in S} p_\theta(i\mid x_{<t}) \ge p
+$$
+
+Top-p is often more adaptive than top-k: when the model is confident, the candidate set is small; when it is uncertain, the candidate set widens.
+
+In language models, decoding is part of the system. Training learns the token distribution; decoding decides how we move through it.
+
+## Ancestral sampling
+
+Many models generate data by factorizing the joint distribution:
+
+$$
+p(x_1,\dots,x_T)
+=
+\prod_{t=1}^{T}p(x_t\mid x_{<t})
+$$
+
+Sampling proceeds sequentially:
+
+$$
+x_1 \sim p(x_1)
+$$
+
+$$
+x_2 \sim p(x_2\mid x_1)
+$$
+
+$$
+\dots
+$$
+
+$$
+x_T \sim p(x_T\mid x_{<T})
+$$
+
+This is ancestral sampling. It is natural for sequences: text, audio, time series. Its advantage is exact, clear likelihood. Its downside is slow sampling, because generation happens one step at a time.
+
+Modern autoregressive language models belong here: the model learns the next-token distribution, then generates by repeatedly sampling the next token.
+
+## Reparameterization trick
+
+Some distributions can be sampled by transforming simple noise.
+
+For a Gaussian:
+
+$$
+z \sim \mathcal{N}(\mu,\sigma^2)
+$$
+
+we can write:
+
+$$
+\epsilon \sim \mathcal{N}(0,1), \quad z = \mu + \sigma\epsilon
+$$
+
+The randomness now lives in $\epsilon$, while $\mu,\sigma$ remain differentiable parameters. This lets gradients flow through the sampling process.
+
+This is central to VAEs:
+
+$$
+z \sim q_\phi(z\mid x), \quad x \sim p_\theta(x\mid z)
+$$
+
+If direct sampling from $q_\phi$ blocks gradients, reparameterization turns sampling into a differentiable transformation of noise.
+
+## Rejection sampling
+
+Rejection sampling uses an easy proposal distribution $q(x)$, then accepts or rejects samples according to the target $p(x)$.
+
+The idea:
+
+1. sample $x \sim q(x)$
+2. sample $u \sim \text{Uniform}(0,1)$
+3. accept if $u$ is small enough relative to $\frac{p(x)}{Mq(x)}$
+
+It is elegant theoretically, but often inefficient in high dimensions. Most samples get rejected. So rejection sampling is more useful as a conceptual anchor than as the main recipe for large deep generative models.
+
+## Importance sampling
+
+Importance sampling does not necessarily generate new samples for direct use. It uses samples from $q(x)$ to estimate expectations under $p(x)$:
+
+$$
+\mathbb{E}_{p(x)}[f(x)]
+=
+\mathbb{E}_{q(x)}
+\left[
+f(x)\frac{p(x)}{q(x)}
+\right]
+$$
+
+The ratio:
+
+$$
+w(x)=\frac{p(x)}{q(x)}
+$$
+
+is the importance weight.
+
+If $q$ is close to $p$, the estimate is good. If $q$ misses important regions of $p$, weights have high variance and the estimate becomes noisy.
+
+In deep learning, importance ideas appear in off-policy RL, negative sampling, weighted datasets, particle methods, and some likelihood estimators.
+
+## MCMC — sampling when normalization is hard
+
+Many distributions are only known up to a normalization constant:
+
+$$
+p(x) = \frac{\tilde{p}(x)}{Z}
+$$
+
+We know $\tilde{p}(x)$ but not:
+
+$$
+Z = \int \tilde{p}(x)\,dx
+$$
+
+MCMC, Markov Chain Monte Carlo, builds a chain:
+
+$$
+x_0 \rightarrow x_1 \rightarrow x_2 \rightarrow \dots
+$$
+
+so that after enough time, $x_t$ behaves like a sample from $p(x)$.
+
+Metropolis-Hastings is the classic example:
+
+- propose a new state $x' \sim q(x'\mid x)$
+- accept $x'$ with probability based on a target-density ratio
+- if rejected, keep $x$
+
+The nice part: many MCMC algorithms only need density ratios, so the normalization constant $Z$ cancels out.
+
+The hard parts:
+
+- the chain needs burn-in time
+- consecutive samples are correlated
+- high-dimensional distributions can mix slowly
+- far-apart modes are hard to jump between
+
+MCMC is foundational for Bayesian computation and energy-based models, but it does not automatically scale easily to modern deep learning.
+
+## Langevin dynamics and score
+
+If we know the score:
+
+$$
+\nabla_x \log p(x)
+$$
+
+we know which direction makes data more likely. Langevin dynamics uses this gradient plus noise:
+
+$$
+x_{t+1}
+=
+x_t
++ \frac{\epsilon}{2}\nabla_x \log p(x_t)
++ \sqrt{\epsilon}\,\eta_t
+$$
+
+where:
+
+$$
+\eta_t \sim \mathcal{N}(0,I)
+$$
+
+Intuition:
+
+- the gradient pulls samples toward high-density regions
+- noise prevents the process from collapsing into one mode
+
+Score-based generative models learn the score at many noise levels, then sample by moving from noise back to data. Modern diffusion models are closely connected to this view.
+
+## Distribution matching with maximum likelihood
+
+The most direct way to match distributions is to maximize likelihood of real data:
+
+$$
+\max_\theta
+\mathbb{E}_{x\sim p_{\text{data}}}
+[\log p_\theta(x)]
+$$
+
+This is equivalent to minimizing:
+
+$$
+D_{\text{KL}}(p_{\text{data}}\|p_\theta)
+$$
+
+because:
+
+$$
+D_{\text{KL}}(p_{\text{data}}\|p_\theta)
+=
+\mathbb{E}_{p_{\text{data}}}
+[\log p_{\text{data}}(x)-\log p_\theta(x)]
+$$
+
+The term $\mathbb{E}_{p_{\text{data}}}[\log p_{\text{data}}(x)]$ does not depend on $\theta$, so optimizing likelihood pulls $p_\theta$ toward $p_{\text{data}}$.
+
+Advantages:
+
+- clear objective
+- measurable NLL/perplexity
+- more stable than adversarial training
+
+Disadvantages:
+
+- requires computing or approximating density
+- can prefer covering all modes, sometimes producing averaged or less sharp samples
+
+Autoregressive models and normalizing flows benefit strongly from direct likelihood.
+
+## Forward KL and reverse KL
+
+The two KL directions behave differently:
+
+$$
+D_{\text{KL}}(p_{\text{data}}\|p_\theta)
+$$
+
+is often called forward KL in this context. It heavily penalizes the model for assigning low probability to real data regions. So it tends to be **mode-covering**: it tries to cover the modes of the data.
+
+The reverse direction:
+
+$$
+D_{\text{KL}}(p_\theta\|p_{\text{data}})
+$$
+
+penalizes the model for putting mass in regions where real data has low probability. It tends to be **mode-seeking**: choose a few safe modes and avoid uncertain regions.
+
+This is why divergence direction is not a small technical detail. It changes sample behavior.
+
+## Adversarial matching
+
+GANs do not require evaluating the density of $p_\theta(x)$. They train two networks:
+
+- generator $G_\theta(z)$ creates fake samples
+- discriminator $D_\psi(x)$ distinguishes real from fake
+
+The generator learns to fool the discriminator:
+
+$$
+z\sim p(z), \quad x_{\text{fake}} = G_\theta(z)
+$$
+
+The discriminator learns a comparison signal between real and fake samples. If the discriminator is strong and training stays balanced, the generator is pulled toward a distribution with more realistic samples.
+
+Advantages:
+
+- samples can be very sharp
+- no explicit likelihood required
+- the sampler is usually fast
+
+Disadvantages:
+
+- unstable training
+- mode collapse
+- hard to measure likelihood
+- strong dependence on architecture and recipe
+
+GANs teach a major lesson: distribution matching can be done by **comparing samples**, not only by evaluating densities.
+
+## Moment matching and MMD
+
+Another route is to match statistics of two distributions.
+
+A simple version is matching mean and covariance. But complex distributions are not fully specified by their first two moments.
+
+MMD, Maximum Mean Discrepancy, uses a kernel to compare expectations of a feature map:
+
+$$
+\text{MMD}^2(p,q)
+=
+\left\|
+\mathbb{E}_{x\sim p}[\phi(x)]
+-
+\mathbb{E}_{x\sim q}[\phi(x)]
+\right\|^2
+$$
+
+With an expressive enough kernel, MMD can detect many kinds of distribution mismatch.
+
+In deep learning, moment matching appears in domain adaptation, generative modeling, representation alignment, and distillation.
+
+## Optimal transport and Wasserstein distance
+
+KL asks how probability is misassigned. Optimal transport asks:
+
+> How much cost is required to move mass from one distribution into the other?
+
+Wasserstein distance has a more geometric intuition than KL. If two distributions do not overlap, KL/JS may provide weak gradients, while Wasserstein can still measure a transport distance.
+
+WGAN uses this idea to improve the training signal for GANs:
+
+$$
+W(p_{\text{data}},p_\theta)
+$$
+
+The advantage is that gradients can remain meaningful when the model distribution is still far from the data distribution. The downside is that the critic needs a Lipschitz constraint, so training still has its own technical details.
+
+## Score matching
+
+Score matching does not learn density directly. It learns the gradient of log-density:
+
+$$
+s_\theta(x) \approx \nabla_x \log p_{\text{data}}(x)
+$$
+
+Because the score does not depend on the normalization constant, score matching avoids the $Z$ problem in many energy-based models.
+
+Denoising score matching adds noise to data, then learns the direction that pulls noisy samples back toward cleaner data regions. This is an important bridge to diffusion:
+
+- gradually add noise until data becomes Gaussian noise
+- learn a model that denoises or estimates scores at each noise level
+- sample in reverse: from noise back to data
+
+## Diffusion view
+
+Diffusion models define a forward process that corrupts data with noise:
+
+$$
+x_0 \rightarrow x_1 \rightarrow \dots \rightarrow x_T
+$$
+
+with $x_T$ close to Gaussian noise.
+
+Then the model learns a reverse process:
+
+$$
+x_T \rightarrow x_{T-1} \rightarrow \dots \rightarrow x_0
+$$
+
+Sampling begins from:
+
+$$
+x_T \sim \mathcal{N}(0,I)
+$$
+
+and denoises over many steps to create a sample.
+
+From the distribution-matching view, diffusion does not compare real/fake samples through a discriminator like GANs. It learns a chain of denoising objectives related to score or noise prediction. Its advantage is stable training and high sample quality. Its traditional downside is multi-step sampling, though modern samplers have reduced the number of steps substantially.
+
+## Flow view
+
+Normalizing flows learn an invertible transformation:
+
+$$
+z \sim p(z), \quad x = f_\theta(z)
+$$
+
+Because $f_\theta$ is invertible, density can be computed by change of variables:
+
+$$
+\log p_\theta(x)
+=
+\log p(z)
++ \log \left|
+\det \frac{\partial f_\theta^{-1}(x)}{\partial x}
+\right|
+$$
+
+Flows are attractive because they both sample and compute likelihood. But invertibility and tractable determinants constrain the architecture. Not every expressive transformation is convenient for a flow.
+
+## VAE view
+
+VAEs assume data is generated from a latent variable:
+
+$$
+z \sim p(z), \quad x \sim p_\theta(x\mid z)
+$$
+
+The true posterior:
+
+$$
+p_\theta(z\mid x)
+$$
+
+is usually hard to compute. VAEs use an encoder:
+
+$$
+q_\phi(z\mid x)
+$$
+
+to approximate that posterior and optimize the ELBO.
+
+In distribution matching, a VAE learns a latent space such that samples from the prior decode into plausible data. Its advantage is stable training and a clear latent representation. Its classic downside is that samples can be blurry when the decoder likelihood is too simple or the objective averages over many possibilities.
+
+## Autoregressive view
+
+Autoregressive models factorize data into conditionals:
+
+$$
+p_\theta(x)
+=
+\prod_t p_\theta(x_t\mid x_{<t})
+$$
+
+Advantages:
+
+- exact likelihood
+- efficient teacher-forced training
+- very strong for text and sequences
+
+Disadvantages:
+
+- sequential sampling
+- early mistakes can affect later steps
+- quality depends on decoding strategy
+
+Language models are the central example: distribution matching happens through next-token likelihood, while sampling is the repeated process of choosing the next token.
+
+## A map of generative model families
+
+| Model family | Matching objective | Sampling |
+|---|---|---|
+| Autoregressive | maximum likelihood | one token/pixel at a time |
+| Flow | exact likelihood | transform noise through an invertible map |
+| VAE | ELBO: reconstruction + KL | sample latent, then decode |
+| GAN | adversarial loss | pass noise through generator |
+| Diffusion/score-based | denoising/score matching | start from noise, denoise over steps |
+| Energy-based model | energy + MCMC/contrastive objective | MCMC or Langevin |
+
+This table is not a rigid taxonomy. Many modern models combine ideas: latent diffusion uses latent representations; diffusion can use classifier-free guidance; autoregressive models use temperature/top-p; flows can appear inside VAEs.
+
+## Evaluation: beautiful samples are not enough
+
+Evaluating generative models is hard because we want many things at once:
+
+- realistic samples
+- high diversity
+- no mode collapse
+- good likelihood if density exists
+- controllability
+- no memorization of training data
+- fast sampling
+
+A single metric is rarely enough. NLL can be good while samples are unattractive. FID can be good while missing semantic correctness. Human evaluation is useful but expensive and unstable.
+
+So when reading generative-model papers, ask:
+
+| Question | Why it matters |
+|---|---|
+| Does the model have explicit likelihood? | decides whether direct NLL is measurable |
+| Is sampling fast or slow? | affects deployment |
+| Does it cover enough modes? | avoids generating only a few beautiful patterns |
+| Can it be conditioned or controlled? | crucial for text-to-image, editing, controllable generation |
+| What does the metric actually measure? | avoids confusing sample quality with coverage or likelihood |
+
+## Common misunderstandings
+
+**Beautiful samples do not imply high likelihood.** GANs can produce sharp images without tractable likelihood. Conversely, likelihood-focused models can produce less appealing samples if the objective or decoder averages over possibilities.
+
+**Noise is not a minor detail.** In many generative models, noise is the source of diversity. How noise enters the model shapes the distribution that can be learned.
+
+**Distribution matching is not dataset copying.** A good model should not merely memorize training samples. It should learn distributional structure and generate plausible new samples.
+
+**Sampling strategy is not the training objective.** Temperature/top-p change how we decode from a trained model; they do not repair the learned distribution by themselves.
+
+**No divergence dominates every task.** KL, JS, Wasserstein, MMD, and score matching emphasize different kinds of mismatch.
+
+## Big picture
+
+| Concept | Question |
+|---|---|
+| Sampling | How do we draw concrete samples from a distribution? |
+| Sampler | What mechanism turns randomness into data? |
+| Distribution matching | How do we make $p_\theta$ resemble $p_{\text{data}}$? |
+| Explicit density | Can we compute $p_\theta(x)$? |
+| Implicit model | Can we sample even if density is unavailable? |
+| MCMC | How do we sample when normalization is hard? |
+| Score | Which direction pulls samples toward high-density regions? |
+| Decoding | Once a model gives a distribution, how do we choose a concrete output? |
+
+Sampling is where probability touches the final experience of generative AI. Users do not see KL, ELBO, or scores; they see the sentence, image, sound, or action that gets sampled. But the quality of that sample comes from how the model matched distributions during training and how we traverse the distribution at inference time.
+
+## References
+
+| Paper | |
+|---|---|
+| Metropolis et al. (1953) | Equation of State Calculations by Fast Computing Machines |
+| Hastings (1970) | Monte Carlo Sampling Methods Using Markov Chains and Their Applications |
+| Neal (1993) | Probabilistic Inference Using Markov Chain Monte Carlo Methods |
+| Kingma & Welling (2013) | Auto-Encoding Variational Bayes |
+| Goodfellow et al. (2014) | Generative Adversarial Nets |
+| Rezende & Mohamed (2015) | Variational Inference with Normalizing Flows |
+| Arjovsky et al. (2017) | Wasserstein GAN |
+| Ho et al. (2020) | Denoising Diffusion Probabilistic Models |
+| Song et al. (2021) | Score-Based Generative Modeling through Stochastic Differential Equations |
