@@ -12,7 +12,7 @@ const L = lang === 'en'
       unseen: 'unseen',
       fhat: 'learned f̂',
       gap: 'gap',
-      cap: 'The true signal has coarse structure plus fine detail. A finite training set (blue) captures only the coarse structure, so the learned f̂ (green) follows the training points and misses the detail. On unseen samples (amber) — exactly the detail the train set lacked — f̂ errs more: the red segments are the generalization gap R(f̂) − R̂(f̂). Low train loss does not guarantee low true risk.',
+      cap: 'The true signal has coarse structure plus fine detail. A finite training set (blue) samples it sparsely, so f̂ (green) fits the train points (low R̂) but does not cover every region. Unseen samples come from the same distribution: where training already covered them f̂ is still fine (gap ≈ 0), but where training under-sampled (amber) f̂ errs more — that difference is the generalization gap R(f̂) − R̂(f̂). The figure deliberately puts most unseen points on the missed detail to make the gap visible; not every unseen point is detail. Low train loss does not guarantee low true risk.',
     }
   : {
       title: 'Generalization gap: train bắt cấu trúc thô, unseen lộ chi tiết',
@@ -21,7 +21,7 @@ const L = lang === 'en'
       unseen: 'unseen',
       fhat: 'f̂ học được',
       gap: 'gap',
-      cap: 'Hàm thật có cả cấu trúc thô lẫn chi tiết nhỏ. Tập train hữu hạn (xanh dương) chỉ bắt được cấu trúc thô, nên f̂ học được (xanh lá) bám theo điểm train và bỏ lỡ chi tiết. Trên sample chưa thấy (amber) — đúng những chi tiết train thiếu — f̂ sai nhiều hơn: các đoạn đỏ là generalization gap R(f̂) − R̂(f̂). Train loss thấp không đảm bảo true risk thấp.',
+      cap: 'Hàm thật có cả cấu trúc thô lẫn chi tiết nhỏ. Tập train hữu hạn (xanh dương) lấy mẫu thưa, nên f̂ (xanh lá) khớp các điểm train (R̂ thấp) nhưng không phủ hết mọi vùng. Sample chưa thấy đến từ cùng phân phối: ở vùng train đã phủ thì f̂ vẫn đúng (gap ≈ 0), còn ở vùng train lấy mẫu thiếu (amber) f̂ sai nhiều hơn — chênh lệch đó là generalization gap R(f̂) − R̂(f̂). Hình cố ý đặt phần lớn điểm unseen vào chi tiết bị bỏ để thấy rõ gap; không phải mọi điểm unseen đều là chi tiết. Train loss thấp không đảm bảo true risk thấp.',
     };
 
 // ---- true signal: coarse humps + fine bumps ----
@@ -31,7 +31,7 @@ const f = (x: number) => Math.min(1,
   + 0.18 * gg(x, 0.45, 0.027) + 0.17 * gg(x, 0.60, 0.024) + 0.16 * gg(x, 0.86, 0.030));
 
 const trainX = [0.06, 0.19, 0.32, 0.53, 0.69, 0.80, 0.93];   // coarse — miss the fine bumps
-const unseenX = [0.45, 0.60, 0.86];                          // the fine detail the train set lacked
+const unseenX = [0.24, 0.45, 0.60, 0.86];                    // 0.24 sits in a well-covered region (≈no gap); the rest fall on detail the train set under-sampled
 const tpts = trainX.map(x => ({ x, y: f(x) }));
 const bw = 0.12;
 const fhat = (x: number) => { let sw = 0, swy = 0; for (const p of tpts) { const u = (x - p.x) / bw; const w = Math.exp(-(u * u)) + 1e-9; sw += w; swy += w * p.y; } return swy / sw; };
@@ -48,7 +48,7 @@ const trueArea = `M${TX(0).toFixed(1)},${baseY} ` + grid.map(x => `L${TX(x).toFi
 const fhatPath = grid.map((x, i) => `${i ? 'L' : 'M'}${TX(x).toFixed(1)},${TY(fhat(x)).toFixed(1)}`).join(' ');
 const trainCols = trainX.map(x => ({ cx: TX(x), top: TY(f(x)) }));
 const unseenCols = unseenX.map(x => ({ cx: TX(x), top: TY(f(x)), fh: TY(fhat(x)) }));
-const gapLabel = unseenCols[1]; // middle one for the "gap" label
+const gapLabel = unseenCols[2]; // the x=0.60 column (a large gap) for the "gap" label
 ---
 
 <figure class="ggd" data-lang={lang}>
