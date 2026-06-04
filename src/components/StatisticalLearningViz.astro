@@ -6,12 +6,12 @@ const { lang = 'vi' } = Astro.props;
 
 const ui = lang === 'en'
   ? {
-      cap: 'Capacity controls the bias–variance trade-off. Drag the slider: a low-capacity model is too rigid and underfits (train and test error both high); high capacity chases the noise in the training points and overfits (train error → 0 but test error climbs). The gap between train error and true (test) error is the generalization gap — minimizing empirical risk only helps when capacity is matched to the data.',
+      cap: 'Capacity is one major axis of the bias–variance trade-off. Drag the slider: low capacity is too rigid and underfits; high capacity chases training noise and overfits. The useful region is in between: train error is low enough while test error has not climbed. The distance between train error and test/true risk is the generalization gap.',
       capLabel: 'Model capacity',
       low: 'low', high: 'high',
     }
   : {
-      cap: 'Capacity điều khiển bias–variance trade-off. Kéo slider: model capacity thấp quá cứng nên underfit (train và test error đều cao); capacity cao bám theo nhiễu của điểm train nên overfit (train error → 0 nhưng test error tăng). Khoảng cách giữa train error và true (test) error chính là generalization gap — minimize empirical risk chỉ có lợi khi capacity hợp với dữ liệu.',
+      cap: 'Capacity là một trục chính của bias–variance trade-off. Kéo slider: capacity thấp quá cứng nên underfit; capacity cao bám theo nhiễu train nên overfit. Vùng tốt nằm giữa: train error đủ thấp, test error chưa tăng mạnh. Khoảng cách giữa train error và test/true risk là generalization gap.',
       capLabel: 'Độ phức tạp (capacity)',
       low: 'thấp', high: 'cao',
     };
