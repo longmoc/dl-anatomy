@@ -6,72 +6,78 @@ const { lang = 'vi' } = Astro.props;
 
 const L = lang === 'en'
   ? {
-      title: 'Sampling and distribution matching',
-      data: 'real data samples',
+      title: 'Sampling & distribution matching',
+      data: 'real data',
       model: 'model samples',
-      latent: 'simple noise z',
-      sampler: 'sampler / generator',
-      match: 'train until sample clouds match',
-      cap: 'A generative model is useful when samples from pθ look like samples from the real data distribution. Different model families choose different ways to define the sampler and different losses for matching the two distributions.',
+      latent: 'z ~ p(z)',
+      gen: 'Gθ(z)',
+      match: 'distribution matching',
+      div: 'min D(p_data ‖ pθ)',
+      cap: 'A generative model defines a sampler: draw simple noise z, push it through Gθ to get model samples from pθ. Training adjusts θ so the model sample cloud matches the real data cloud — i.e. minimize a divergence between p_data and pθ. Model families differ in how the sampler and the matching loss are defined.',
     }
   : {
-      title: 'Sampling và distribution matching',
-      data: 'sample dữ liệu thật',
+      title: 'Sampling & distribution matching',
+      data: 'dữ liệu thật',
       model: 'sample từ model',
-      latent: 'nhiễu đơn giản z',
-      sampler: 'sampler / generator',
-      match: 'train để hai đám sample khớp nhau',
-      cap: 'Một generative model hữu ích khi sample từ pθ trông giống sample từ phân phối dữ liệu thật. Các họ model khác nhau chọn cách định nghĩa sampler và loss matching khác nhau.',
+      latent: 'z ~ p(z)',
+      gen: 'Gθ(z)',
+      match: 'khớp phân phối',
+      div: 'min D(p_data ‖ pθ)',
+      cap: 'Một generative model định nghĩa một sampler: lấy nhiễu đơn giản z, đẩy qua Gθ để ra sample từ pθ. Training chỉnh θ sao cho đám sample của model khớp với đám dữ liệu thật — tức minimize một divergence giữa p_data và pθ. Các họ model khác nhau ở cách định nghĩa sampler và loss matching.',
     };
 
 const dataDots = [
-  [94, 148], [116, 126], [134, 160], [154, 137], [178, 154], [205, 126],
-  [230, 144], [252, 164], [112, 198], [145, 220], [174, 204], [214, 214], [246, 198],
+  [98, 200], [126, 182], [150, 210], [174, 190], [198, 206], [224, 184],
+  [150, 238], [182, 244], [212, 232], [120, 258], [164, 268], [206, 262], [238, 244],
+  [112, 222], [244, 212],
 ];
 const modelDots = [
-  [488, 148], [510, 126], [530, 160], [552, 138], [575, 153], [604, 129],
-  [630, 146], [650, 168], [508, 198], [540, 218], [570, 204], [612, 216], [644, 198],
+  [520, 204], [548, 184], [574, 214], [596, 192], [620, 208], [646, 186],
+  [572, 240], [604, 248], [636, 234], [542, 260], [586, 270], [628, 262], [660, 242],
+  [666, 214], [530, 228],
 ];
-const noiseDots = [[335, 102], [354, 88], [374, 104], [394, 88], [414, 102]];
+const bell = (cx: number, cy: number) =>
+  `M${cx - 15},${cy} C${cx - 7},${cy} ${cx - 5},${cy - 15} ${cx},${cy - 15} C${cx + 5},${cy - 15} ${cx + 7},${cy} ${cx + 15},${cy}`;
 ---
 
 <figure class="sdm" data-lang={lang}>
-  <svg viewBox="0 0 760 316" role="img" aria-label="Sampling and distribution matching diagram" class="sdm-svg">
+  <svg viewBox="0 0 760 314" role="img" aria-label="Sampling and distribution matching diagram" class="sdm-svg">
     <defs>
-      <marker id="sdm-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <marker id="sdm-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
         <path d="M0,0 L10,5 L0,10 z" class="sdm-head" />
       </marker>
-      <marker id="sdm-arrow2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <marker id="sdm-arrow2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
         <path d="M0,0 L10,5 L0,10 z" class="sdm-head2" />
       </marker>
     </defs>
 
-    <text x="380" y="27" class="sdm-title">{L.title}</text>
+    <text x="380" y="26" class="sdm-title">{L.title}</text>
 
-    <rect x="54" y="78" width="236" height="176" rx="12" class="sdm-panel sdm-data-panel" />
-    <text x="172" y="102" class="sdm-label">p_data(x)</text>
-    <text x="172" y="121" class="sdm-small">{L.data}</text>
+    <!-- ===== sampler feeding the model panel (top) ===== -->
+    <text x="468" y="70" class="sdm-small">{L.latent}</text>
+    <path d={bell(468, 96)} class="sdm-bell" fill="none" />
+    <line x1="486" y1="92" x2="506" y2="92" class="sdm-gline" marker-end="url(#sdm-arrow2)" />
+    <rect x="510" y="76" width="86" height="32" rx="8" class="sdm-gen" />
+    <text x="553" y="96" class="sdm-glabel">{L.gen}</text>
+    <line x1="553" y1="108" x2="553" y2="120" class="sdm-gline" marker-end="url(#sdm-arrow2)" />
+
+    <!-- ===== data cloud (left) ===== -->
+    <rect x="50" y="122" width="236" height="166" rx="12" class="sdm-panel sdm-data-panel" />
+    <text x="168" y="146" class="sdm-label">p_data(x)</text>
+    <text x="168" y="164" class="sdm-small">{L.data}</text>
     {dataDots.map(([x, y]) => <circle cx={x} cy={y} r="5" class="sdm-data-dot" />)}
 
-    <rect x="320" y="72" width="120" height="64" rx="10" class="sdm-noise" />
-    <text x="380" y="94" class="sdm-label">z ~ p(z)</text>
-    <text x="380" y="114" class="sdm-small">{L.latent}</text>
-    {noiseDots.map(([x, y]) => <circle cx={x} cy={y} r="3.2" class="sdm-noise-dot" />)}
-
-    <rect x="310" y="178" width="140" height="62" rx="10" class="sdm-gen" />
-    <text x="380" y="204" class="sdm-label">Gθ(z)</text>
-    <text x="380" y="224" class="sdm-small">{L.sampler}</text>
-
-    <line x1="380" y1="136" x2="380" y2="178" class="sdm-line2" marker-end="url(#sdm-arrow2)" />
-    <line x1="450" y1="209" x2="482" y2="209" class="sdm-line2" marker-end="url(#sdm-arrow2)" />
-
-    <rect x="482" y="78" width="236" height="176" rx="12" class="sdm-panel sdm-model-panel" />
-    <text x="600" y="102" class="sdm-label">pθ(x)</text>
-    <text x="600" y="121" class="sdm-small">{L.model}</text>
+    <!-- ===== model cloud (right) ===== -->
+    <rect x="474" y="122" width="236" height="166" rx="12" class="sdm-panel sdm-model-panel" />
+    <text x="592" y="146" class="sdm-label">pθ(x)</text>
+    <text x="592" y="164" class="sdm-small">{L.model}</text>
     {modelDots.map(([x, y]) => <circle cx={x} cy={y} r="5" class="sdm-model-dot" />)}
 
-    <path d="M290,258 C380,296 482,296 572,258" class="sdm-match" fill="none" marker-end="url(#sdm-arrow)" />
-    <text x="380" y="292" class="sdm-match-label">{L.match}</text>
+    <!-- ===== matching (center) ===== -->
+    <text x="380" y="190" class="sdm-approx">≈</text>
+    <line x1="288" y1="205" x2="472" y2="205" class="sdm-match" marker-start="url(#sdm-arrow)" marker-end="url(#sdm-arrow)" />
+    <text x="380" y="228" class="sdm-match-label">{L.match}</text>
+    <text x="380" y="244" class="sdm-div">{L.div}</text>
   </svg>
   <figcaption class="sdm-cap">{L.cap}</figcaption>
 </figure>
@@ -86,25 +92,27 @@ const noiseDots = [[335, 102], [354, 88], [374, 104], [394, 88], [414, 102]];
   }
   .sdm-svg { display: block; width: 100%; max-width: 820px; height: auto; margin: 0 auto; }
   .sdm-title { fill: var(--text); font-family: var(--mono); font-size: 13px; font-weight: 600; text-anchor: middle; }
-  .sdm-panel, .sdm-noise, .sdm-gen { fill: var(--bg); stroke-width: 1.8; }
+  .sdm-panel { fill: var(--bg); stroke-width: 1.8; }
   .sdm-data-panel { stroke: var(--accent); }
   .sdm-model-panel { stroke: var(--accent2); }
-  .sdm-noise { stroke: var(--muted); }
-  .sdm-gen { stroke: var(--amber); }
-  .sdm-label, .sdm-small, .sdm-match-label {
+  .sdm-gen { fill: var(--bg); stroke: var(--amber); stroke-width: 1.8; }
+  .sdm-bell { stroke: var(--muted); stroke-width: 1.6; }
+  .sdm-label, .sdm-small, .sdm-glabel, .sdm-match-label, .sdm-div, .sdm-approx {
     font-family: var(--mono);
     text-anchor: middle;
   }
   .sdm-label { fill: var(--text); font-size: 12.5px; font-weight: 700; }
-  .sdm-small { fill: var(--muted); font-size: 10px; }
+  .sdm-small { fill: var(--muted); font-size: 10.5px; }
+  .sdm-glabel { fill: var(--text); font-size: 12px; font-weight: 600; }
   .sdm-data-dot { fill: var(--accent); fill-opacity: 0.78; stroke: var(--bg2); stroke-width: 1; }
   .sdm-model-dot { fill: var(--accent2); fill-opacity: 0.78; stroke: var(--bg2); stroke-width: 1; }
-  .sdm-noise-dot { fill: var(--muted); }
-  .sdm-line2 { stroke: var(--amber); stroke-width: 1.7; }
+  .sdm-gline { stroke: var(--amber); stroke-width: 1.7; }
   .sdm-head2 { fill: var(--amber); }
   .sdm-match { stroke: var(--muted); stroke-width: 1.6; stroke-dasharray: 5 4; }
   .sdm-head { fill: var(--muted); }
-  .sdm-match-label { fill: var(--muted); font-size: 10.5px; }
+  .sdm-approx { fill: var(--text); font-size: 22px; font-weight: 700; }
+  .sdm-match-label { fill: var(--muted); font-size: 11px; font-weight: 600; }
+  .sdm-div { fill: var(--muted); font-size: 10.5px; }
   .sdm-cap {
     font-size: 0.78rem;
     color: var(--muted);
