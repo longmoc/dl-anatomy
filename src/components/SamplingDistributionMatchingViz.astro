@@ -6,12 +6,12 @@ const { lang = 'vi' } = Astro.props;
 
 const ui = lang === 'en'
   ? {
-      caption: 'A generative model draws simple noise and pushes it through Gθ to sample from pθ. Training adjusts θ so the model distribution (green) morphs to match the real data distribution (blue) — the divergence D(p_data ‖ pθ) shrinks toward 0. The ticks on the axis are samples drawn from the current pθ; they slide under the data peaks as the match improves.',
+      caption: 'A generative model draws simple noise and pushes it through Gθ to sample from pθ. The blue ticks below the axis are the fixed real-data samples we observe — they pull pθ toward them. As θ is matched, the model distribution (green) morphs onto the data distribution (blue) and the green model samples (above the axis) slide onto the data samples; the divergence D(p_data ‖ pθ) shrinks toward 0.',
       training: 'training…',
       matched: 'matched ✓',
     }
   : {
-      caption: 'Generative model lấy nhiễu đơn giản rồi đẩy qua Gθ để sample từ pθ. Training chỉnh θ sao cho phân phối model (xanh lá) biến dạng để khớp phân phối dữ liệu thật (xanh dương) — divergence D(p_data ‖ pθ) co dần về 0. Các vạch trên trục là sample lấy từ pθ hiện tại; chúng trượt dồn về dưới các đỉnh dữ liệu khi độ khớp tăng.',
+      caption: 'Generative model lấy nhiễu đơn giản rồi đẩy qua Gθ để sample từ pθ. Các vạch xanh dương dưới trục là sample dữ liệu thật (cố định) mà ta quan sát được — chính chúng kéo pθ về phía mình. Khi khớp θ, phân phối model (xanh lá) biến dạng trùm lên phân phối dữ liệu (xanh dương) và sample model (trên trục) trượt tới đúng vị trí sample dữ liệu; divergence D(p_data ‖ pθ) co dần về 0.',
       training: 'đang train…',
       matched: 'đã khớp ✓',
     };
@@ -28,7 +28,7 @@ document.querySelectorAll('.dmv').forEach(root => {
   const ctx = canvas.getContext('2d')!;
   const isEn = (root as HTMLElement).dataset.lang === 'en';
   const T = {
-    training: isEn ? 'training…' : 'đang train…',
+    training: isEn ? 'matching…' : 'đang khớp…',
     matched: isEn ? 'matched ✓' : 'đã khớp ✓',
     data: 'p_data', model: 'pθ',
   };
@@ -50,8 +50,9 @@ document.querySelectorAll('.dmv').forEach(root => {
   type P = { x: number; target: number; timer: number };
   const NP = 34;
   let parts: P[] = [];
+  let dataSamplesArr: number[] = [];
 
-  const PL = 14, PR = 14, PT = 36, PB = 26;
+  const PL = 14, PR = 14, PT = 36, PB = 34;
   let W = 0, H = 0;
   const tx = (x: number) => PL + x * (W - PL - PR);
   const baseY = () => H - PB;
@@ -98,9 +99,10 @@ document.querySelectorAll('.dmv').forEach(root => {
       for (let i = 0; i < N; i++) cur[i] = (1 - s) * start[i] + s * target[i];
       const D = (1 - s) * D0;
 
-      // init particles once
+      // init particles + fixed data samples once
       if (!started) {
         parts = Array.from({ length: NP }, () => { const x = sampleX(cur); return { x, target: x, timer: Math.random() * 1.2 }; });
+        dataSamplesArr = Array.from({ length: 30 }, () => sampleX(target));
         started = true;
       }
 
@@ -128,7 +130,15 @@ document.querySelectorAll('.dmv').forEach(root => {
       area(target, data, data + '22');
       area(cur, model, model + '33');
 
-      // sample rug: ticks at sampled x-values, gliding as pθ morphs
+      // fixed real-data samples (below axis) — these are what pull pθ
+      ctx.strokeStyle = data; ctx.lineWidth = 1.6; ctx.globalAlpha = 0.85;
+      for (const x of dataSamplesArr) {
+        const X = tx(x);
+        ctx.beginPath(); ctx.moveTo(X, baseY() + 2); ctx.lineTo(X, baseY() + 10); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+
+      // model sample rug (above axis): ticks at sampled x-values, gliding as pθ morphs
       ctx.strokeStyle = model; ctx.lineWidth = 1.6; ctx.globalAlpha = 0.7;
       for (const p of parts) {
         if (!reduce) {
