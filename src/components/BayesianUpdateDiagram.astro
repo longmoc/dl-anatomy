@@ -33,7 +33,7 @@ const fanEnds = [104, 132, 158, 184];
 ---
 
 <figure class="bud" data-lang={lang}>
-  <svg viewBox="0 0 760 318" role="img" aria-label="Bayesian update diagram" class="bud-svg">
+  <svg viewBox="0 0 760 338" role="img" aria-label="Bayesian update diagram" class="bud-svg">
     <defs>
       <marker id="bud-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
         <path d="M0,0 L10,5 L0,10 z" class="bud-head" />
@@ -41,6 +41,8 @@ const fanEnds = [104, 132, 158, 184];
     </defs>
 
     <text x="380" y="22" class="bud-title">{L.title}</text>
+
+    <g transform="translate(0,20)">
     <line x1="380" y1="40" x2="380" y2="294" class="bud-div" />
 
     <!-- ===== Panel A: belief update over θ ===== -->
@@ -80,6 +82,7 @@ const fanEnds = [104, 132, 158, 184];
     <text x="492" y="204" class="bud-lbl2">{L.data}</text>
     <text x="660" y="96" class="bud-lbl2" style="fill:var(--accent2)">{L.preds}</text>
     <text x="690" y="158" class="bud-lbl2">{L.mean}</text>
+    </g>
   </svg>
   <figcaption class="bud-cap">{L.cap}</figcaption>
 </figure>
