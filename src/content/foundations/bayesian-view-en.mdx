@@ -57,11 +57,17 @@ The pieces:
 | $p(\theta\mid\mathcal{D})$ | posterior — what we believe after seeing data |
 | $p(\mathcal{D})$ | evidence — probability of data under the whole model |
 
-Bayesian learning is the move:
+Bayesian learning is the move $\text{prior} + \text{data} \rightarrow \text{posterior}$:
 
 $$
-\text{prior} + \text{data} \rightarrow \text{posterior}
+\underbrace{p(\theta)}_{\text{prior}}
+\;\xrightarrow{\;\times\,p(\mathcal{D}\mid\theta)\;}\;
+\underbrace{p(\theta\mid\mathcal{D})}_{\text{posterior}}
+\;\xrightarrow{\;\int(\cdot)\,d\theta\;}\;
+\underbrace{p(y\mid x,\mathcal{D})}_{\text{predictive}}
 $$
+
+The first arrow is Bayes' rule (multiply the prior by the likelihood, then normalize); the second is the posterior predictive (average over $\theta$). These two steps match the two panels of the diagram above.
 
 <Note type="intuition">
 Frequentist training often asks "which parameter value is best?". Bayesian learning asks "which parameter values remain plausible after seeing data, and how much should we believe each one?".
