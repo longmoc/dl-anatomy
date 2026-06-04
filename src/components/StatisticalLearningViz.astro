@@ -1,0 +1,181 @@
+---
+interface Props {
+  lang?: 'vi' | 'en';
+}
+const { lang = 'vi' } = Astro.props;
+
+const ui = lang === 'en'
+  ? {
+      cap: 'Capacity controls the bias–variance trade-off. Drag the slider: a low-capacity model is too rigid and underfits (train and test error both high); high capacity chases the noise in the training points and overfits (train error → 0 but test error climbs). The gap between train error and true (test) error is the generalization gap — minimizing empirical risk only helps when capacity is matched to the data.',
+      capLabel: 'Model capacity',
+      low: 'low', high: 'high',
+    }
+  : {
+      cap: 'Capacity điều khiển bias–variance trade-off. Kéo slider: model capacity thấp quá cứng nên underfit (train và test error đều cao); capacity cao bám theo nhiễu của điểm train nên overfit (train error → 0 nhưng test error tăng). Khoảng cách giữa train error và true (test) error chính là generalization gap — minimize empirical risk chỉ có lợi khi capacity hợp với dữ liệu.',
+      capLabel: 'Độ phức tạp (capacity)',
+      low: 'thấp', high: 'cao',
+    };
+---
+
+<div class="slv" data-lang={lang}>
+  <canvas class="slv-canvas"></canvas>
+  <div class="slv-controls">
+    <span class="slv-lbl">{ui.capLabel}:</span>
+    <span class="slv-end">{ui.low}</span>
+    <input type="range" class="slv-slider" min="0" max="100" value="42" />
+    <span class="slv-end">{ui.high}</span>
+  </div>
+  <p class="slv-caption">{ui.cap}</p>
+</div>
+
+<script>
+document.querySelectorAll('.slv').forEach(root => {
+  const canvas = root.querySelector('.slv-canvas') as HTMLCanvasElement;
+  const ctx = canvas.getContext('2d')!;
+  const slider = root.querySelector('.slv-slider') as HTMLInputElement;
+  const isEn = (root as HTMLElement).dataset.lang === 'en';
+  const cv = (n: string) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const TT = {
+    fit: isEn ? 'model fit' : 'khớp dữ liệu',
+    err: isEn ? 'error vs capacity' : 'error theo capacity',
+    train: isEn ? 'train' : 'train',
+    test: isEn ? 'test (true risk)' : 'test (true risk)',
+    truef: isEn ? 'true f' : 'hàm thật',
+    under: 'underfit', good: isEn ? 'good fit' : 'vừa khít', over: 'overfit',
+  };
+
+  // true function + fixed noisy training points
+  const f = (x: number) => 0.5 + 0.32 * Math.sin(2 * Math.PI * x);
+  const noise = [0.06, -0.07, 0.05, -0.04, 0.08, -0.05, 0.03, 0.07, -0.08, 0.05, -0.05, 0.06, -0.06, 0.04];
+  const pts = noise.map((nz, i) => { const x = 0.045 + i * 0.91 / 13; return { x, y: Math.min(0.95, Math.max(0.05, f(x) + nz)) }; });
+
+  const hOf = (c: number) => 0.5 * Math.pow(0.028 / 0.5, c);          // bandwidth: smooth → wiggly
+  const fit = (x: number, h: number) => {
+    let sw = 0, swy = 0;
+    for (const p of pts) { const u = (x - p.x) / h; const w = Math.exp(-(u * u)) + 1e-9; sw += w; swy += w * p.y; }
+    return swy / sw;
+  };
+  const trainErr = (h: number) => { let s = 0; for (const p of pts) s += (fit(p.x, h) - p.y) ** 2; return s / pts.length; };
+  const testErr = (h: number) => { let s = 0, n = 120; for (let i = 0; i <= n; i++) { const x = i / n; s += (fit(x, h) - f(x)) ** 2; } return s / (n + 1); };
+
+  // precompute error curves over capacity
+  const CN = 80;
+  const trE: number[] = [], teE: number[] = [];
+  for (let i = 0; i <= CN; i++) { const h = hOf(i / CN); trE.push(trainErr(h)); teE.push(testErr(h)); }
+  const maxE = Math.max(...teE, ...trE) * 1.06;
+  let cBest = 0; { let mn = Infinity; for (let i = 0; i <= CN; i++) if (teE[i] < mn) { mn = teE[i]; cBest = i / CN; } }
+
+  let W = 0, H = 0;
+  const PT = 66, PB = 30;
+
+  function draw() {
+    const rect = canvas.getBoundingClientRect();
+    W = rect.width; H = rect.height;
+    if (!W || !H) return;
+    const dpr = window.devicePixelRatio || 1;
+    if (canvas.width !== Math.round(W * dpr)) { canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr); }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const bg = cv('--bg'), border = cv('--border'), muted = cv('--muted');
+    const accent = cv('--accent'), good = cv('--accent2'), amber = cv('--amber'), danger = cv('--danger'), text = cv('--text');
+
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+
+    const c = slider.valueAsNumber / 100;
+    const h = hOf(c);
+    const regime = c < cBest - 0.13 ? 'under' : c > cBest + 0.13 ? 'over' : 'good';
+    const fitCol = regime === 'good' ? good : regime === 'under' ? amber : danger;
+
+    // panels
+    const mid = W / 2;
+    const lx0 = 16, lx1 = mid - 16, rx0 = mid + 22, rx1 = W - 16;
+    const yT = PT, yB = H - PB;
+    ctx.strokeStyle = border; ctx.lineWidth = 1.2; ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(mid, 40); ctx.lineTo(mid, H - 12); ctx.stroke(); ctx.setLineDash([]);
+
+    // ===== LEFT: data + fit =====
+    const lpx = (x: number) => lx0 + x * (lx1 - lx0);
+    const lpy = (y: number) => yB - y * (yB - yT);
+    ctx.fillStyle = text; ctx.font = 'bold 12px var(--mono, monospace)'; ctx.textAlign = 'center';
+    ctx.fillText(TT.fit, (lx0 + lx1) / 2, 30);
+    // axes
+    ctx.strokeStyle = border; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(lx0, yB); ctx.lineTo(lx1, yB); ctx.moveTo(lx0, yT); ctx.lineTo(lx0, yB); ctx.stroke();
+    // true function (faint)
+    ctx.strokeStyle = accent; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.45; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); for (let i = 0; i <= 120; i++) { const x = i / 120, X = lpx(x), Y = lpy(f(x)); i === 0 ? ctx.moveTo(X, Y) : ctx.lineTo(X, Y); } ctx.stroke();
+    ctx.setLineDash([]); ctx.globalAlpha = 1;
+    // fitted curve
+    ctx.strokeStyle = fitCol; ctx.lineWidth = 2.4;
+    ctx.beginPath(); for (let i = 0; i <= 160; i++) { const x = i / 160, X = lpx(x), Y = lpy(Math.min(1.02, Math.max(-0.02, fit(x, h)))); i === 0 ? ctx.moveTo(X, Y) : ctx.lineTo(X, Y); } ctx.stroke();
+    // data points
+    ctx.fillStyle = muted; for (const p of pts) { ctx.beginPath(); ctx.arc(lpx(p.x), lpy(p.y), 3.2, 0, Math.PI * 2); ctx.fill(); }
+    // regime + legend
+    ctx.font = 'bold 12px var(--mono, monospace)'; ctx.textAlign = 'left';
+    ctx.fillStyle = fitCol; ctx.fillText('→ ' + (regime === 'under' ? TT.under : regime === 'over' ? TT.over : TT.good), lx0 + 4, yT + 14);
+    ctx.font = '10px var(--mono, monospace)'; ctx.fillStyle = muted; ctx.textAlign = 'right';
+    ctx.fillText(TT.truef, lx1 - 2, yT + 14);
+
+    // ===== RIGHT: error vs capacity =====
+    const rpx = (cc: number) => rx0 + cc * (rx1 - rx0);
+    const rpy = (e: number) => yB - (e / maxE) * (yB - yT);
+    ctx.fillStyle = text; ctx.font = 'bold 12px var(--mono, monospace)'; ctx.textAlign = 'center';
+    ctx.fillText(TT.err, (rx0 + rx1) / 2, 30);
+    ctx.strokeStyle = border; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(rx0, yB); ctx.lineTo(rx1, yB); ctx.moveTo(rx0, yT); ctx.lineTo(rx0, yB); ctx.stroke();
+    // gap shading (between train and test)
+    ctx.fillStyle = danger + '1f';
+    ctx.beginPath();
+    for (let i = 0; i <= CN; i++) { const X = rpx(i / CN), Y = rpy(teE[i]); i === 0 ? ctx.moveTo(X, Y) : ctx.lineTo(X, Y); }
+    for (let i = CN; i >= 0; i--) ctx.lineTo(rpx(i / CN), rpy(trE[i]));
+    ctx.closePath(); ctx.fill();
+    // curves
+    const curve = (arr: number[], col: string) => { ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.beginPath(); for (let i = 0; i <= CN; i++) { const X = rpx(i / CN), Y = rpy(arr[i]); i === 0 ? ctx.moveTo(X, Y) : ctx.lineTo(X, Y); } ctx.stroke(); };
+    curve(trE, accent);
+    curve(teE, danger);
+    // current-capacity marker
+    ctx.strokeStyle = text; ctx.lineWidth = 1.3; ctx.globalAlpha = 0.7; ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(rpx(c), yT); ctx.lineTo(rpx(c), yB); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
+    const ti = Math.round(c * CN);
+    ctx.fillStyle = accent; ctx.beginPath(); ctx.arc(rpx(c), rpy(trE[ti]), 3.6, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = danger; ctx.beginPath(); ctx.arc(rpx(c), rpy(teE[ti]), 3.6, 0, Math.PI * 2); ctx.fill();
+    // sweet-spot tick
+    ctx.strokeStyle = good; ctx.lineWidth = 1.4; ctx.globalAlpha = 0.8;
+    ctx.beginPath(); ctx.moveTo(rpx(cBest), yB); ctx.lineTo(rpx(cBest), yB - 7); ctx.stroke(); ctx.globalAlpha = 1;
+    // labels
+    ctx.font = '10px var(--mono, monospace)'; ctx.textAlign = 'left';
+    ctx.fillStyle = accent; ctx.fillText(TT.train, rx0 + 4, yT + 14);
+    ctx.fillStyle = danger; ctx.fillText(TT.test, rx0 + 4, yT + 28);
+    ctx.fillStyle = muted; ctx.textAlign = 'center';
+    ctx.fillText(isEn ? 'capacity →' : 'capacity →', (rx0 + rx1) / 2, H - 8);
+    ctx.fillStyle = good; ctx.textAlign = 'center'; ctx.font = '9px var(--mono, monospace)';
+    ctx.fillText(isEn ? 'sweet spot' : 'điểm tối ưu', rpx(cBest), yB - 10);
+  }
+
+  slider.addEventListener('input', draw);
+  const ro = new ResizeObserver(draw); ro.observe(canvas);
+  draw();
+});
+</script>
+
+<style>
+  .slv {
+    margin: 1.5rem 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--bg2);
+  }
+  .slv-canvas { width: 100%; height: 250px; display: block; background: var(--bg); }
+  .slv-controls {
+    display: flex; align-items: center; gap: 0.6rem;
+    padding: 0.6rem 0.9rem; border-top: 1px solid var(--border);
+  }
+  .slv-lbl { font-family: var(--mono); font-size: 0.77rem; color: var(--muted); }
+  .slv-end { font-family: var(--mono); font-size: 0.72rem; color: var(--muted); }
+  .slv-slider { flex: 1; min-width: 80px; }
+  .slv-caption {
+    font-size: 0.78rem; color: var(--muted); text-align: center;
+    padding: 0.1rem 1rem 0.65rem; font-style: italic; line-height: 1.5;
+  }
+</style>
