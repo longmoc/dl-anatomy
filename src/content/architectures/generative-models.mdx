@@ -1,0 +1,219 @@
+---
+title: "Generative Models"
+description: "Học phân phối dữ liệu để sinh dữ liệu mới — autoregressive, VAE, normalizing flow, GAN, diffusion và energy-based models dưới cùng một lens distribution matching."
+lang: vi
+category: architectures
+order: 10
+parent: architecture-anatomy
+translation: generative-models-en
+tags: [generative-models, autoregressive, vae, gan, diffusion, normalizing-flow]
+---
+
+import Note from '../../components/Note.astro';
+import GenerativeFamiliesDiagram from '../../components/GenerativeFamiliesDiagram.astro';
+
+# Generative Models
+
+Bài [Representation Learning](/dl-anatomy/architectures/representation-learning) hỏi: làm sao học một representation $z$ hữu ích từ dữ liệu? Generative models hỏi câu ngược lại:
+
+> Làm sao học một phân phối $p_\theta(x)$ sao cho **sample từ nó** trông như dữ liệu thật?
+
+Đây chính là mặt "sinh" của bài toán [Sampling & Distribution Matching](/dl-anatomy/foundations/sampling-distribution-matching) ở Foundations: ta chỉ có sample từ $p_{\text{data}}$, và cần một model vừa **định nghĩa được** một phân phối, vừa **sample được** từ nó, vừa **train được** để hai phân phối khớp nhau.
+
+Một LLM sinh token, một diffusion model sinh ảnh, một VAE decode latent thành dữ liệu, một GAN biến noise thành sample — tất cả là những cách trả lời khác nhau cho cùng một câu hỏi. Khác biệt nằm ở chỗ: **phân phối $p_\theta$ được tham số hóa như thế nào**, và điều đó quyết định likelihood có tính được không, sampling nhanh hay chậm, training ổn định đến đâu.
+
+<GenerativeFamiliesDiagram />
+
+## Bài toán chung: ba yêu cầu khó cùng có
+
+Một generative model lý tưởng cần ba thứ:
+
+1. **Sample chất lượng cao** — output trông như dữ liệu thật
+2. **Likelihood tính được** — đánh giá $p_\theta(x)$ cho một $x$ bất kỳ, để train bằng maximum likelihood và so sánh model
+3. **Sampling nhanh** — sinh dữ liệu mới với ít bước tính
+
+Trong thực tế, ba yêu cầu này giằng co nhau — thường được gọi là **generative learning trilemma**. Mỗi họ model chọn hy sinh một góc:
+
+| Họ | Cách định nghĩa $p_\theta$ | Likelihood | Sampling |
+|---|---|---|---|
+| Autoregressive | factorize bằng chain rule | exact | tuần tự, chậm theo độ dài |
+| VAE | latent variable + decoder | lower bound (ELBO) | nhanh (1 lần decode) |
+| Normalizing flow | biến đổi khả nghịch từ noise | exact | nhanh |
+| GAN | implicit — chỉ có sampler | không có | nhanh |
+| Diffusion | đảo ngược quá trình thêm nhiễu | bound / ước lượng | nhiều bước, chậm |
+| Energy-based | hàm năng lượng không chuẩn hóa | không chuẩn hóa được | MCMC, chậm |
+
+<Note type="intuition">
+Đọc bảng này theo một câu hỏi duy nhất: **model "nắm" phân phối ở dạng nào?** Autoregressive và flow nắm mật độ tường minh. VAE nắm một bound. GAN chỉ nắm cái vòi sample. Diffusion nắm hướng đi ngược về phía dữ liệu. EBM nắm điểm số tương đối giữa các cấu hình. Mọi tính chất còn lại (likelihood, tốc độ, độ ổn định) đều suy ra từ lựa chọn này.
+</Note>
+
+## Autoregressive — factorize bằng chain rule
+
+Cách trực tiếp nhất để định nghĩa một phân phối hợp lệ trên dữ liệu nhiều chiều: bẻ nó thành chuỗi các phân phối điều kiện một chiều bằng chain rule:
+
+$$
+p_\theta(x) = \prod_{t=1}^{n} p_\theta(x_t \mid x_{<t})
+$$
+
+Mỗi bước chỉ cần một classifier/regressor điều kiện — thứ deep learning làm rất tốt. Likelihood **exact**: chỉ việc cộng log của từng bước. Training là maximum likelihood thuần, ổn định, scale tốt.
+
+Đây chính là công thức của **LLM**: [decoder-only Transformer](/dl-anatomy/architectures/transformer-variants) với causal mask, objective next-token prediction. Nhưng autoregressive không chỉ dành cho text — PixelRNN/PixelCNN sinh ảnh từng pixel, WaveNet sinh audio từng sample, và nhiều hệ sinh ảnh hiện đại autoregressive trên **token rời rạc** (ảnh được VQ-VAE token hóa trước).
+
+Cái giá phải trả nằm ở sampling: sinh $n$ phần tử cần $n$ bước tuần tự. Với text (vài nghìn token) điều này chấp nhận được; với ảnh raw (hàng triệu pixel) thì rất chậm — vì vậy ảnh thường được nén thành ít token trước khi sinh autoregressive.
+
+## VAE — latent variable và ELBO
+
+VAE định nghĩa phân phối qua một biến ẩn: sample $z$ từ prior đơn giản rồi decode:
+
+$$
+p_\theta(x) = \int p_\theta(x \mid z)\, p(z)\, dz
+$$
+
+Tích phân này không tính được với decoder là neural network. VAE giải quyết bằng một encoder xấp xỉ $q_\phi(z \mid x)$ và tối ưu **ELBO** — lower bound của log-likelihood:
+
+$$
+\log p_\theta(x) \ge \mathbb{E}_{q_\phi(z|x)}[\log p_\theta(x \mid z)] - \mathrm{KL}\big(q_\phi(z \mid x)\,\|\,p(z)\big)
+$$
+
+Số hạng đầu là reconstruction; số hạng sau kéo latent distribution về prior để **sample được**: lấy $z \sim p(z)$, decode, xong — một lần forward.
+
+Bài [Representation Learning](/dl-anatomy/architectures/representation-learning) đã nhìn VAE dưới lens latent space. Dưới lens generative, điểm mạnh của VAE là sampling nhanh và latent có cấu trúc; điểm yếu kinh điển là sample **mờ** — một phần vì reconstruction loss dạng pixel-wise trung bình hóa các khả năng, một phần vì bound không chặt. Vì vậy VAE hiện đại ít khi đứng một mình: **VQ-VAE** cung cấp token rời rạc cho autoregressive, và autoencoder của **latent diffusion** chính là hậu duệ trực tiếp của ý tưởng này.
+
+## Normalizing Flow — biến đổi khả nghịch
+
+Flow định nghĩa $x$ bằng cách đẩy noise qua một hàm **khả nghịch**:
+
+$$
+x = f_\theta(z), \qquad z \sim \mathcal{N}(0, I)
+$$
+
+Vì $f_\theta$ khả nghịch, mật độ được tính exact bằng công thức đổi biến:
+
+$$
+\log p_\theta(x) = \log p(z) - \log \left| \det \frac{\partial f_\theta}{\partial z} \right|
+$$
+
+Flow là họ duy nhất có **cả likelihood exact lẫn sampling nhanh**. Cái giá: kiến trúc bị ràng buộc nặng — mỗi layer phải khả nghịch và có Jacobian determinant tính được rẻ (coupling layer trong RealNVP/Glow), số chiều của $z$ phải bằng số chiều của $x$, và điều đó giới hạn expressiveness trên dữ liệu phức tạp.
+
+Trong vài năm, flow lép vế so với diffusion. Nhưng ý tưởng "học một ánh xạ liên tục từ noise sang data" quay lại rất mạnh dưới dạng **flow matching / rectified flow** — thay vì ràng buộc từng layer khả nghịch, học thẳng một trường vận tốc biến noise dần thành data. Đây là backbone của nhiều model sinh ảnh/video thế hệ mới (Stable Diffusion 3, Flux).
+
+## GAN — học sampler mà không cần likelihood
+
+GAN bỏ hẳn yêu cầu likelihood. Nó chỉ học một **sampler**: generator $G$ biến noise thành sample, và một **discriminator** $D$ học phân biệt sample thật/giả. Hai bên chơi minimax:
+
+$$
+\min_G \max_D \;
+\mathbb{E}_{x \sim p_{\text{data}}}[\log D(x)]
++
+\mathbb{E}_{z \sim p(z)}[\log(1 - D(G(z)))]
+$$
+
+Trực giác: discriminator đóng vai một **loss học được**. Thay vì so pixel với pixel (thứ tạo ra ảnh mờ của VAE), generator bị chấm bởi một mạng nhìn được cấu trúc — nên sample GAN **sắc nét** từ rất sớm trong lịch sử generative modeling, và sampling chỉ tốn một lần forward.
+
+Đổi lại, $p_\theta$ là **implicit**: không có mật độ để đánh giá, không có likelihood để so sánh model, và training là một trò chơi hai người chơi không phải minimize một hàm cố định.
+
+<Note type="warning">
+Hai failure mode kinh điển của GAN: **training bất ổn định** (hai network đuổi nhau, loss dao động, cần cân bằng tinh tế giữa $G$ và $D$) và **mode collapse** (generator chỉ sinh một vài kiểu sample "an toàn" thay vì phủ hết các mode của dữ liệu — khớp một phần phân phối nhưng bỏ rơi phần còn lại). Cả hai đến từ cùng gốc: không có likelihood, không có thước đo tuyệt đối nào cho "đã phủ đủ phân phối chưa".
+</Note>
+
+GAN không còn là mặc định cho sinh ảnh chất lượng cao (diffusion đã thay), nhưng ý tưởng adversarial vẫn sống: làm loss cho super-resolution, distillation cho diffusion ít bước, và các hệ cần sample một lần forward.
+
+## Diffusion — khử nhiễu dần
+
+Diffusion định nghĩa sampling như **đảo ngược một quá trình phá hủy**. Quá trình forward thêm nhiễu Gaussian dần vào dữ liệu cho đến khi chỉ còn noise:
+
+$$
+x_t = \sqrt{\bar{\alpha}_t}\, x_0 + \sqrt{1 - \bar{\alpha}_t}\, \varepsilon,
+\qquad \varepsilon \sim \mathcal{N}(0, I)
+$$
+
+Model học đi ngược: từ $x_t$ đoán nhiễu đã thêm vào. Loss đơn giản đến bất ngờ:
+
+$$
+\mathcal{L} = \mathbb{E}_{x_0, t, \varepsilon}
+\big\| \varepsilon - \varepsilon_\theta(x_t, t) \big\|^2
+$$
+
+Sinh dữ liệu = bắt đầu từ noise thuần, lặp lại bước khử nhiễu $T$ lần. Mỗi bước là một bài toán dễ (khử một chút nhiễu), nên training cực kỳ ổn định — không có minimax, không có collapse — và model phủ mode tốt vì được train trên mọi mức nhiễu của mọi sample.
+
+<Note type="result">
+Có một cách đọc thống nhất: mạng khử nhiễu thực chất học **score** — gradient của log-density $\nabla_x \log p(x_t)$ ở từng mức nhiễu. Diffusion vì vậy tương đương một chuỗi bước đi theo score từ vùng noise về vùng data. Cách đọc này (score-based SDE) nối diffusion với EBM và mở đường cho các sampler nhanh kiểu ODE.
+</Note>
+
+Điểm yếu là **tốc độ sampling**: hàng chục đến hàng nghìn lần forward cho một sample. Hầu hết tiến bộ sau DDPM là tấn công vào đúng chỗ này:
+
+| Hướng | Ý tưởng |
+|---|---|
+| DDIM / ODE sampler | biến sampling thành giải ODE với ít bước hơn |
+| Latent diffusion | chạy diffusion trong latent space nén của autoencoder (Stable Diffusion) |
+| Distillation / consistency | train model ít bước bắt chước model nhiều bước, tiến về 1–4 bước |
+| Flow matching | học thẳng đường đi noise→data, quỹ đạo thẳng hơn, ít bước hơn |
+
+## Energy-based — chấm điểm thay vì chuẩn hóa
+
+EBM định nghĩa phân phối qua một hàm năng lượng, không chuẩn hóa:
+
+$$
+p_\theta(x) = \frac{\exp(-E_\theta(x))}{Z_\theta},
+\qquad
+Z_\theta = \int \exp(-E_\theta(x))\, dx
+$$
+
+$E_\theta$ có thể là bất kỳ network nào — tự do kiến trúc tối đa. Cấu hình "giống data" có năng lượng thấp, cấu hình vô lý có năng lượng cao. Nhưng hằng số chuẩn hóa $Z_\theta$ không tính được, nên cả likelihood lẫn sampling đều gián tiếp: sampling cần **MCMC** (ví dụ Langevin dynamics — đi theo gradient của năng lượng cộng noise), training cần các kỹ thuật như contrastive divergence hoặc score matching.
+
+Trong thực hành, EBM thuần ít khi là hệ sinh dữ liệu chủ lực. Giá trị của nó là **khung khái niệm**: score matching trên EBM chính là gốc của score-based diffusion; discriminator của GAN có thể đọc như một hàm năng lượng; và "chấm điểm cấu hình thay vì chuẩn hóa phân phối" là cách nghĩ xuất hiện lại ở nhiều nơi, từ contrastive learning đến reward model.
+
+## So sánh các họ
+
+| | Likelihood | Sampling | Chất lượng sample | Training |
+|---|---|---|---|---|
+| Autoregressive | exact | chậm (tuần tự) | rất cao (text, token) | ổn định |
+| VAE | bound (ELBO) | nhanh | trung bình, dễ mờ | ổn định |
+| Flow | exact | nhanh | trung bình (kiến trúc bị ràng buộc) | ổn định |
+| GAN | không có | nhanh nhất | cao, sắc nét | bất ổn, mode collapse |
+| Diffusion | bound / ước lượng | chậm (nhiều bước) | cao nhất cho ảnh/audio/video | rất ổn định |
+| EBM | không chuẩn hóa | chậm (MCMC) | — | khó |
+
+Nhìn theo trilemma: autoregressive hy sinh tốc độ sampling; VAE hy sinh chất lượng; flow hy sinh expressiveness để giữ exact likelihood; GAN hy sinh likelihood và độ ổn định; diffusion hy sinh tốc độ sampling nhưng giữ được chất lượng lẫn training ổn định — và đó là lý do nó thắng thế cho dữ liệu liên tục.
+
+## Ranh giới giữa các họ đang mờ đi
+
+Sáu họ trên không phải sáu ốc đảo. Các hệ hiện đại hầu hết là **lai**:
+
+- **Latent diffusion** = VAE (nén ảnh thành latent) + diffusion (sinh trong latent space).
+- **VQ-VAE + autoregressive** = học token rời rạc rồi sinh token bằng Transformer — công thức của DALL·E 1 và nhiều model sinh ảnh/audio theo token.
+- **Score-based view** thống nhất diffusion và EBM: khử nhiễu = đi theo gradient năng lượng.
+- **Flow matching** nối flow và diffusion thành cùng một khung "học đường đi liên tục từ noise đến data".
+- **Adversarial distillation** dùng GAN loss để nén diffusion nhiều bước thành ít bước.
+
+Và ranh giới với hai bài trước cũng mờ: pretraining LLM bằng next-token prediction *là* generative modeling, đồng thời *là* representation learning — cùng một objective, hai lens.
+
+## Bức tranh chung
+
+Mọi generative model đều giải cùng một bài toán distribution matching, chỉ khác nhau ở ba lựa chọn:
+
+| Lựa chọn | Câu hỏi |
+|---|---|
+| Tham số hóa | $p_\theta$ tường minh (mật độ), latent, implicit (sampler), hay energy? |
+| Tín hiệu training | maximum likelihood, bound, adversarial, hay denoising/score? |
+| Con đường sampling | tuần tự từng phần, một lần decode, hay lặp khử nhiễu? |
+
+Chọn xong ba ô này là gần như xác định được model thuộc họ nào — và nó sẽ mạnh yếu ở đâu.
+
+Bài tiếp theo trong Model families ghép nốt mảnh cuối: khi dữ liệu không chỉ có một modality — làm sao align ảnh, text, audio vào cùng một hệ sinh/hiểu? [Multimodal Models](/dl-anatomy/architectures/multimodal-models).
+
+## Papers tham khảo
+
+| Paper | |
+|---|---|
+| Kingma & Welling (2013) | Auto-Encoding Variational Bayes (VAE) |
+| Goodfellow et al. (2014) | Generative Adversarial Networks |
+| Rezende & Mohamed (2015) | Variational Inference with Normalizing Flows |
+| van den Oord et al. (2016) | Pixel Recurrent Neural Networks (PixelRNN) |
+| Dinh et al. (2016) | Density Estimation using Real NVP |
+| van den Oord et al. (2017) | Neural Discrete Representation Learning (VQ-VAE) |
+| Ho et al. (2020) | Denoising Diffusion Probabilistic Models (DDPM) |
+| Song et al. (2021) | Score-Based Generative Modeling through SDEs |
+| Rombach et al. (2022) | High-Resolution Image Synthesis with Latent Diffusion Models |
+| Lipman et al. (2023) | Flow Matching for Generative Modeling |
+| Song et al. (2023) | Consistency Models |

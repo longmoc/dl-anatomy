@@ -1,0 +1,219 @@
+---
+title: "Generative Models"
+description: "Learning the data distribution to generate new data — autoregressive models, VAEs, normalizing flows, GANs, diffusion, and energy-based models under one distribution-matching lens."
+lang: en
+category: architectures
+order: 10
+parent: architecture-anatomy
+translation: generative-models
+tags: [generative-models, autoregressive, vae, gan, diffusion, normalizing-flow]
+---
+
+import Note from '../../components/Note.astro';
+import GenerativeFamiliesDiagram from '../../components/GenerativeFamiliesDiagram.astro';
+
+# Generative Models
+
+[Representation Learning](/dl-anatomy/architectures/representation-learning-en) asked: how do we learn a useful representation $z$ from data? Generative models ask the reverse:
+
+> How do we learn a distribution $p_\theta(x)$ such that **samples from it** look like real data?
+
+This is the "generate" side of [Sampling & Distribution Matching](/dl-anatomy/foundations/sampling-distribution-matching-en) from Foundations: we only have samples from $p_{\text{data}}$, and we need a model that can **define** a distribution, **sample** from it, and be **trained** so the two distributions match.
+
+An LLM generates tokens, a diffusion model generates images, a VAE decodes latents into data, a GAN turns noise into samples — all are different answers to the same question. The difference lies in **how $p_\theta$ is parameterized**, and that choice determines whether the likelihood is tractable, whether sampling is fast, and how stable training is.
+
+<GenerativeFamiliesDiagram lang="en" />
+
+## The shared problem: three requirements in tension
+
+An ideal generative model needs three things:
+
+1. **High-quality samples** — outputs look like real data
+2. **Tractable likelihood** — evaluate $p_\theta(x)$ for any $x$, enabling maximum-likelihood training and model comparison
+3. **Fast sampling** — generate new data in few compute steps
+
+In practice these pull against each other — often called the **generative learning trilemma**. Each family sacrifices one corner:
+
+| Family | How $p_\theta$ is defined | Likelihood | Sampling |
+|---|---|---|---|
+| Autoregressive | factorize by the chain rule | exact | sequential, slow in length |
+| VAE | latent variable + decoder | lower bound (ELBO) | fast (one decode) |
+| Normalizing flow | invertible transform of noise | exact | fast |
+| GAN | implicit — only a sampler | none | fast |
+| Diffusion | reverse a gradual noising process | bound / estimate | many steps, slow |
+| Energy-based | unnormalized energy function | unnormalized | MCMC, slow |
+
+<Note type="intuition">
+Read this table through a single question: **in what form does the model "hold" the distribution?** Autoregressive models and flows hold an explicit density. VAEs hold a bound. GANs hold only the sampling faucet. Diffusion holds the direction back toward data. EBMs hold relative scores between configurations. Every other property (likelihood, speed, stability) follows from this choice.
+</Note>
+
+## Autoregressive — factorize by the chain rule
+
+The most direct way to define a valid distribution over high-dimensional data: break it into a sequence of one-dimensional conditionals with the chain rule:
+
+$$
+p_\theta(x) = \prod_{t=1}^{n} p_\theta(x_t \mid x_{<t})
+$$
+
+Each step only needs a conditional classifier/regressor — the thing deep learning does best. The likelihood is **exact**: just sum the per-step logs. Training is pure maximum likelihood, stable, and scales well.
+
+This is exactly the formula of an **LLM**: a [decoder-only Transformer](/dl-anatomy/architectures/transformer-variants-en) with a causal mask, trained on next-token prediction. But autoregressive is not text-only — PixelRNN/PixelCNN generate images pixel by pixel, WaveNet generates audio sample by sample, and many modern image generators are autoregressive over **discrete tokens** (images tokenized first by a VQ-VAE).
+
+The price is paid at sampling: generating $n$ elements takes $n$ sequential steps. For text (a few thousand tokens) that is acceptable; for raw images (millions of pixels) it is very slow — which is why images are usually compressed into few tokens before autoregressive generation.
+
+## VAE — latent variables and the ELBO
+
+A VAE defines the distribution through a latent variable: sample $z$ from a simple prior, then decode:
+
+$$
+p_\theta(x) = \int p_\theta(x \mid z)\, p(z)\, dz
+$$
+
+This integral is intractable when the decoder is a neural network. The VAE fixes it with an approximate encoder $q_\phi(z \mid x)$ and optimizes the **ELBO** — a lower bound on the log-likelihood:
+
+$$
+\log p_\theta(x) \ge \mathbb{E}_{q_\phi(z|x)}[\log p_\theta(x \mid z)] - \mathrm{KL}\big(q_\phi(z \mid x)\,\|\,p(z)\big)
+$$
+
+The first term is reconstruction; the second pulls the latent distribution toward the prior so that **sampling works**: draw $z \sim p(z)$, decode, done — one forward pass.
+
+[Representation Learning](/dl-anatomy/architectures/representation-learning-en) viewed the VAE through the latent-space lens. Through the generative lens, its strengths are fast sampling and a structured latent; the classic weakness is **blurry** samples — partly because pixel-wise reconstruction losses average over possibilities, partly because the bound is loose. Modern VAEs therefore rarely stand alone: **VQ-VAE** supplies discrete tokens for autoregressive models, and the autoencoder in **latent diffusion** is a direct descendant of this idea.
+
+## Normalizing Flows — invertible transforms
+
+A flow defines $x$ by pushing noise through an **invertible** map:
+
+$$
+x = f_\theta(z), \qquad z \sim \mathcal{N}(0, I)
+$$
+
+Because $f_\theta$ is invertible, the density is exact via the change-of-variables formula:
+
+$$
+\log p_\theta(x) = \log p(z) - \log \left| \det \frac{\partial f_\theta}{\partial z} \right|
+$$
+
+Flows are the only family with **both exact likelihood and fast sampling**. The price: heavily constrained architectures — every layer must be invertible with a cheaply computable Jacobian determinant (coupling layers in RealNVP/Glow), $z$ must have the same dimensionality as $x$, and that limits expressiveness on complex data.
+
+For several years flows lost ground to diffusion. But the idea of "learning a continuous map from noise to data" came back strongly as **flow matching / rectified flow** — instead of constraining each layer to be invertible, learn a velocity field that gradually transports noise to data. This is the backbone of a new generation of image/video generators (Stable Diffusion 3, Flux).
+
+## GAN — a sampler without a likelihood
+
+GANs drop the likelihood requirement entirely. They learn only a **sampler**: a generator $G$ maps noise to samples, and a **discriminator** $D$ learns to tell real from fake. The two play minimax:
+
+$$
+\min_G \max_D \;
+\mathbb{E}_{x \sim p_{\text{data}}}[\log D(x)]
++
+\mathbb{E}_{z \sim p(z)}[\log(1 - D(G(z)))]
+$$
+
+Intuition: the discriminator acts as a **learned loss**. Instead of comparing pixel to pixel (the thing that makes VAE samples blurry), the generator is graded by a network that can see structure — which is why GAN samples were **sharp** very early in the history of generative modeling, and sampling costs a single forward pass.
+
+In exchange, $p_\theta$ is **implicit**: there is no density to evaluate, no likelihood for model comparison, and training is a two-player game rather than minimizing a fixed objective.
+
+<Note type="warning">
+The two classic GAN failure modes: **training instability** (two networks chasing each other, oscillating losses, a delicate balance between $G$ and $D$) and **mode collapse** (the generator produces only a few "safe" kinds of samples instead of covering all modes of the data — matching part of the distribution while abandoning the rest). Both share one root cause: without a likelihood, there is no absolute measure of "have we covered the distribution yet".
+</Note>
+
+GANs are no longer the default for high-quality image generation (diffusion took that seat), but the adversarial idea lives on: as a loss for super-resolution, as distillation for few-step diffusion, and in systems that need single-forward-pass sampling.
+
+## Diffusion — denoise, step by step
+
+Diffusion defines sampling as **reversing a destruction process**. The forward process gradually adds Gaussian noise to data until only noise remains:
+
+$$
+x_t = \sqrt{\bar{\alpha}_t}\, x_0 + \sqrt{1 - \bar{\alpha}_t}\, \varepsilon,
+\qquad \varepsilon \sim \mathcal{N}(0, I)
+$$
+
+The model learns to go backwards: given $x_t$, predict the noise that was added. The loss is surprisingly simple:
+
+$$
+\mathcal{L} = \mathbb{E}_{x_0, t, \varepsilon}
+\big\| \varepsilon - \varepsilon_\theta(x_t, t) \big\|^2
+$$
+
+Generation = start from pure noise, repeat the denoising step $T$ times. Each step is an easy problem (remove a little noise), so training is extremely stable — no minimax, no collapse — and mode coverage is good because the model trains on every noise level of every sample.
+
+<Note type="result">
+There is a unifying reading: the denoising network actually learns the **score** — the gradient of the log-density $\nabla_x \log p(x_t)$ at each noise level. Diffusion is therefore equivalent to following the score from the noise region back to the data region. This score-based (SDE) view connects diffusion to EBMs and opened the door to fast ODE-style samplers.
+</Note>
+
+The weakness is **sampling speed**: tens to thousands of forward passes per sample. Most post-DDPM progress attacks exactly this point:
+
+| Direction | Idea |
+|---|---|
+| DDIM / ODE samplers | turn sampling into solving an ODE with fewer steps |
+| Latent diffusion | run diffusion in a compressed autoencoder latent space (Stable Diffusion) |
+| Distillation / consistency | train a few-step model to imitate a many-step model, down to 1–4 steps |
+| Flow matching | learn the noise→data path directly, straighter trajectories, fewer steps |
+
+## Energy-based — score configurations instead of normalizing
+
+An EBM defines the distribution through an unnormalized energy function:
+
+$$
+p_\theta(x) = \frac{\exp(-E_\theta(x))}{Z_\theta},
+\qquad
+Z_\theta = \int \exp(-E_\theta(x))\, dx
+$$
+
+$E_\theta$ can be any network — maximal architectural freedom. Data-like configurations get low energy, implausible ones get high energy. But the normalizing constant $Z_\theta$ is intractable, so both likelihood and sampling become indirect: sampling needs **MCMC** (e.g. Langevin dynamics — follow the energy gradient plus noise), and training needs techniques like contrastive divergence or score matching.
+
+In practice, pure EBMs are rarely the workhorse generator. Their value is as a **conceptual frame**: score matching on EBMs is the root of score-based diffusion; a GAN discriminator can be read as an energy function; and "score configurations instead of normalizing a distribution" is a way of thinking that reappears everywhere, from contrastive learning to reward models.
+
+## Comparing the families
+
+| | Likelihood | Sampling | Sample quality | Training |
+|---|---|---|---|---|
+| Autoregressive | exact | slow (sequential) | very high (text, tokens) | stable |
+| VAE | bound (ELBO) | fast | medium, tends to blur | stable |
+| Flow | exact | fast | medium (constrained architecture) | stable |
+| GAN | none | fastest | high, sharp | unstable, mode collapse |
+| Diffusion | bound / estimate | slow (many steps) | highest for image/audio/video | very stable |
+| EBM | unnormalized | slow (MCMC) | — | hard |
+
+Through the trilemma: autoregressive sacrifices sampling speed; VAEs sacrifice quality; flows sacrifice expressiveness to keep exact likelihood; GANs sacrifice likelihood and stability; diffusion sacrifices sampling speed but keeps both quality and stable training — which is why it won for continuous data.
+
+## The boundaries are blurring
+
+These six families are not six islands. Most modern systems are **hybrids**:
+
+- **Latent diffusion** = VAE (compress images into latents) + diffusion (generate in latent space).
+- **VQ-VAE + autoregressive** = learn discrete tokens, then generate tokens with a Transformer — the recipe of DALL·E 1 and many image/audio token models.
+- The **score-based view** unifies diffusion and EBMs: denoising = following the energy gradient.
+- **Flow matching** joins flows and diffusion into one framework of "learning a continuous path from noise to data".
+- **Adversarial distillation** uses a GAN loss to compress many-step diffusion into few steps.
+
+The boundary with the previous two articles blurs too: LLM pretraining with next-token prediction *is* generative modeling and *is* representation learning — one objective, two lenses.
+
+## The big picture
+
+Every generative model solves the same distribution-matching problem, differing only in three choices:
+
+| Choice | Question |
+|---|---|
+| Parameterization | is $p_\theta$ explicit (a density), latent, implicit (a sampler), or an energy? |
+| Training signal | maximum likelihood, a bound, adversarial, or denoising/score? |
+| Sampling path | sequential piece by piece, one decode, or iterative denoising? |
+
+Fill in these three cells and you have almost determined which family a model belongs to — and where it will be strong or weak.
+
+The next Model families article adds the final piece: when data has more than one modality — how do we align images, text, and audio into one system that understands and generates? [Multimodal Models](/dl-anatomy/architectures/multimodal-models-en).
+
+## References
+
+| Paper | |
+|---|---|
+| Kingma & Welling (2013) | Auto-Encoding Variational Bayes (VAE) |
+| Goodfellow et al. (2014) | Generative Adversarial Networks |
+| Rezende & Mohamed (2015) | Variational Inference with Normalizing Flows |
+| van den Oord et al. (2016) | Pixel Recurrent Neural Networks (PixelRNN) |
+| Dinh et al. (2016) | Density Estimation using Real NVP |
+| van den Oord et al. (2017) | Neural Discrete Representation Learning (VQ-VAE) |
+| Ho et al. (2020) | Denoising Diffusion Probabilistic Models (DDPM) |
+| Song et al. (2021) | Score-Based Generative Modeling through SDEs |
+| Rombach et al. (2022) | High-Resolution Image Synthesis with Latent Diffusion Models |
+| Lipman et al. (2023) | Flow Matching for Generative Modeling |
+| Song et al. (2023) | Consistency Models |

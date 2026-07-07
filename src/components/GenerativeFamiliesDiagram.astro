@@ -1,0 +1,173 @@
+---
+interface Props {
+  lang?: 'vi' | 'en';
+}
+const { lang = 'vi' } = Astro.props;
+
+const L = lang === 'en'
+  ? {
+      ar: 'Autoregressive', arSub: 'generate one piece at a time',
+      vae: 'VAE', vaeSub: 'latent → decode',
+      flow: 'Normalizing Flow', flowSub: 'invertible transform',
+      gan: 'GAN', ganSub: 'generator vs discriminator',
+      diff: 'Diffusion', diffSub: 'denoise step by step',
+      ebm: 'Energy-based', ebmSub: 'low energy = data-like',
+      real: 'real x', fake: 'x̂', judge: 'real / fake?',
+      noise: '+noise', denoise: 'denoise',
+      cap: 'Six ways to define a distribution you can sample from. Autoregressive models factorize by chain rule; VAEs decode a latent variable; flows push noise through an invertible map; GANs train a sampler against a discriminator; diffusion models invert a gradual noising process; energy-based models score configurations and sample the low-energy regions.',
+    }
+  : {
+      ar: 'Autoregressive', arSub: 'sinh tuần tự từng phần',
+      vae: 'VAE', vaeSub: 'latent → decode',
+      flow: 'Normalizing Flow', flowSub: 'biến đổi khả nghịch',
+      gan: 'GAN', ganSub: 'generator vs discriminator',
+      diff: 'Diffusion', diffSub: 'khử nhiễu từng bước',
+      ebm: 'Energy-based', ebmSub: 'năng lượng thấp = giống data',
+      real: 'x thật', fake: 'x̂', judge: 'thật / giả?',
+      noise: '+nhiễu', denoise: 'khử nhiễu',
+      cap: 'Sáu cách định nghĩa một phân phối có thể sample. Autoregressive factorize bằng chain rule; VAE decode từ latent; flow đẩy noise qua ánh xạ khả nghịch; GAN train sampler đấu với discriminator; diffusion đảo ngược quá trình thêm nhiễu dần; energy-based chấm điểm cấu hình và sample vùng năng lượng thấp.',
+    };
+---
+
+<figure class="gfd" data-lang={lang}>
+  <svg viewBox="0 0 760 420" role="img" aria-label="Six generative model families" class="gfd-svg">
+    <defs>
+      <marker id="gfd-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" class="gfd-head" />
+      </marker>
+      <marker id="gfd-a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" class="gfd-head2" />
+      </marker>
+    </defs>
+
+    <!-- grid dividers -->
+    <line x1="253" y1="14" x2="253" y2="406" class="gfd-div" />
+    <line x1="506" y1="14" x2="506" y2="406" class="gfd-div" />
+    <line x1="14" y1="210" x2="746" y2="210" class="gfd-div" />
+
+    <!-- ============ Panel 1: Autoregressive ============ -->
+    <text x="126" y="38" class="gfd-title">{L.ar}</text>
+    <g>
+      <circle cx="48" cy="110" r="15" class="gfd-node" /><text x="48" y="114" class="gfd-nt">x₁</text>
+      <line x1="63" y1="110" x2="85" y2="110" class="gfd-line" marker-end="url(#gfd-a)" />
+      <circle cx="102" cy="110" r="15" class="gfd-node" /><text x="102" y="114" class="gfd-nt">x₂</text>
+      <line x1="117" y1="110" x2="139" y2="110" class="gfd-line" marker-end="url(#gfd-a)" />
+      <circle cx="156" cy="110" r="15" class="gfd-node" /><text x="156" y="114" class="gfd-nt">x₃</text>
+      <line x1="171" y1="110" x2="193" y2="110" class="gfd-line" marker-end="url(#gfd-a)" />
+      <circle cx="210" cy="110" r="15" class="gfd-node gfd-next" /><text x="210" y="114" class="gfd-nt">x₄</text>
+    </g>
+    <text x="126" y="176" class="gfd-sub">{L.arSub}</text>
+
+    <!-- ============ Panel 2: VAE ============ -->
+    <text x="380" y="38" class="gfd-title">{L.vae}</text>
+    <g>
+      <circle cx="308" cy="110" r="16" class="gfd-latent" /><text x="308" y="114" class="gfd-nt">z</text>
+      <line x1="326" y1="110" x2="352" y2="110" class="gfd-line" marker-end="url(#gfd-a)" />
+      <path d="M354,90 L398,80 L398,140 L354,130 Z" class="gfd-box" />
+      <text x="376" y="114" class="gfd-bt">dec</text>
+      <line x1="400" y1="110" x2="424" y2="110" class="gfd-line" marker-end="url(#gfd-a)" />
+      <rect x="426" y="94" width="32" height="32" rx="5" class="gfd-data" /><text x="442" y="114" class="gfd-nt">x</text>
+    </g>
+    <text x="380" y="176" class="gfd-sub">{L.vaeSub}</text>
+
+    <!-- ============ Panel 3: Flow ============ -->
+    <text x="632" y="38" class="gfd-title">{L.flow}</text>
+    <g>
+      <circle cx="556" cy="110" r="16" class="gfd-latent" /><text x="556" y="114" class="gfd-nt">z</text>
+      <line x1="576" y1="102" x2="666" y2="102" class="gfd-line" marker-end="url(#gfd-a)" />
+      <line x1="666" y1="118" x2="576" y2="118" class="gfd-line" marker-end="url(#gfd-a)" />
+      <text x="621" y="94" class="gfd-mini">f</text>
+      <text x="621" y="136" class="gfd-mini">f⁻¹</text>
+      <rect x="672" y="94" width="32" height="32" rx="5" class="gfd-data" /><text x="688" y="114" class="gfd-nt">x</text>
+    </g>
+    <text x="632" y="176" class="gfd-sub">{L.flowSub}</text>
+
+    <!-- ============ Panel 4: GAN ============ -->
+    <text x="126" y="238" class="gfd-title">{L.gan}</text>
+    <g>
+      <circle cx="42" cy="296" r="13" class="gfd-latent" /><text x="42" y="300" class="gfd-nt2">z</text>
+      <line x1="57" y1="296" x2="73" y2="296" class="gfd-line" marker-end="url(#gfd-a)" />
+      <rect x="75" y="282" width="30" height="28" rx="6" class="gfd-box" /><text x="90" y="300" class="gfd-bt">G</text>
+      <line x1="107" y1="296" x2="123" y2="296" class="gfd-line" marker-end="url(#gfd-a)" />
+      <rect x="125" y="282" width="28" height="28" rx="5" class="gfd-data" /><text x="139" y="300" class="gfd-nt2">{L.fake}</text>
+      <rect x="125" y="330" width="28" height="28" rx="5" class="gfd-data gfd-real" />
+      <text x="118" y="348" class="gfd-mini" text-anchor="end">{L.real}</text>
+      <line x1="155" y1="296" x2="176" y2="308" class="gfd-line" marker-end="url(#gfd-a)" />
+      <line x1="155" y1="344" x2="176" y2="330" class="gfd-line" marker-end="url(#gfd-a)" />
+      <rect x="178" y="304" width="30" height="30" rx="6" class="gfd-box2" /><text x="193" y="324" class="gfd-bt">D</text>
+      <text x="193" y="356" class="gfd-mini">{L.judge}</text>
+    </g>
+    <text x="126" y="392" class="gfd-sub">{L.ganSub}</text>
+
+    <!-- ============ Panel 5: Diffusion ============ -->
+    <text x="380" y="238" class="gfd-title">{L.diff}</text>
+    <g>
+      {[0, 1, 2, 3].map(i => (
+        <g>
+          <rect x={296 + i * 48} y="288" width="30" height="30" rx="5" class="gfd-data" style={`fill-opacity:${0.55 - i * 0.13}`} />
+          {Array.from({ length: 2 + i * 3 }, (_, j) => (
+            <circle cx={296 + i * 48 + 4 + ((j * 11 + i * 5) % 23)} cy={288 + 4 + ((j * 17 + 7) % 23)} r="1.3" class="gfd-noise-dot" />
+          ))}
+        </g>
+      ))}
+      <text x="311" y="282" class="gfd-mini">x₀</text>
+      <text x="455" y="282" class="gfd-mini">x_T</text>
+      <line x1="330" y1="330" x2="440" y2="330" class="gfd-dash" marker-end="url(#gfd-a2)" />
+      <text x="385" y="344" class="gfd-mini">{L.noise}</text>
+      <line x1="440" y1="358" x2="330" y2="358" class="gfd-line" marker-end="url(#gfd-a)" />
+      <text x="385" y="372" class="gfd-mini gfd-strong">{L.denoise}</text>
+    </g>
+    <text x="380" y="392" class="gfd-sub">{L.diffSub}</text>
+
+    <!-- ============ Panel 6: EBM ============ -->
+    <text x="632" y="238" class="gfd-title">{L.ebm}</text>
+    <g>
+      <path d="M540,290 C556,332 570,344 588,338 C602,333 606,300 622,300 C638,300 640,346 662,350 C684,353 700,320 722,286" class="gfd-energy" fill="none" />
+      <circle cx="662" cy="343" r="7" class="gfd-ball" />
+      <text x="548" y="282" class="gfd-mini">E(x)</text>
+    </g>
+    <text x="632" y="392" class="gfd-sub">{L.ebmSub}</text>
+  </svg>
+  <figcaption class="gfd-cap">{L.cap}</figcaption>
+</figure>
+
+<style>
+  .gfd {
+    margin: 1.75rem 0;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg2);
+    padding: 0.75rem 0 0.2rem;
+  }
+  .gfd-svg { display: block; width: 100%; max-width: 800px; height: auto; margin: 0 auto; }
+  .gfd-div { stroke: var(--border); stroke-width: 1.1; stroke-dasharray: 4 4; }
+  .gfd-title { fill: var(--text); font-family: var(--mono); font-size: 13px; font-weight: 600; text-anchor: middle; }
+  .gfd-sub { fill: var(--muted); font-family: var(--mono); font-size: 10.5px; text-anchor: middle; }
+  .gfd-node { fill: var(--bg); stroke: var(--accent); stroke-width: 1.7; }
+  .gfd-next { stroke-dasharray: 4 3; stroke: var(--accent2); }
+  .gfd-latent { fill: var(--bg); stroke: var(--muted); stroke-width: 1.7; }
+  .gfd-data { fill: var(--accent); fill-opacity: 0.28; stroke: var(--accent); stroke-width: 1.5; }
+  .gfd-real { stroke: var(--accent2); fill: var(--accent2); fill-opacity: 0.28; }
+  .gfd-box { fill: var(--bg); stroke: var(--amber); stroke-width: 1.7; }
+  .gfd-box2 { fill: var(--bg); stroke: var(--accent2); stroke-width: 1.7; }
+  .gfd-bt { fill: var(--text); font-family: var(--mono); font-size: 11px; text-anchor: middle; }
+  .gfd-nt { fill: var(--text); font-family: var(--mono); font-size: 11px; text-anchor: middle; }
+  .gfd-nt2 { fill: var(--text); font-family: var(--mono); font-size: 10px; text-anchor: middle; }
+  .gfd-mini { fill: var(--muted); font-family: var(--mono); font-size: 9.5px; text-anchor: middle; }
+  .gfd-strong { fill: var(--accent2); font-weight: 600; }
+  .gfd-line { stroke: var(--text); stroke-width: 1.5; fill: none; }
+  .gfd-head { fill: var(--text); }
+  .gfd-dash { stroke: var(--muted); stroke-width: 1.4; stroke-dasharray: 4 3; }
+  .gfd-head2 { fill: var(--muted); }
+  .gfd-noise-dot { fill: var(--muted); opacity: 0.75; }
+  .gfd-energy { stroke: var(--amber); stroke-width: 2; }
+  .gfd-ball { fill: var(--accent2); }
+  .gfd-cap {
+    font-size: 0.78rem;
+    color: var(--muted);
+    text-align: center;
+    padding: 0.5rem 1rem 0.65rem;
+    font-style: italic;
+    line-height: 1.5;
+  }
+</style>
