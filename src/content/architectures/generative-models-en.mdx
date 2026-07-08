@@ -1,6 +1,6 @@
 ---
 title: "Generative Models"
-description: "Learning the data distribution to generate new data — autoregressive models, VAEs, normalizing flows, GANs, diffusion, and energy-based models under one distribution-matching lens."
+description: "Learning the data distribution to generate new data — autoregressive models, VAEs, normalizing flows, GANs, diffusion, and energy-based models through distribution matching."
 lang: en
 category: architectures
 order: 10
@@ -44,7 +44,7 @@ The trouble is that nobody has all three at once. The requirements pull against 
 | Energy-based | unnormalized energy function | unnormalized | MCMC, slow |
 
 <Note type="intuition">
-Read this table through a single question: **in what form does the model "hold" the distribution?** Autoregressive models and flows hold an explicit density. VAEs hold a bound. GANs hold only the sampling faucet. Diffusion holds the direction back toward data. EBMs hold relative scores between configurations. Every other property (likelihood, speed, stability) follows from this choice.
+Read this table through a single question: **in what form does the model "hold" the distribution?** Autoregressive models and flows hold an explicit density. VAEs hold a bound. GANs hold only a sampling mechanism. Diffusion holds the direction back toward data. EBMs hold relative scores between configurations. Every other property (likelihood, speed, stability) follows from this choice.
 </Note>
 
 ## Autoregressive — factorize by the chain rule
@@ -77,7 +77,7 @@ $$
 
 The first term is reconstruction; the second pulls the latent distribution toward the prior so that **sampling works**: draw $z \sim p(z)$, decode, done — one forward pass.
 
-[Representation Learning](/dl-anatomy/architectures/representation-learning-en) viewed the VAE through the latent-space lens. Through the generative lens, its strengths are fast sampling and a structured latent; the classic weakness is **blurry** samples — partly because pixel-wise reconstruction losses average over possibilities, partly because the bound is loose. Modern VAEs therefore rarely stand alone: **VQ-VAE** supplies discrete tokens for autoregressive models, and the autoencoder in **latent diffusion** is a direct descendant of this idea.
+[Representation Learning](/dl-anatomy/architectures/representation-learning-en) viewed the VAE from the latent-space side. From the generative side, its strengths are fast sampling and a structured latent; the classic weakness is **blurry** samples — partly because pixel-wise reconstruction losses average over possibilities, partly because the bound is loose. Modern VAEs therefore rarely stand alone: **VQ-VAE** supplies discrete tokens for autoregressive models, and the autoencoder in **latent diffusion** is a direct descendant of this idea.
 
 ## Normalizing Flows — invertible transforms
 
@@ -241,7 +241,7 @@ These six families are not six islands. Most modern systems are **hybrids**:
 
 Flow matching here is not classical normalizing flow in the exact-likelihood, invertible-layer sense. It is closer to diffusion or continuous transport: learn a vector field that moves noise toward data.
 
-The boundary with the previous two articles blurs too: LLM pretraining with next-token prediction *is* generative modeling and *is* representation learning — one objective, two lenses.
+The boundary with the previous two articles blurs too: LLM pretraining with next-token prediction *is* generative modeling and *is* representation learning — one objective, two views.
 
 ## The big picture
 
@@ -255,7 +255,7 @@ Every generative model solves the same distribution-matching problem, differing 
 
 Fill in these three cells and you have almost determined which family a model belongs to — and where it will be strong or weak.
 
-Starting from the problem instead, the practical map looks like this:
+Starting from the problem instead, the choices usually look like this:
 
 | Problem | Common choice | Why |
 |---|---|---|
