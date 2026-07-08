@@ -16,7 +16,9 @@ import ProbabilityDivergenceDiagram from '../../components/ProbabilityDivergence
 
 Trong deep learning, ta hay nói "model dự đoán class đúng" hoặc "language model dự đoán token tiếp theo". Nhưng dưới lớp ngôn ngữ đó, rất nhiều model đang làm một việc xác suất hơn:
 
-> Gán xác suất cao cho dữ liệu thật, và xác suất thấp cho dữ liệu không phù hợp.
+> Gán xác suất cao cho điều thật sự xảy ra.
+
+Với softmax, các khả năng phải chia nhau tổng xác suất bằng 1. Vì vậy khi training đẩy xác suất của label/token đúng lên, các lựa chọn cạnh tranh tự bị đẩy xuống. Ta không cần lúc nào cũng viết rõ "negative examples"; chúng đã nằm trong normalization.
 
 Classifier không chỉ chọn class. Nó tạo một phân phối:
 
@@ -34,7 +36,7 @@ Training thường là làm cho phân phối model $q_\theta$ gần với phân 
 
 <ProbabilityDivergenceDiagram />
 
-## Distribution thật và distribution của model
+## Phân phối thật và phân phối của model
 
 Giả sử dữ liệu đến từ một phân phối thật:
 
@@ -71,7 +73,7 @@ $$
 Với toàn bộ dataset, likelihood là tích các xác suất đó:
 
 $$
-\mathcal{L}(\theta) = \prod_{i=1}^{n} q_\theta(y_i \mid x_i)
+\operatorname{Lik}(\theta;\mathcal{D}) = \prod_{i=1}^{n} q_\theta(y_i \mid x_i)
 $$
 
 Nếu model gán xác suất cao cho label đúng của mọi sample, likelihood lớn. Nếu chỉ một vài sample đúng bị gán xác suất rất thấp, tích này giảm mạnh.
@@ -79,7 +81,7 @@ Nếu model gán xác suất cao cho label đúng của mọi sample, likelihood
 Thực tế ta dùng log-likelihood:
 
 $$
-\log \mathcal{L}(\theta) = \sum_{i=1}^{n} \log q_\theta(y_i \mid x_i)
+\log \operatorname{Lik}(\theta;\mathcal{D}) = \sum_{i=1}^{n} \log q_\theta(y_i \mid x_i)
 $$
 
 Log biến tích thành tổng, ổn định số học hơn, và dễ tối ưu hơn.
@@ -95,10 +97,18 @@ $$
 Trong deep learning, optimizer thường minimize loss, nên ta đổi dấu:
 
 $$
-\mathcal{L}_{\text{NLL}}(\theta) = - \sum_{i=1}^{n} \log q_\theta(y_i \mid x_i)
+\mathcal{J}_{\text{NLL}}(\theta) = - \sum_{i=1}^{n} \log q_\theta(y_i \mid x_i)
 $$
 
 Đây là **negative log-likelihood**.
+
+Khi báo loss trên batch hoặc dataset, ta thường lấy trung bình:
+
+$$
+\frac{1}{n}\mathcal{J}_{\text{NLL}}(\theta)
+$$
+
+Tổng hay trung bình chỉ khác nhau một hệ số $1/n$, nên nghiệm tối ưu giống nhau. Nhưng bản trung bình dễ so sánh giữa batch/dataset có kích thước khác nhau.
 
 Với một sample, nếu model gán xác suất $0.9$ cho label đúng:
 
@@ -175,6 +185,19 @@ $$
 
 Nó hỏi: nếu dữ liệu thật đến từ $p$, nhưng ta dùng $q$ để gán xác suất/mã hóa, chi phí trung bình là bao nhiêu?
 
+Trong supervised learning, thường ta đang nói về phân phối điều kiện theo từng input. Khi viết đầy đủ hơn:
+
+$$
+H(p_{\text{data}}, q_\theta)
+=
+\mathbb{E}_{x \sim p_{\text{data}}(x)}
+\left[
+-\sum_y p_{\text{data}}(y \mid x)\log q_\theta(y \mid x)
+\right]
+$$
+
+Nói cách khác: lấy từng input $x$, so phân phối label thật $p_{\text{data}}(y \mid x)$ với phân phối model $q_\theta(y \mid x)$, rồi trung bình qua các input.
+
 Nếu $p$ là one-hot label cho class đúng $c$:
 
 $$
@@ -216,8 +239,44 @@ $$
 Minimize cross-entropy tương đương minimize KL từ data distribution sang model distribution.
 
 <Note type="result">
-Đây là cầu nối lớn: cross-entropy không chỉ là loss thực dụng; nó là cách kéo phân phối model lại gần phân phối dữ liệu theo chiều $D_{\text{KL}}(p_{\text{data}} \| q_\theta)$.
+Đây là cầu nối lớn: cross-entropy không chỉ là một loss tiện để code; nó là cách kéo phân phối model lại gần phân phối dữ liệu theo chiều $D_{\text{KL}}(p_{\text{data}} \| q_\theta)$.
 </Note>
+
+### Một ví dụ số nhỏ
+
+Giả sử phân phối thật là một coin công bằng:
+
+$$
+p = [0.5, 0.5]
+$$
+
+Một model lại tin khá lệch:
+
+$$
+q = [0.9, 0.1]
+$$
+
+Entropy của dữ liệu thật:
+
+$$
+H(p) = -0.5\log 0.5 - 0.5\log 0.5 \approx 0.693
+$$
+
+Cross-entropy khi dùng model $q$:
+
+$$
+H(p,q) = -0.5\log 0.9 - 0.5\log 0.1 \approx 1.204
+$$
+
+Phần lãng phí thêm chính là KL:
+
+$$
+D_{\text{KL}}(p\|q) = H(p,q) - H(p) \approx 0.511
+$$
+
+Vậy cross-entropy gồm hai phần: độ bất định vốn có của dữ liệu, và phần sai thêm vì model dùng phân phối chưa đúng.
+
+Các số trên dùng log tự nhiên, nên đơn vị là **nats**. Nếu dùng $\log_2$, đơn vị sẽ là bits.
 
 ## Chiều của KL rất quan trọng
 
@@ -227,13 +286,13 @@ $$
 D_{\text{KL}}(p \| q) \neq D_{\text{KL}}(q \| p)
 $$
 
-Chiều $D_{\text{KL}}(p \| q)$ phạt mạnh khi $p(y)$ cao nhưng $q(y)$ thấp. Nói cách khác, model bị phạt nếu bỏ sót vùng dữ liệu thật.
+Chiều $D_{\text{KL}}(p \| q)$ phạt mạnh khi $p(y)$ cao nhưng $q(y)$ thấp. Nói cách khác, model bị phạt nếu bỏ sót vùng dữ liệu thật. Nếu dữ liệu có hai mode, model phải cố phủ cả hai; bỏ hẳn một mode làm KL tăng rất mạnh. Vì vậy chiều này thường mang trực giác **mode-covering**: thà phủ hơi rộng còn hơn bỏ sót.
 
-Chiều $D_{\text{KL}}(q \| p)$ phạt mạnh khi model đặt xác suất vào vùng mà $p$ thấp. Nó có xu hướng tránh vùng không chắc và có thể mode-seeking hơn.
+Chiều $D_{\text{KL}}(q \| p)$ phạt mạnh khi model đặt xác suất vào vùng mà $p$ thấp. Nếu giữa hai mode có một vùng "không giống dữ liệu", model sẽ tránh đặt mass vào vùng đó. Với capacity hạn chế, nó có thể chọn bám một mode chắc nhất thay vì trải ra cả hai. Vì vậy chiều này thường có trực giác **mode-seeking** hơn.
 
 | Chiều | Trực giác |
 |---|---|
-| $D_{\text{KL}}(p \| q)$ | model phải cover dữ liệu thật |
+| $D_{\text{KL}}(p \| q)$ | model phải cover dữ liệu thật, khó bỏ sót mode |
 | $D_{\text{KL}}(q \| p)$ | model tránh đặt mass vào vùng dữ liệu thật ít hỗ trợ |
 
 Trong supervised MLE, ta thường gặp $D_{\text{KL}}(p_{\text{data}} \| q_\theta)$. Trong variational inference, tùy setup ta có thể gặp chiều KL khác, và hành vi sẽ khác.
@@ -260,16 +319,24 @@ $$
 q_\theta(x_1,\dots,x_T) = \prod_{t=1}^{T} q_\theta(x_t \mid x_{<t})
 $$
 
-NLL:
+NLL của cả chuỗi:
 
 $$
 -\sum_{t=1}^{T} \log q_\theta(x_t \mid x_{<t})
 $$
 
-Chính là cross-entropy token-level. Perplexity là:
+Để so sánh giữa chuỗi dài ngắn khác nhau, ta dùng cross-entropy trung bình trên token:
 
 $$
-\text{PPL} = \exp(\text{CE})
+\mathrm{CE}_{\text{token}}
+=
+-\frac{1}{T}\sum_{t=1}^{T} \log q_\theta(x_t \mid x_{<t})
+$$
+
+Perplexity là:
+
+$$
+\text{PPL} = \exp(\mathrm{CE}_{\text{token}})
 $$
 
 Perplexity càng thấp nghĩa là model trung bình gán xác suất tốt hơn cho token thật.
@@ -298,7 +365,7 @@ Autoregressive models làm điều này rõ ràng. VAE dùng lower bound vì lik
 
 | Lens | Công thức | Câu hỏi |
 |---|---|---|
-| Likelihood | $\prod_i q_\theta(y_i \mid x_i)$ | Dữ liệu thật có xác suất cao dưới model không? |
+| Likelihood | $\operatorname{Lik}(\theta;\mathcal{D})$ | Dữ liệu thật có xác suất cao dưới model không? |
 | NLL | $-\sum_i \log q_\theta(y_i \mid x_i)$ | Dữ liệu thật bất ngờ đến mức nào? |
 | Cross-entropy | $H(p, q)$ | Dùng model để mã hóa dữ liệu thật tốn bao nhiêu? |
 | KL divergence | $D_{\text{KL}}(p \| q)$ | Model lệch khỏi phân phối thật bao nhiêu? |

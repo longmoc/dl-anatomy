@@ -16,7 +16,9 @@ import ProbabilityDivergenceDiagram from '../../components/ProbabilityDivergence
 
 In deep learning, we often say "the model predicts the right class" or "the language model predicts the next token". Under that language, many models are doing something more probabilistic:
 
-> Assign high probability to real data, and low probability to incompatible data.
+> Assign high probability to what actually happened.
+
+With a softmax, all alternatives must share total probability 1. So when training pushes probability up for the correct label or token, the competing choices are pushed down through normalization. We do not always have to write explicit negative examples; they are already inside the distribution.
 
 A classifier does not only choose a class. It produces a distribution:
 
@@ -71,7 +73,7 @@ $$
 For the whole dataset, likelihood is the product of these probabilities:
 
 $$
-\mathcal{L}(\theta) = \prod_{i=1}^{n} q_\theta(y_i \mid x_i)
+\operatorname{Lik}(\theta;\mathcal{D}) = \prod_{i=1}^{n} q_\theta(y_i \mid x_i)
 $$
 
 If the model assigns high probability to the correct label of every sample, likelihood is high. If even a few real labels receive very low probability, the product drops sharply.
@@ -79,7 +81,7 @@ If the model assigns high probability to the correct label of every sample, like
 In practice, we use log-likelihood:
 
 $$
-\log \mathcal{L}(\theta) = \sum_{i=1}^{n} \log q_\theta(y_i \mid x_i)
+\log \operatorname{Lik}(\theta;\mathcal{D}) = \sum_{i=1}^{n} \log q_\theta(y_i \mid x_i)
 $$
 
 Log turns products into sums, improves numerical stability, and is easier to optimize.
@@ -95,10 +97,18 @@ $$
 Deep learning optimizers usually minimize losses, so we flip the sign:
 
 $$
-\mathcal{L}_{\text{NLL}}(\theta) = - \sum_{i=1}^{n} \log q_\theta(y_i \mid x_i)
+\mathcal{J}_{\text{NLL}}(\theta) = - \sum_{i=1}^{n} \log q_\theta(y_i \mid x_i)
 $$
 
 This is **negative log-likelihood**.
+
+When reporting loss over a batch or dataset, we usually average it:
+
+$$
+\frac{1}{n}\mathcal{J}_{\text{NLL}}(\theta)
+$$
+
+The sum and the average differ only by the constant factor $1/n$, so they have the same optimum. The average is simply easier to compare across batches or datasets of different sizes.
 
 For one sample, if the model assigns probability $0.9$ to the correct label:
 
@@ -175,6 +185,19 @@ $$
 
 It asks: if data truly comes from $p$, but we use $q$ to assign probabilities or encode it, what is the average cost?
 
+In supervised learning, we are usually talking about a conditional distribution for each input. Written more fully:
+
+$$
+H(p_{\text{data}}, q_\theta)
+=
+\mathbb{E}_{x \sim p_{\text{data}}(x)}
+\left[
+-\sum_y p_{\text{data}}(y \mid x)\log q_\theta(y \mid x)
+\right]
+$$
+
+In words: for each input $x$, compare the true label distribution $p_{\text{data}}(y \mid x)$ with the model distribution $q_\theta(y \mid x)$, then average over inputs.
+
 If $p$ is a one-hot label for the correct class $c$:
 
 $$
@@ -216,8 +239,44 @@ $$
 Minimizing cross-entropy is equivalent to minimizing KL from the data distribution to the model distribution.
 
 <Note type="result">
-This is the key bridge: cross-entropy is not only a practical loss; it pulls the model distribution toward the data distribution in the direction $D_{\text{KL}}(p_{\text{data}} \| q_\theta)$.
+This is the key bridge: cross-entropy is not only a convenient loss to implement; it pulls the model distribution toward the data distribution in the direction $D_{\text{KL}}(p_{\text{data}} \| q_\theta)$.
 </Note>
+
+### A small numerical example
+
+Suppose the true distribution is a fair coin:
+
+$$
+p = [0.5, 0.5]
+$$
+
+The model is quite biased:
+
+$$
+q = [0.9, 0.1]
+$$
+
+The entropy of the true data is:
+
+$$
+H(p) = -0.5\log 0.5 - 0.5\log 0.5 \approx 0.693
+$$
+
+Cross-entropy when we use model $q$ is:
+
+$$
+H(p,q) = -0.5\log 0.9 - 0.5\log 0.1 \approx 1.204
+$$
+
+The extra waste is exactly KL:
+
+$$
+D_{\text{KL}}(p\|q) = H(p,q) - H(p) \approx 0.511
+$$
+
+So cross-entropy has two parts: the uncertainty already present in the data, plus the extra cost from using the wrong model distribution.
+
+The numbers above use natural logs, so the unit is **nats**. With $\log_2$, the unit would be bits.
 
 ## KL direction matters
 
@@ -227,13 +286,13 @@ $$
 D_{\text{KL}}(p \| q) \neq D_{\text{KL}}(q \| p)
 $$
 
-The direction $D_{\text{KL}}(p \| q)$ heavily penalizes cases where $p(y)$ is high but $q(y)$ is low. In other words, the model is penalized for missing regions where real data appears.
+The direction $D_{\text{KL}}(p \| q)$ heavily penalizes cases where $p(y)$ is high but $q(y)$ is low. In other words, the model is penalized for missing regions where real data appears. If the data has two modes, the model is pushed to cover both; dropping one mode makes KL grow sharply. This is the **mode-covering** intuition: better to cover a little too broadly than to miss real data.
 
-The direction $D_{\text{KL}}(q \| p)$ heavily penalizes cases where the model puts probability mass in regions where $p$ is low. It tends to avoid uncertain regions and can be more mode-seeking.
+The direction $D_{\text{KL}}(q \| p)$ heavily penalizes cases where the model puts probability mass in regions where $p$ is low. If the region between two modes does not look like data, the model avoids putting mass there. With limited capacity, it may choose one confident mode rather than spread across both. This is the more **mode-seeking** intuition.
 
 | Direction | Intuition |
 |---|---|
-| $D_{\text{KL}}(p \| q)$ | the model should cover real data |
+| $D_{\text{KL}}(p \| q)$ | the model should cover real data and avoid missing modes |
 | $D_{\text{KL}}(q \| p)$ | the model should avoid putting mass where real data has little support |
 
 In supervised MLE, we usually encounter $D_{\text{KL}}(p_{\text{data}} \| q_\theta)$. In variational inference, depending on the setup, we may see the other KL direction, with different behavior.
@@ -260,16 +319,24 @@ $$
 q_\theta(x_1,\dots,x_T) = \prod_{t=1}^{T} q_\theta(x_t \mid x_{<t})
 $$
 
-NLL:
+Sequence NLL:
 
 $$
 -\sum_{t=1}^{T} \log q_\theta(x_t \mid x_{<t})
 $$
 
-This is token-level cross-entropy. Perplexity is:
+To compare sequences of different lengths, we use average token cross-entropy:
 
 $$
-\text{PPL} = \exp(\text{CE})
+\mathrm{CE}_{\text{token}}
+=
+-\frac{1}{T}\sum_{t=1}^{T} \log q_\theta(x_t \mid x_{<t})
+$$
+
+Perplexity is:
+
+$$
+\text{PPL} = \exp(\mathrm{CE}_{\text{token}})
 $$
 
 Lower perplexity means the model assigns better average probability to the true tokens.
@@ -298,7 +365,7 @@ Autoregressive models do this explicitly. VAEs use a lower bound because direct 
 
 | Lens | Formula | Question |
 |---|---|---|
-| Likelihood | $\prod_i q_\theta(y_i \mid x_i)$ | Does the model assign high probability to real data? |
+| Likelihood | $\operatorname{Lik}(\theta;\mathcal{D})$ | Does the model assign high probability to real data? |
 | NLL | $-\sum_i \log q_\theta(y_i \mid x_i)$ | How surprising is real data under the model? |
 | Cross-entropy | $H(p, q)$ | How costly is it to encode true data with the model? |
 | KL divergence | $D_{\text{KL}}(p \| q)$ | How far is the model from the true distribution? |
