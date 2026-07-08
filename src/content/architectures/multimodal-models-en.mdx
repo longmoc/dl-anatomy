@@ -1,0 +1,155 @@
+---
+title: "Multimodal Models"
+description: "Getting images, text, and audio into one system — CLIP-style alignment, vision-language models, text-to-image, audio tokenization, and unified multimodal models."
+lang: en
+category: architectures
+order: 11
+parent: architecture-anatomy
+translation: multimodal-models
+tags: [multimodal, clip, vlm, text-to-image, audio, alignment]
+---
+
+import Note from '../../components/Note.astro';
+import MultimodalPatternsDiagram from '../../components/MultimodalPatternsDiagram.astro';
+
+# Multimodal Models
+
+[Generative Models](/dl-anatomy/architectures/generative-models-en) closed with a question we left hanging: real systems rarely live inside one modality. We ask a model to describe an image, generate an image from a sentence, transcribe speech, answer questions about a chart. Each of those crosses a boundary between kinds of data.
+
+Here is the strange part: none of the hard work is in the individual modalities anymore. We have excellent image backbones, excellent text backbones, excellent audio encoders. The hard part is the seam:
+
+> How do you make representations of *different kinds of signals* live in the same space — or at least speak through the same interface?
+
+That question sounds abstract, but it decomposes into surprisingly few design patterns. Almost every multimodal system you have heard of — CLIP, LLaVA, Stable Diffusion, Whisper, GPT-4o — is one of three or four recipes, mixed and matched.
+
+<MultimodalPatternsDiagram lang="en" />
+
+## The core problem: different signals, different shapes
+
+A sentence is a short sequence of discrete symbols from a fixed vocabulary. An image is a huge grid of continuous values with strong local structure. Audio is a very long 1-D waveform. They differ in dimensionality, continuity, and how meaning is distributed.
+
+The first move of every multimodal system is the same: **get everything into token/embedding form**.
+
+| Modality | Natural form | How it becomes model food |
+|---|---|---|
+| Text | discrete symbol sequence | tokenizer → embeddings (already native) |
+| Image | continuous 2-D grid | ViT patches, or VQ tokens, or CNN features |
+| Audio | continuous 1-D waveform | spectrogram frames, or neural-codec tokens |
+| Video | grid × time | patch tokens across space and time |
+
+Once everything is a sequence of vectors, a Transformer does not particularly care what the vectors *mean* — attention mixes them all the same. That indifference is exactly what makes multimodal architectures possible: the [Transformer](/dl-anatomy/architectures/transformer-en) is modality-agnostic; only the tokenizers and embeddings are modality-specific.
+
+The second problem is data. Within one modality, self-supervision is free — next token, masked patch. *Across* modalities you need **paired data**: images with captions, audio with transcripts. Where pairs are abundant but noisy (web alt-text), contrastive methods shine. Where pairs are clean but scarce, you lean on pretrained single-modality models and only learn the glue.
+
+## Contrastive alignment — CLIP and the shared space
+
+The most direct answer to "one space for two signals" is to just train for it. **CLIP** takes an image encoder and a text encoder, and trains both so that matching image–caption pairs land close in a shared embedding space while mismatched pairs land far apart — an InfoNCE loss in both directions, over huge batches of noisy web pairs.
+
+No generation, no decoder, no fancy fusion. And yet the result was one of the most reusable artifacts in deep learning:
+
+- **Zero-shot classification**: embed the class names as sentences ("a photo of a dog"), embed the image, pick the nearest text. A classifier with no training, for any label set you can phrase.
+- **Retrieval**: text-to-image and image-to-text search drop out for free — that is literally the training objective.
+- **A vision backbone that understands language**: CLIP's image encoder became the default eye bolted onto later systems, and its text encoder became the default conditioner for image generators.
+
+<Note type="intuition">
+Contrastive alignment learns what things *are*, relationally: this image and this sentence point at the same thing. It does not learn to *say* anything — there is no decoder. That is why CLIP alone can match and rank but never describe, and why nearly every later system uses CLIP as a component rather than as the product.
+</Note>
+
+The weaknesses are the flip side of the recipe. One global vector per image means fine-grained structure gets averaged away — CLIP-style models are famously loose about spatial relations, counting, and word order ("a man bites a dog" and "a dog bites a man" embed uncomfortably close). The alignment is at the level of *whole images and whole captions*, not regions and phrases.
+
+## Vision-language models — bolt an eye onto an LLM
+
+If contrastive models can match but not talk, the obvious next move is to hand the vision signal to something that already talks extremely well: an LLM.
+
+The recipe that won is almost embarrassingly economical:
+
+1. Take a **pretrained vision encoder** (very often CLIP's).
+2. Take a **pretrained LLM**.
+3. Train a small **adapter** that maps image features into the LLM's token space.
+4. Feed the mapped image tokens into the context like words, and instruction-tune.
+
+The LLM never stops being a language model. It just receives some "words" that happen to have come from pixels. All the reasoning, world knowledge, and dialogue ability it learned from text transfers to images for the price of training a projection layer — that is the LLaVA recipe, and some version of it sits inside most open VLMs.
+
+| Connection style | Idea | Example |
+|---|---|---|
+| Prefix tokens | project image features to token embeddings, prepend to context | LLaVA |
+| Cross-attention | frozen LLM attends to image features through inserted layers | Flamingo |
+| Query tokens | a small module learns a few dozen queries that distill the image | BLIP-2 (Q-Former) |
+| Native / early fusion | one model consumes image and text tokens from the start | GPT-4o-style, Chameleon |
+
+<Note type="warning">
+A VLM sees the image only through the adapter's bottleneck. If the vision encoder compresses a detail away — small text, exact counts, precise spatial layout — no amount of LLM intelligence downstream recovers it. Many "hallucinations" in VLMs are better read as the language model fluently papering over information it never received.
+</Note>
+
+## Text-to-image — conditioning, in the other direction
+
+Text-to-image looks like a new problem but is mostly a problem we already solved. The [Generative Models](/dl-anatomy/architectures/generative-models-en) article ended with conditional generation and classifier-free guidance; text-to-image is exactly that machinery with $c$ = a text embedding.
+
+The multimodal content is concentrated in one place: **the conditioning interface**. A text encoder (CLIP's, or a large language encoder like T5) turns the prompt into embeddings; the diffusion model's denoiser attends to them via cross-attention at every step; CFG turns the strength of that conditioning into a dial. Generation quality comes from the diffusion side; *prompt understanding* comes from the text-encoder side — which is why swapping in a stronger text encoder improved prompt faithfulness more than making the image model bigger, a lesson Imagen made explicit.
+
+Seen this way, text-to-image and VLMs are mirror images:
+
+- VLM: image → embeddings → **language model** → text
+- Text-to-image: text → embeddings → **image generator** → image
+
+Same seam, opposite directions.
+
+## Audio — and the trick that makes everything language
+
+Audio-language systems fall on the same two sides. On the understanding side, **Whisper** is a plain encoder-decoder Transformer trained on massive weakly-supervised pairs — spectrogram in, transcript out; no architectural novelty, just scale and data.
+
+The generation side hides the more interesting idea: **neural codecs**. A codec like SoundStream/EnCodec is a VQ-VAE for audio — it compresses a waveform into a short sequence of *discrete tokens* and can decode them back to sound. The moment audio is discrete tokens, audio generation stops being a signal-processing problem and becomes... language modeling. AudioLM and VALL-E generate speech by next-token prediction over codec tokens; MusicLM does the same for music.
+
+<Note type="result">
+This is the quiet unification running through the whole modality zoo: **tokenize anything, then language-model it**. Images through VQ tokens, audio through codec tokens, actions and even protein structures through their own vocabularies. The Transformer + next-token recipe is modality-blind; the tokenizer carries all the modality knowledge.
+</Note>
+
+## Unified multimodal models
+
+Everything so far glues pretrained parts around a seam. The frontier has been moving toward removing the seam entirely: **one model, trained from the start on interleaved sequences of every modality**, that both understands and generates.
+
+Early fusion of this kind (Chameleon-style, and the direction of GPT-4o and Gemini) buys things gluing cannot:
+
+- **Cross-modal reasoning in one stream** — the model can look at an image mid-sentence, generate a chart mid-answer, mix speech and text without hand-offs between separate systems.
+- **Shared knowledge** — one set of weights learns from all data, so text knowledge improves image understanding and vice versa.
+- **Native latency** — speech-to-speech without chaining ASR → LLM → TTS, which matters for real-time interaction.
+
+The open trade-off is on the generation side: discrete image tokens are convenient for a unified next-token objective but lossy for visual detail, so many systems pair a unified understanding core with a diffusion-based head for high-fidelity synthesis. Whether generation ultimately goes fully autoregressive, fully diffusion, or stays hybrid is one of the genuinely unsettled questions.
+
+## The recurring design choices
+
+Strip the brand names away and every multimodal system is a point in a small design space:
+
+| Choice | Options | What it decides |
+|---|---|---|
+| Where modalities meet | late (contrastive), mid (adapter into LLM), early (one token stream) | how deeply modalities can interact |
+| The meeting format | shared embedding space vs interface tokens | matching/retrieval vs reasoning/generation |
+| Image/audio representation | continuous embeddings vs discrete tokens | fidelity vs unified LM training |
+| What is trained | just the glue vs everything end-to-end | cost vs ceiling |
+
+Late fusion is cheap and composable but shallow; early fusion is expensive and monolithic but deep. The last decade of multimodal work is essentially a slow walk from the left of this table to the right, as compute and paired data allowed it.
+
+## The big picture
+
+This article closes the Model families arc, and it is worth seeing how the pieces stack:
+
+- [Backbones](/dl-anatomy/architectures/architecture-anatomy-en) move information within a signal.
+- [Representation Learning](/dl-anatomy/architectures/representation-learning-en) shapes that information into useful spaces.
+- [Generative Models](/dl-anatomy/architectures/generative-models-en) turn distributions over those spaces into new data.
+- Multimodal models wire several such stacks together — or increasingly, train one stack over all signals at once.
+
+A frontier model today is all four layers at once: a Transformer backbone, self-supervised representations, an autoregressive (plus diffusion) generator, and a multimodal interface. The taxonomy is not a menu of alternatives; it is the anatomy of a single organism.
+
+## References
+
+| Paper | |
+|---|---|
+| Radford et al. (2021) | Learning Transferable Visual Models From Natural Language Supervision (CLIP) |
+| Alayrac et al. (2022) | Flamingo: a Visual Language Model for Few-Shot Learning |
+| Li et al. (2023) | BLIP-2: Bootstrapping Language-Image Pre-training |
+| Liu et al. (2023) | Visual Instruction Tuning (LLaVA) |
+| Saharia et al. (2022) | Photorealistic Text-to-Image Diffusion Models (Imagen) |
+| Radford et al. (2022) | Robust Speech Recognition via Large-Scale Weak Supervision (Whisper) |
+| Défossez et al. (2022) | High Fidelity Neural Audio Compression (EnCodec) |
+| Borsos et al. (2022) | AudioLM: a Language Modeling Approach to Audio Generation |
+| Chameleon Team (2024) | Chameleon: Mixed-Modal Early-Fusion Foundation Models |

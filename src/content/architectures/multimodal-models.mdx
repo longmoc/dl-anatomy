@@ -1,0 +1,155 @@
+---
+title: "Multimodal Models"
+description: "Đưa ảnh, text và audio vào cùng một hệ — CLIP-style alignment, vision-language models, text-to-image, audio tokenization và unified multimodal models."
+lang: vi
+category: architectures
+order: 11
+parent: architecture-anatomy
+translation: multimodal-models-en
+tags: [multimodal, clip, vlm, text-to-image, audio, alignment]
+---
+
+import Note from '../../components/Note.astro';
+import MultimodalPatternsDiagram from '../../components/MultimodalPatternsDiagram.astro';
+
+# Multimodal Models
+
+Bài [Generative Models](/dl-anatomy/architectures/generative-models) khép lại với một câu hỏi còn treo: hệ thống thực tế hiếm khi sống trong một modality. Ta yêu cầu model mô tả một bức ảnh, sinh ảnh từ một câu văn, gỡ băng giọng nói, trả lời câu hỏi về một biểu đồ. Mỗi việc đó đều băng qua ranh giới giữa các loại dữ liệu.
+
+Điều lạ là: phần khó không còn nằm ở từng modality nữa. Ta đã có backbone ảnh rất tốt, backbone text rất tốt, encoder audio rất tốt. Phần khó nằm ở đường may:
+
+> Làm sao để representation của *những loại tín hiệu khác nhau* sống trong cùng một không gian — hoặc ít nhất nói chuyện qua cùng một interface?
+
+Câu hỏi nghe trừu tượng, nhưng nó rút gọn về một số pattern thiết kế ít đến bất ngờ. Gần như mọi hệ multimodal bạn từng nghe tên — CLIP, LLaVA, Stable Diffusion, Whisper, GPT-4o — đều là một trong ba bốn công thức, trộn đi trộn lại.
+
+<MultimodalPatternsDiagram />
+
+## Bài toán gốc: tín hiệu khác nhau, hình hài khác nhau
+
+Một câu văn là chuỗi ngắn các ký hiệu rời rạc từ một vocabulary cố định. Một bức ảnh là lưới khổng lồ các giá trị liên tục với cấu trúc cục bộ mạnh. Audio là một waveform 1-D rất dài. Chúng khác nhau về số chiều, tính liên tục, và cách ý nghĩa được rải ra.
+
+Bước đầu tiên của mọi hệ multimodal đều giống nhau: **đưa tất cả về dạng token/embedding**.
+
+| Modality | Dạng tự nhiên | Cách biến thành thức ăn cho model |
+|---|---|---|
+| Text | chuỗi ký hiệu rời rạc | tokenizer → embedding (vốn đã native) |
+| Ảnh | lưới 2-D liên tục | patch ViT, hoặc VQ token, hoặc feature CNN |
+| Audio | waveform 1-D liên tục | frame spectrogram, hoặc token neural codec |
+| Video | lưới × thời gian | patch token theo cả không gian và thời gian |
+
+Một khi mọi thứ đã là chuỗi vector, Transformer không mấy quan tâm các vector *nghĩa là gì* — attention trộn tất cả như nhau. Chính sự "vô tâm" đó làm kiến trúc multimodal khả thi: [Transformer](/dl-anatomy/architectures/transformer) là modality-agnostic; chỉ tokenizer và embedding là gắn với từng modality.
+
+Vấn đề thứ hai là dữ liệu. Trong một modality, self-supervision là miễn phí — next token, masked patch. Nhưng *xuyên* modality thì cần **dữ liệu cặp**: ảnh kèm caption, audio kèm transcript. Chỗ nào cặp dồi dào nhưng nhiễu (alt-text trên web), contrastive tỏa sáng. Chỗ nào cặp sạch nhưng hiếm, ta dựa vào model đơn-modality đã pretrain và chỉ học phần keo dán.
+
+## Contrastive alignment — CLIP và không gian chung
+
+Câu trả lời thẳng nhất cho "một không gian cho hai tín hiệu" là: train thẳng cho điều đó. **CLIP** lấy một image encoder và một text encoder, train cả hai sao cho cặp ảnh–caption khớp nhau rơi gần nhau trong một embedding space chung, cặp lệch nhau thì rơi xa — InfoNCE theo cả hai chiều, trên batch khổng lồ các cặp web đầy nhiễu.
+
+Không sinh, không decoder, không fusion cầu kỳ. Vậy mà kết quả là một trong những sản phẩm tái sử dụng được nhiều nhất của deep learning:
+
+- **Zero-shot classification**: embed tên class thành câu ("a photo of a dog"), embed ảnh, chọn text gần nhất. Một classifier không cần train, cho bất kỳ tập nhãn nào diễn đạt được thành lời.
+- **Retrieval**: tìm ảnh bằng text và ngược lại có sẵn luôn — đó đúng nghĩa đen là objective lúc train.
+- **Một vision backbone hiểu ngôn ngữ**: image encoder của CLIP trở thành "con mắt" mặc định gắn vào các hệ sau, còn text encoder của nó thành bộ điều kiện mặc định cho các model sinh ảnh.
+
+<Note type="intuition">
+Contrastive alignment học xem mọi thứ *là gì*, theo nghĩa quan hệ: ảnh này và câu này trỏ về cùng một thứ. Nó không học *nói* — làm gì có decoder. Vì vậy CLIP một mình chỉ match và xếp hạng được chứ không mô tả được, và gần như mọi hệ sau này dùng CLIP như một linh kiện chứ không phải sản phẩm cuối.
+</Note>
+
+Điểm yếu là mặt sau của chính công thức đó. Mỗi ảnh một vector toàn cục nghĩa là cấu trúc chi tiết bị trung bình hóa mất — các model kiểu CLIP nổi tiếng lỏng lẻo về quan hệ không gian, đếm số lượng, và trật tự từ ("người cắn chó" với "chó cắn người" embed gần nhau đến khó chịu). Alignment nằm ở mức *cả ảnh với cả caption*, không phải vùng ảnh với cụm từ.
+
+## Vision-language models — gắn con mắt vào LLM
+
+Nếu model contrastive match được mà không nói được, nước đi hiển nhiên tiếp theo là trao tín hiệu vision cho một thứ vốn đã nói cực giỏi: LLM.
+
+Công thức thắng cuộc tiết kiệm đến mức gần như đáng xấu hổ:
+
+1. Lấy một **vision encoder đã pretrain** (rất thường là của CLIP).
+2. Lấy một **LLM đã pretrain**.
+3. Train một **adapter** nhỏ map feature ảnh vào không gian token của LLM.
+4. Đưa các token ảnh đã map vào context như thể chúng là chữ, rồi instruction-tune.
+
+LLM chưa bao giờ ngừng là một language model. Nó chỉ nhận thêm vài "từ" tình cờ đến từ pixel. Toàn bộ khả năng suy luận, kiến thức thế giới, kỹ năng hội thoại nó học từ text chuyển sang ảnh với cái giá chỉ là train một lớp projection — đó là công thức LLaVA, và một phiên bản nào đó của nó nằm trong hầu hết VLM mở.
+
+| Kiểu ghép nối | Ý tưởng | Ví dụ |
+|---|---|---|
+| Prefix token | project feature ảnh thành token embedding, chèn trước context | LLaVA |
+| Cross-attention | LLM đóng băng attend sang feature ảnh qua các layer chèn thêm | Flamingo |
+| Query token | một module nhỏ học vài chục query chắt lọc bức ảnh | BLIP-2 (Q-Former) |
+| Native / early fusion | một model ăn token ảnh và text từ đầu | kiểu GPT-4o, Chameleon |
+
+<Note type="warning">
+VLM chỉ nhìn thấy bức ảnh qua nút cổ chai của adapter. Nếu vision encoder đã nén mất một chi tiết — chữ nhỏ, số lượng chính xác, bố cục không gian — thì LLM phía sau thông minh đến đâu cũng không lấy lại được. Nhiều "hallucination" của VLM nên được đọc là: language model đang trơn tru che lấp thông tin mà nó chưa bao giờ nhận được.
+</Note>
+
+## Text-to-image — điều kiện hóa, theo chiều ngược lại
+
+Text-to-image trông như bài toán mới nhưng phần lớn là bài toán đã giải. Bài [Generative Models](/dl-anatomy/architectures/generative-models) kết thúc bằng sinh có điều kiện và classifier-free guidance; text-to-image đúng là bộ máy đó với $c$ = embedding của text.
+
+Phần multimodal dồn cả vào một chỗ: **interface điều kiện hóa**. Một text encoder (của CLIP, hoặc một language encoder lớn như T5) biến prompt thành embedding; mạng khử nhiễu của diffusion attend sang chúng qua cross-attention ở mọi bước; CFG biến độ mạnh của điều kiện thành núm vặn. Chất lượng sinh đến từ phía diffusion; *độ hiểu prompt* đến từ phía text encoder — vì vậy thay text encoder mạnh hơn cải thiện độ bám prompt nhiều hơn là phóng to model ảnh, bài học mà Imagen nói thẳng ra.
+
+Nhìn theo cách này, text-to-image và VLM là ảnh gương của nhau:
+
+- VLM: ảnh → embedding → **language model** → text
+- Text-to-image: text → embedding → **image generator** → ảnh
+
+Cùng một đường may, hai chiều ngược nhau.
+
+## Audio — và cú trick biến mọi thứ thành ngôn ngữ
+
+Hệ audio-language cũng chia đúng hai phía như vậy. Phía hiểu, **Whisper** là một Transformer encoder-decoder trơn, train trên lượng khổng lồ cặp weakly-supervised — spectrogram vào, transcript ra; không có gì mới về kiến trúc, chỉ có scale và dữ liệu.
+
+Phía sinh mới giấu ý tưởng thú vị hơn: **neural codec**. Một codec như SoundStream/EnCodec là VQ-VAE cho audio — nén waveform thành một chuỗi ngắn các *token rời rạc* và decode ngược lại thành âm thanh. Khoảnh khắc audio trở thành token rời rạc, sinh audio thôi là bài toán xử lý tín hiệu và trở thành... language modeling. AudioLM và VALL-E sinh giọng nói bằng next-token prediction trên token codec; MusicLM làm y vậy với nhạc.
+
+<Note type="result">
+Đây là sự thống nhất lặng lẽ chạy xuyên cả vườn thú modality: **tokenize bất cứ thứ gì, rồi language-model nó**. Ảnh qua VQ token, audio qua codec token, hành động và cả cấu trúc protein qua vocabulary riêng của chúng. Công thức Transformer + next-token mù modality; toàn bộ tri thức về modality nằm trong tokenizer.
+</Note>
+
+## Unified multimodal models
+
+Mọi thứ đến giờ đều là dán các linh kiện pretrain quanh một đường may. Biên giới nghiên cứu đang dịch về phía xóa hẳn đường may: **một model, train từ đầu trên chuỗi đan xen của mọi modality**, vừa hiểu vừa sinh.
+
+Early fusion kiểu này (hướng Chameleon, và là hướng của GPT-4o, Gemini) mua được những thứ mà cách dán ghép không có:
+
+- **Suy luận xuyên modality trong một dòng chảy** — model nhìn ảnh giữa câu, vẽ biểu đồ giữa câu trả lời, trộn giọng nói và text mà không phải chuyền tay giữa các hệ riêng.
+- **Tri thức dùng chung** — một bộ trọng số học từ mọi loại dữ liệu, nên kiến thức từ text nâng khả năng hiểu ảnh và ngược lại.
+- **Độ trễ native** — speech-to-speech không phải xâu chuỗi ASR → LLM → TTS, thứ quyết định với tương tác thời gian thực.
+
+Đánh đổi còn mở nằm ở phía sinh: token ảnh rời rạc tiện cho một objective next-token thống nhất nhưng mất chi tiết thị giác, nên nhiều hệ ghép một lõi hiểu thống nhất với một đầu sinh diffusion cho chất lượng cao. Sinh dữ liệu rốt cuộc sẽ thuần autoregressive, thuần diffusion, hay ở lại dạng lai — đây là một trong những câu hỏi thật sự chưa ngã ngũ.
+
+## Những lựa chọn thiết kế lặp lại
+
+Bóc nhãn hiệu đi thì mọi hệ multimodal là một điểm trong không gian thiết kế khá nhỏ:
+
+| Lựa chọn | Các phương án | Quyết định điều gì |
+|---|---|---|
+| Modality gặp nhau ở đâu | muộn (contrastive), giữa (adapter vào LLM), sớm (một dòng token) | các modality tương tác sâu đến đâu |
+| Hình thức gặp nhau | không gian embedding chung vs token interface | match/retrieval vs suy luận/sinh |
+| Biểu diễn ảnh/audio | embedding liên tục vs token rời rạc | độ trung thực vs train LM thống nhất |
+| Train phần nào | chỉ phần keo vs end-to-end tất cả | chi phí vs trần khả năng |
+
+Fusion muộn rẻ và dễ lắp ghép nhưng nông; fusion sớm đắt và nguyên khối nhưng sâu. Một thập kỷ multimodal vừa qua về cơ bản là cuộc đi bộ chậm rãi từ cột trái sang cột phải của bảng này, theo đà compute và dữ liệu cặp cho phép.
+
+## Bức tranh chung
+
+Bài này khép lại mạch Model families, và đáng dừng một nhịp để thấy các tầng xếp lên nhau thế nào:
+
+- [Backbone](/dl-anatomy/architectures/architecture-anatomy) di chuyển thông tin bên trong một tín hiệu.
+- [Representation Learning](/dl-anatomy/architectures/representation-learning) nhào nặn thông tin đó thành không gian hữu ích.
+- [Generative Models](/dl-anatomy/architectures/generative-models) biến phân phối trên các không gian đó thành dữ liệu mới.
+- Multimodal models nối nhiều chồng tầng như vậy lại với nhau — hoặc ngày càng thường xuyên hơn, train một chồng duy nhất trên mọi tín hiệu.
+
+Một frontier model hôm nay là cả bốn tầng cùng lúc: backbone Transformer, representation tự giám sát, generator autoregressive (cộng diffusion), và interface multimodal. Taxonomy này không phải thực đơn để chọn món — nó là giải phẫu của một cơ thể duy nhất.
+
+## Papers tham khảo
+
+| Paper | |
+|---|---|
+| Radford et al. (2021) | Learning Transferable Visual Models From Natural Language Supervision (CLIP) |
+| Alayrac et al. (2022) | Flamingo: a Visual Language Model for Few-Shot Learning |
+| Li et al. (2023) | BLIP-2: Bootstrapping Language-Image Pre-training |
+| Liu et al. (2023) | Visual Instruction Tuning (LLaVA) |
+| Saharia et al. (2022) | Photorealistic Text-to-Image Diffusion Models (Imagen) |
+| Radford et al. (2022) | Robust Speech Recognition via Large-Scale Weak Supervision (Whisper) |
+| Défossez et al. (2022) | High Fidelity Neural Audio Compression (EnCodec) |
+| Borsos et al. (2022) | AudioLM: a Language Modeling Approach to Audio Generation |
+| Chameleon Team (2024) | Chameleon: Mixed-Modal Early-Fusion Foundation Models |
