@@ -132,7 +132,7 @@ $$
 
 Nhìn kỹ chỗ hình phạt rơi vào đâu: nếu có một điểm data thật mà $p_\theta$ gán xác suất gần 0, KL nổ tung. Ngược lại, model đặt mass vào vùng *không có* data thì bị phạt rất nhẹ. Nên model học kiểu "trải mền cho rộng" — **mode covering**: thà phủ thừa còn hơn bỏ sót. Với capacity hữu hạn, trải rộng qua nhiều mode nghĩa là mass rơi cả vào vùng *giữa* các mode — và một điểm nằm giữa nhiều ảnh hợp lệ chính là... trung bình của chúng. Đó là ảnh mờ.
 
-Adversarial training thì hành xử gần với **reverse KL**: hình phạt nặng rơi vào chỗ *model sinh ra thứ không giống data*. Generator vì vậy **mode seeking** — thà bám chắc vài mode và sinh cho thật giống, còn hơn phủ hết mà chỗ nào cũng lơ lớ. Sample sắc nét, nhưng cái giá nằm ngay trong cùng cơ chế: bỏ hẳn một mode không bị phạt trực tiếp. Mode collapse không phải tai nạn — nó là hệ quả logic của chiều divergence.
+Adversarial training thì hành xử gần với **reverse KL**: hình phạt nặng rơi vào chỗ *model sinh ra thứ không giống dữ liệu thật*. Generator vì vậy **mode seeking** — thà bám chắc vài mode và sinh cho thật giống, còn hơn phủ hết mà chỗ nào cũng lơ lớ. Sample sắc nét, nhưng cái giá nằm ngay trong cùng cơ chế: bỏ hẳn một mode không bị phạt trực tiếp. Mode collapse không phải tai nạn — nó là hệ quả logic của chiều divergence.
 
 <Note type="intuition">
 Mờ và collapse không phải bug của kiến trúc — chúng là dấu vân tay của divergence. Forward KL: "đừng bỏ sót gì" → phủ hết, chấp nhận mờ. Reverse KL: "đừng sinh gì sai" → sắc nét, chấp nhận bỏ sót. Chọn objective là chọn trước kiểu lỗi mà model sẽ mắc.
@@ -181,7 +181,7 @@ p_\theta(x) = \frac{\exp(-E_\theta(x))}{Z_\theta},
 Z_\theta = \int \exp(-E_\theta(x))\, dx
 $$
 
-$E_\theta$ có thể là bất kỳ network nào — tự do kiến trúc tối đa. Cấu hình "giống data" có năng lượng thấp, cấu hình vô lý có năng lượng cao. Nhưng hằng số chuẩn hóa $Z_\theta$ không tính được, nên cả likelihood lẫn sampling đều gián tiếp: sampling cần **MCMC** (ví dụ Langevin dynamics — đi theo gradient của năng lượng cộng noise), training cần các kỹ thuật như contrastive divergence hoặc score matching.
+$E_\theta$ có thể là bất kỳ network nào — tự do kiến trúc tối đa. Cấu hình càng giống dữ liệu thật thì năng lượng càng thấp; cấu hình vô lý thì năng lượng cao. Nhưng hằng số chuẩn hóa $Z_\theta$ không tính được, nên cả likelihood lẫn sampling đều gián tiếp: sampling cần **MCMC** (ví dụ Langevin dynamics — đi theo gradient của năng lượng cộng noise), training cần các kỹ thuật như contrastive divergence hoặc score matching.
 
 Trong thực hành, EBM thuần ít khi là hệ sinh dữ liệu chủ lực. Giá trị của nó là **khung khái niệm**: score matching trên EBM chính là gốc của score-based diffusion; discriminator của GAN có thể đọc như một hàm năng lượng; và "chấm điểm cấu hình thay vì chuẩn hóa phân phối" là cách nghĩ xuất hiện lại ở nhiều nơi, từ contrastive learning đến reward model.
 
