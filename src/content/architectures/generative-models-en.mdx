@@ -26,13 +26,13 @@ An LLM generates tokens, a diffusion model generates images, a VAE decodes laten
 
 ## The shared problem: three requirements in tension
 
-An ideal generative model needs three things:
+If we could have anything we wished for, an ideal generative model would offer all three:
 
 1. **High-quality samples** — outputs look like real data
 2. **Tractable likelihood** — evaluate $p_\theta(x)$ for any $x$, enabling maximum-likelihood training and model comparison
 3. **Fast sampling** — generate new data in few compute steps
 
-In practice these pull against each other — often called the **generative learning trilemma**. Each family sacrifices one corner:
+The trouble is that nobody has all three at once. The requirements pull against each other — the **generative learning trilemma** — and the history of generative modeling is essentially a history of choosing which corner to give up:
 
 | Family | How $p_\theta$ is defined | Likelihood | Sampling |
 |---|---|---|---|
@@ -118,6 +118,28 @@ The two classic GAN failure modes: **training instability** (two networks chasin
 
 GANs are no longer the default for high-quality image generation (diffusion took that seat), but the adversarial idea lives on: as a loss for super-resolution, as distillation for few-step diffusion, and in systems that need single-forward-pass sampling.
 
+## Why VAEs blur and GANs are sharp — a tale of two KL directions
+
+Put VAE and GAN side by side and there is a question that is hard to ignore: trained on the same dataset, why does one produce blurry images and the other sharp ones? The answer is not in the architecture. It is in **which divergence each one minimizes** — and this may be the single most valuable intuition in this article.
+
+Maximum likelihood (the camp of VAEs, autoregressive models, flows) is equivalent to minimizing the **forward KL** — as established in [Likelihood, Cross-Entropy & KL](/dl-anatomy/foundations/likelihood-cross-entropy-kl-en):
+
+$$
+\mathrm{KL}(p_{\text{data}} \,\|\, p_\theta)
+=
+\mathbb{E}_{x \sim p_{\text{data}}}\left[\log \frac{p_{\text{data}}(x)}{p_\theta(x)}\right]
+$$
+
+Look closely at where the penalty lands: if there is a real data point that $p_\theta$ assigns near-zero probability, the KL explodes. Putting mass where there is *no* data, on the other hand, costs almost nothing. So the model learns to spread the blanket wide — **mode covering**: better to over-cover than to miss anything. With finite capacity, spreading across many modes means putting mass *between* them too — and a point sitting between several valid images is... their average. That is the blur.
+
+Adversarial training behaves closer to the **reverse KL**: the heavy penalty lands where *the model generates something that does not look like data*. The generator is therefore **mode seeking** — better to hold a few modes and render them convincingly than to cover everything and be mediocre everywhere. Samples come out sharp, but the price sits in the same mechanism: dropping an entire mode carries no direct penalty. Mode collapse is not an accident — it is the logical consequence of the divergence direction.
+
+<Note type="intuition">
+Blur and collapse are not architecture bugs — they are fingerprints of the divergence. Forward KL: "miss nothing" → cover everything, accept blur. Reverse KL: "generate nothing wrong" → sharp, accept dropped modes. Choosing the objective is choosing, in advance, the kind of mistake your model will make.
+</Note>
+
+Diffusion is interesting precisely because it escapes this dilemma: it belongs to the likelihood/mode-covering camp (hence good mode coverage), but it never has to average in a single shot — each step removes only a little noise, and the chain of steps lets the model *commit gradually* to one specific mode instead of standing between them. Wide coverage, still sharp.
+
 ## Diffusion — denoise, step by step
 
 Diffusion defines sampling as **reversing a destruction process**. The forward process gradually adds Gaussian noise to data until only noise remains:
@@ -176,6 +198,37 @@ In practice, pure EBMs are rarely the workhorse generator. Their value is as a *
 
 Through the trilemma: autoregressive sacrifices sampling speed; VAEs sacrifice quality; flows sacrifice expressiveness to keep exact likelihood; GANs sacrifice likelihood and stability; diffusion sacrifices sampling speed but keeps both quality and stable training — which is why it won for continuous data.
 
+## Conditional generation and guidance
+
+So far we have talked about sampling from $p(x)$ — generating "some image", "some sentence". But almost no real system does that. What we want is $p_\theta(x \mid c)$: generate an image *from a description*, code *from a request*, speech *from text*.
+
+Formally, just feed the condition $c$ into the model. For autoregressive models this is so natural it is easy to miss: **the prompt is the condition** — the prefix of the sequence that every later token is conditioned on. For diffusion, $c$ enters the denoising network, usually through cross-attention over text embeddings.
+
+But there is one trick that nearly every text-to-image system stands on: **classifier-free guidance (CFG)**. Train one model in both modes — occasionally dropping the condition during training — then at sampling time *extrapolate* between the two predictions:
+
+$$
+\hat{\varepsilon}
+=
+\varepsilon_\theta(x_t, \varnothing)
++
+w \big( \varepsilon_\theta(x_t, c) - \varepsilon_\theta(x_t, \varnothing) \big)
+$$
+
+The difference between the conditional and unconditional predictions is "the direction the condition pulls the sample toward". Scaling it by $w > 1$ pushes samples to follow the condition harder than the model naturally would. High $w$: tight prompt adherence, punchier images, but less diversity and easy to overshoot. Low $w$: diverse, but loose on the prompt. A **fidelity–diversity** knob you turn at inference time, no retraining needed — which is exactly why it became ubiquitous.
+
+## Evaluation — the awkward part of generative modeling
+
+Discriminative models have accuracy. Generative models have... a basket of proxies, each with a blind spot:
+
+| Metric | What it measures | Blind spot |
+|---|---|---|
+| Likelihood / perplexity | how much probability the model assigns to real data | high likelihood does not guarantee good samples — and vice versa |
+| FID | feature statistics of samples vs real data | depends on the feature extractor; one number mixes many error types |
+| Precision / Recall | two separate axes: samples *look like* data (fidelity) and *cover* the data (coverage) | hard to estimate reliably in high dimension |
+| Human eval / Elo | the thing we actually care about | expensive, slow, hard to reproduce |
+
+The thing to remember: **one number is not enough**, because the failure modes live on different axes. A mode-collapsed GAN can score high precision (every sample looks great) with terrible recall (it only generates one corner of the distribution). A model with good likelihood can produce ugly samples — image likelihood is dominated by high-frequency detail human eyes barely care about. The precision–recall pair earns its keep precisely because it separates "does it look right" from "does it cover enough" — the same two axes the forward/reverse KL trade against each other.
+
 ## The boundaries are blurring
 
 These six families are not six islands. Most modern systems are **hybrids**:
@@ -199,6 +252,16 @@ Every generative model solves the same distribution-matching problem, differing 
 | Sampling path | sequential piece by piece, one decode, or iterative denoising? |
 
 Fill in these three cells and you have almost determined which family a model belongs to — and where it will be strong or weak.
+
+Starting from the problem instead, the practical map looks like this:
+
+| Problem | Common choice | Why |
+|---|---|---|
+| Text, code | autoregressive | data is already discrete tokens, exact likelihood, sequential generation matches usage |
+| High-quality image / video / audio | diffusion, flow matching | stable training, mode coverage, best quality |
+| Real-time, single forward pass | GAN or distilled diffusion | one step |
+| Compressing data into discrete tokens | VQ-VAE | the tokenizer for autoregressive systems |
+| Density estimation, anomaly detection | flow, autoregressive | exact likelihood needed for comparison |
 
 The next Model families article adds the final piece: when data has more than one modality — how do we align images, text, and audio into one system that understands and generates? [Multimodal Models](/dl-anatomy/architectures/multimodal-models-en).
 

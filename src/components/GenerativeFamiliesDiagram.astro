@@ -12,7 +12,7 @@ const L = lang === 'en'
       gan: 'GAN', ganSub: 'generator vs discriminator',
       diff: 'Diffusion', diffSub: 'denoise step by step',
       ebm: 'Energy-based', ebmSub: 'low energy = data-like',
-      real: 'real x', fake: 'x̂', judge: 'real / fake?',
+      real: 'x', fake: 'x̂', judge: 'real / fake?',
       noise: '+noise', denoise: 'denoise',
       cap: 'Six ways to define a distribution you can sample from. Autoregressive models factorize by chain rule; VAEs decode a latent variable; flows push noise through an invertible map; GANs train a sampler against a discriminator; diffusion models invert a gradual noising process; energy-based models score configurations and sample the low-energy regions.',
     }
@@ -23,7 +23,7 @@ const L = lang === 'en'
       gan: 'GAN', ganSub: 'generator vs discriminator',
       diff: 'Diffusion', diffSub: 'khử nhiễu từng bước',
       ebm: 'Energy-based', ebmSub: 'năng lượng thấp = giống data',
-      real: 'x thật', fake: 'x̂', judge: 'thật / giả?',
+      real: 'x', fake: 'x̂', judge: 'thật / giả?',
       noise: '+nhiễu', denoise: 'khử nhiễu',
       cap: 'Sáu cách định nghĩa một phân phối có thể sample. Autoregressive factorize bằng chain rule; VAE decode từ latent; flow đẩy noise qua ánh xạ khả nghịch; GAN train sampler đấu với discriminator; diffusion đảo ngược quá trình thêm nhiễu dần; energy-based chấm điểm cấu hình và sample vùng năng lượng thấp.',
     };
@@ -91,7 +91,7 @@ const L = lang === 'en'
       <line x1="107" y1="296" x2="123" y2="296" class="gfd-line" marker-end="url(#gfd-a)" />
       <rect x="125" y="282" width="28" height="28" rx="5" class="gfd-data" /><text x="139" y="300" class="gfd-nt2">{L.fake}</text>
       <rect x="125" y="330" width="28" height="28" rx="5" class="gfd-data gfd-real" />
-      <text x="118" y="348" class="gfd-mini" text-anchor="end">{L.real}</text>
+      <text x="139" y="348" class="gfd-nt2">{L.real}</text>
       <line x1="155" y1="296" x2="176" y2="308" class="gfd-line" marker-end="url(#gfd-a)" />
       <line x1="155" y1="344" x2="176" y2="330" class="gfd-line" marker-end="url(#gfd-a)" />
       <rect x="178" y="304" width="30" height="30" rx="6" class="gfd-box2" /><text x="193" y="324" class="gfd-bt">D</text>

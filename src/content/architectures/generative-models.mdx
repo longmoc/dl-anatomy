@@ -26,13 +26,13 @@ Một LLM sinh token, một diffusion model sinh ảnh, một VAE decode latent 
 
 ## Bài toán chung: ba yêu cầu khó cùng có
 
-Một generative model lý tưởng cần ba thứ:
+Nếu được ước, một generative model lý tưởng sẽ có đủ ba thứ:
 
 1. **Sample chất lượng cao** — output trông như dữ liệu thật
 2. **Likelihood tính được** — đánh giá $p_\theta(x)$ cho một $x$ bất kỳ, để train bằng maximum likelihood và so sánh model
 3. **Sampling nhanh** — sinh dữ liệu mới với ít bước tính
 
-Trong thực tế, ba yêu cầu này giằng co nhau — thường được gọi là **generative learning trilemma**. Mỗi họ model chọn hy sinh một góc:
+Rắc rối là chưa ai có cả ba cùng lúc. Ba yêu cầu này giằng co nhau — người ta gọi là **generative learning trilemma** — và lịch sử generative modeling về cơ bản là lịch sử các cách chọn góc để hy sinh:
 
 | Họ | Cách định nghĩa $p_\theta$ | Likelihood | Sampling |
 |---|---|---|---|
@@ -118,6 +118,28 @@ Hai failure mode kinh điển của GAN: **training bất ổn định** (hai ne
 
 GAN không còn là mặc định cho sinh ảnh chất lượng cao (diffusion đã thay), nhưng ý tưởng adversarial vẫn sống: làm loss cho super-resolution, distillation cho diffusion ít bước, và các hệ cần sample một lần forward.
 
+## Vì sao VAE mờ còn GAN sắc — chuyện hai chiều của KL
+
+Đặt VAE và GAN cạnh nhau, có một câu hỏi khó bỏ qua: cùng học trên một dataset, sao một bên cho ảnh mờ, một bên cho ảnh sắc nét? Câu trả lời không nằm ở kiến trúc. Nó nằm ở **divergence mà mỗi bên đang tối thiểu hóa** — và đây có lẽ là trực giác đáng tiền nhất của cả bài.
+
+Maximum likelihood (nhóm của VAE, autoregressive, flow) tương đương minimize **forward KL** — như đã chốt ở bài [Likelihood, Cross-Entropy & KL](/dl-anatomy/foundations/likelihood-cross-entropy-kl):
+
+$$
+\mathrm{KL}(p_{\text{data}} \,\|\, p_\theta)
+=
+\mathbb{E}_{x \sim p_{\text{data}}}\left[\log \frac{p_{\text{data}}(x)}{p_\theta(x)}\right]
+$$
+
+Nhìn kỹ chỗ hình phạt rơi vào đâu: nếu có một điểm data thật mà $p_\theta$ gán xác suất gần 0, KL nổ tung. Ngược lại, model đặt mass vào vùng *không có* data thì bị phạt rất nhẹ. Nên model học kiểu "trải mền cho rộng" — **mode covering**: thà phủ thừa còn hơn bỏ sót. Với capacity hữu hạn, trải rộng qua nhiều mode nghĩa là mass rơi cả vào vùng *giữa* các mode — và một điểm nằm giữa nhiều ảnh hợp lệ chính là... trung bình của chúng. Đó là ảnh mờ.
+
+Adversarial training thì hành xử gần với **reverse KL**: hình phạt nặng rơi vào chỗ *model sinh ra thứ không giống data*. Generator vì vậy **mode seeking** — thà bám chắc vài mode và sinh cho thật giống, còn hơn phủ hết mà chỗ nào cũng lơ lớ. Sample sắc nét, nhưng cái giá nằm ngay trong cùng cơ chế: bỏ hẳn một mode không bị phạt trực tiếp. Mode collapse không phải tai nạn — nó là hệ quả logic của chiều divergence.
+
+<Note type="intuition">
+Mờ và collapse không phải bug của kiến trúc — chúng là dấu vân tay của divergence. Forward KL: "đừng bỏ sót gì" → phủ hết, chấp nhận mờ. Reverse KL: "đừng sinh gì sai" → sắc nét, chấp nhận bỏ sót. Chọn objective là chọn trước kiểu lỗi mà model sẽ mắc.
+</Note>
+
+Diffusion thú vị ở chỗ nó né được thế lưỡng nan này: vẫn thuộc nhóm likelihood/mode-covering (nên phủ mode tốt), nhưng không bao giờ phải "trung bình hóa" trong một phát — mỗi bước chỉ khử một chút nhiễu, và chuỗi bước cho phép model *cam kết dần* vào một mode cụ thể thay vì đứng giữa các mode. Phủ rộng mà vẫn sắc.
+
 ## Diffusion — khử nhiễu dần
 
 Diffusion định nghĩa sampling như **đảo ngược một quá trình phá hủy**. Quá trình forward thêm nhiễu Gaussian dần vào dữ liệu cho đến khi chỉ còn noise:
@@ -176,6 +198,37 @@ Trong thực hành, EBM thuần ít khi là hệ sinh dữ liệu chủ lực. G
 
 Nhìn theo trilemma: autoregressive hy sinh tốc độ sampling; VAE hy sinh chất lượng; flow hy sinh expressiveness để giữ exact likelihood; GAN hy sinh likelihood và độ ổn định; diffusion hy sinh tốc độ sampling nhưng giữ được chất lượng lẫn training ổn định — và đó là lý do nó thắng thế cho dữ liệu liên tục.
 
+## Sinh có điều kiện và guidance
+
+Đến đây ta toàn nói về việc sample từ $p(x)$ — sinh "một ảnh nào đó", "một câu nào đó". Nhưng gần như không có hệ thực tế nào làm vậy. Cái ta muốn là $p_\theta(x \mid c)$: sinh ảnh *theo mô tả*, sinh code *theo yêu cầu*, sinh giọng nói *theo văn bản*.
+
+Về mặt công thức, chỉ cần đưa điều kiện $c$ vào model. Với autoregressive, chuyện này tự nhiên đến mức khó nhận ra: **prompt chính là điều kiện** — phần đầu của chuỗi mà mọi token sau phải conditional theo. Với diffusion, $c$ đi vào mạng khử nhiễu, thường qua cross-attention với text embedding.
+
+Nhưng có một trick mà gần như mọi hệ text-to-image đứng trên: **classifier-free guidance (CFG)**. Train một model kiêm cả hai chế độ — thỉnh thoảng drop điều kiện trong lúc train — rồi lúc sample thì *ngoại suy* giữa hai dự đoán:
+
+$$
+\hat{\varepsilon}
+=
+\varepsilon_\theta(x_t, \varnothing)
++
+w \big( \varepsilon_\theta(x_t, c) - \varepsilon_\theta(x_t, \varnothing) \big)
+$$
+
+Hiệu giữa dự đoán có điều kiện và không điều kiện chính là "hướng mà điều kiện kéo sample về". Nhân nó lên $w > 1$ nghĩa là đẩy sample bám điều kiện mạnh hơn mức model tự nhiên làm. $w$ cao: bám prompt chặt, ảnh "đậm" hơn, nhưng kém đa dạng và dễ quá đà. $w$ thấp: đa dạng, nhưng lỏng prompt. Một núm vặn **fidelity–diversity** chỉnh được ngay lúc inference, không cần train lại — đó là lý do nó phổ biến đến vậy.
+
+## Đánh giá — phần khó nói của generative modeling
+
+Discriminative model có accuracy. Generative model thì có... một rổ proxy, và cái nào cũng khuyết:
+
+| Thước đo | Đo gì | Điểm mù |
+|---|---|---|
+| Likelihood / perplexity | model gán xác suất cho data thật cao đến đâu | likelihood cao không đảm bảo sample đẹp — và ngược lại |
+| FID | so thống kê feature giữa sample và data thật | phụ thuộc feature extractor; một con số trộn lẫn nhiều loại lỗi |
+| Precision / Recall | tách hai trục: sample có *giống* data (fidelity) và có *phủ hết* data (coverage) | khó ước lượng chuẩn ở chiều cao |
+| Human eval / Elo | thứ ta thật sự quan tâm | đắt, chậm, khó lặp lại |
+
+Điều đáng nhớ nhất: **một con số là không đủ**, vì các failure mode nằm trên các trục khác nhau. Một GAN mode collapse có thể đạt precision rất cao (mọi sample đều đẹp) trong khi recall thảm hại (chỉ sinh được một góc phân phối). Một model likelihood tốt có thể sinh ảnh xấu — likelihood của ảnh bị chi phối bởi chi tiết tần số cao mà mắt người gần như không quan tâm. Cặp precision–recall đáng giá chính vì nó tách được "sinh có giống không" khỏi "có phủ đủ không" — đúng hai trục mà forward/reverse KL ở trên đánh đổi.
+
 ## Ranh giới giữa các họ đang mờ đi
 
 Sáu họ trên không phải sáu ốc đảo. Các hệ hiện đại hầu hết là **lai**:
@@ -199,6 +252,16 @@ Mọi generative model đều giải cùng một bài toán distribution matchin
 | Con đường sampling | tuần tự từng phần, một lần decode, hay lặp khử nhiễu? |
 
 Chọn xong ba ô này là gần như xác định được model thuộc họ nào — và nó sẽ mạnh yếu ở đâu.
+
+Còn nếu đi từ phía bài toán, bản đồ thực dụng trông thế này:
+
+| Bài toán | Lựa chọn phổ biến | Vì sao |
+|---|---|---|
+| Text, code | autoregressive | dữ liệu rời sẵn thành token, likelihood exact, sinh tuần tự khớp cách dùng |
+| Ảnh / video / audio chất lượng cao | diffusion, flow matching | training ổn định, phủ mode, chất lượng dẫn đầu |
+| Sinh realtime, một lần forward | GAN hoặc diffusion đã distill | chỉ một bước |
+| Nén dữ liệu thành token rời | VQ-VAE | tokenizer cho hệ autoregressive |
+| Density estimation, anomaly detection | flow, autoregressive | cần likelihood exact để so sánh |
 
 Bài tiếp theo trong Model families ghép nốt mảnh cuối: khi dữ liệu không chỉ có một modality — làm sao align ảnh, text, audio vào cùng một hệ sinh/hiểu? [Multimodal Models](/dl-anatomy/architectures/multimodal-models).
 
