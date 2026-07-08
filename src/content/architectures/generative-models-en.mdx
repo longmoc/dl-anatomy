@@ -120,7 +120,7 @@ GANs are no longer the default for high-quality image generation (diffusion took
 
 ## Why VAEs blur and GANs are sharp — a tale of two KL directions
 
-Put VAE and GAN side by side and there is a question that is hard to ignore: trained on the same dataset, why does one produce blurry images and the other sharp ones? The answer is not in the architecture. It is in **which divergence each one minimizes** — and this may be the single most valuable intuition in this article.
+Put VAE and GAN side by side and there is a question that is hard to ignore: trained on the same dataset, why does one produce blurry images and the other sharp ones? The answer is not only in the architecture. A lot of it comes from **which direction the objective pulls the model distribution** — and this may be the single most valuable intuition in this article.
 
 Maximum likelihood (the camp of VAEs, autoregressive models, flows) is equivalent to minimizing the **forward KL** — as established in [Likelihood, Cross-Entropy & KL](/dl-anatomy/foundations/likelihood-cross-entropy-kl-en):
 
@@ -132,10 +132,10 @@ $$
 
 Look closely at where the penalty lands: if there is a real data point that $p_\theta$ assigns near-zero probability, the KL explodes. Putting mass where there is *no* data, on the other hand, costs almost nothing. So the model learns to spread the blanket wide — **mode covering**: better to over-cover than to miss anything. With finite capacity, spreading across many modes means putting mass *between* them too — and a point sitting between several valid images is... their average. That is the blur.
 
-Adversarial training behaves closer to the **reverse KL**: the heavy penalty lands where *the model generates something that does not look like data*. The generator is therefore **mode seeking** — better to hold a few modes and render them convincingly than to cover everything and be mediocre everywhere. Samples come out sharp, but the price sits in the same mechanism: dropping an entire mode carries no direct penalty. Mode collapse is not an accident — it is the logical consequence of the divergence direction.
+The original GAN does not literally optimize reverse KL — with an optimal discriminator, the story is closer to Jensen-Shannon divergence. But as training intuition, adversarial loss still has a clear **mode-seeking** flavor: the most visible penalty lands where *the generator produces samples the discriminator can call fake*. The generator is therefore pushed to hold a few modes and render them convincingly, rather than cover everything and be mediocre everywhere. Samples come out sharp, but the price is nearby: dropping an entire mode may not be penalized strongly enough. Mode collapse is not a random accident — it is the kind of mistake adversarial objectives can easily permit.
 
 <Note type="intuition">
-Blur and collapse are not architecture bugs — they are fingerprints of the divergence. Forward KL: "miss nothing" → cover everything, accept blur. Reverse KL: "generate nothing wrong" → sharp, accept dropped modes. Choosing the objective is choosing, in advance, the kind of mistake your model will make.
+Blur and collapse are not only architecture bugs — they are often fingerprints of the objective. Forward-KL-like training says "miss nothing" → broad coverage, accept blur. Adversarial / reverse-KL-like behavior says "generate nothing obviously wrong" → sharp samples, accept dropped modes. Choosing the objective is choosing, in advance, the kind of mistake the model is likely to make.
 </Note>
 
 Diffusion is interesting precisely because it escapes this dilemma: it belongs to the likelihood/mode-covering camp (hence good mode coverage), but it never has to average in a single shot — each step removes only a little noise, and the chain of steps lets the model *commit gradually* to one specific mode instead of standing between them. Wide coverage, still sharp.
@@ -196,7 +196,7 @@ In practice, pure EBMs are rarely the workhorse generator. Their value is as a *
 | Diffusion | bound / estimate | slow (many steps) | highest for image/audio/video | very stable |
 | EBM | unnormalized | slow (MCMC) | — | hard |
 
-Through the trilemma: autoregressive sacrifices sampling speed; VAEs sacrifice quality; flows sacrifice expressiveness to keep exact likelihood; GANs sacrifice likelihood and stability; diffusion sacrifices sampling speed but keeps both quality and stable training — which is why it won for continuous data.
+Through the trilemma: autoregressive sacrifices sampling speed; VAEs sacrifice quality; flows sacrifice expressiveness to keep exact likelihood; GANs sacrifice likelihood and stability; diffusion sacrifices sampling speed but keeps both quality and stable training — which is why it became a very strong choice for high-quality images, audio, and video.
 
 ## Conditional generation and guidance
 
@@ -239,6 +239,8 @@ These six families are not six islands. Most modern systems are **hybrids**:
 - **Flow matching** joins flows and diffusion into one framework of "learning a continuous path from noise to data".
 - **Adversarial distillation** uses a GAN loss to compress many-step diffusion into few steps.
 
+Flow matching here is not classical normalizing flow in the exact-likelihood, invertible-layer sense. It is closer to diffusion or continuous transport: learn a vector field that moves noise toward data.
+
 The boundary with the previous two articles blurs too: LLM pretraining with next-token prediction *is* generative modeling and *is* representation learning — one objective, two lenses.
 
 ## The big picture
@@ -258,7 +260,7 @@ Starting from the problem instead, the practical map looks like this:
 | Problem | Common choice | Why |
 |---|---|---|
 | Text, code | autoregressive | data is already discrete tokens, exact likelihood, sequential generation matches usage |
-| High-quality image / video / audio | diffusion, flow matching | stable training, mode coverage, best quality |
+| High-quality image / video / audio | diffusion, flow matching | stable training, good mode coverage, modern samplers reduce steps |
 | Real-time, single forward pass | GAN or distilled diffusion | one step |
 | Compressing data into discrete tokens | VQ-VAE | the tokenizer for autoregressive systems |
 | Density estimation, anomaly detection | flow, autoregressive | exact likelihood needed for comparison |
