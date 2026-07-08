@@ -12,7 +12,7 @@ const L = lang === 'en'
       img: 'image', txt: 'text', enc: 'enc', shared: 'shared space',
       venc: 'vision enc', adapter: 'adapter', llm: 'LLM', out: 'answer',
       tenc: 'text enc', diff: 'diffusion', imgout: 'image',
-      cap: 'Three recurring patterns. Contrastive alignment (CLIP) trains two encoders so paired image–text land close in one embedding space — built for matching and retrieval. A vision-language model feeds encoded images into an LLM through a small adapter — built for understanding and reasoning. Text-to-image runs the arrow the other way: a text encoder conditions a generative model — built for synthesis.',
+      cap: 'Three recurring patterns. Contrastive alignment (CLIP) trains two encoders so paired image–text land close in one embedding space, which makes it natural for matching and retrieval. A vision-language model feeds encoded images into an LLM through a small adapter, turning vision into something the LLM can reason over. Text-to-image runs the arrow the other way: a text encoder conditions a generative model for synthesis.',
     }
   : {
       t1: 'Contrastive alignment', t1sub: 'hai encoder, một không gian chung',
@@ -21,7 +21,7 @@ const L = lang === 'en'
       img: 'ảnh', txt: 'text', enc: 'enc', shared: 'không gian chung',
       venc: 'vision enc', adapter: 'adapter', llm: 'LLM', out: 'câu trả lời',
       tenc: 'text enc', diff: 'diffusion', imgout: 'ảnh',
-      cap: 'Ba pattern lặp đi lặp lại. Contrastive alignment (CLIP) train hai encoder sao cho cặp ảnh–text rơi gần nhau trong một không gian embedding — sinh ra để match và retrieval. Vision-language model đưa ảnh đã encode vào LLM qua một adapter nhỏ — sinh ra để hiểu và suy luận. Text-to-image chạy mũi tên theo chiều ngược lại: text encoder điều kiện hóa một generative model — sinh ra để tổng hợp.',
+      cap: 'Ba pattern lặp đi lặp lại. Contrastive alignment (CLIP) train hai encoder sao cho cặp ảnh–text rơi gần nhau trong một không gian embedding, rất hợp cho match và retrieval. Vision-language model đưa ảnh đã encode vào LLM qua một adapter nhỏ, biến vision thành thứ LLM có thể suy luận trên đó. Text-to-image chạy mũi tên theo chiều ngược lại: text encoder điều kiện hóa một generative model để tổng hợp ảnh.',
     };
 ---
 

@@ -16,11 +16,11 @@ import MultimodalPatternsDiagram from '../../components/MultimodalPatternsDiagra
 
 [Generative Models](/dl-anatomy/architectures/generative-models-en) closed with a question we left hanging: real systems rarely live inside one modality. We ask a model to describe an image, generate an image from a sentence, transcribe speech, answer questions about a chart. Each of those crosses a boundary between kinds of data.
 
-Here is the strange part: none of the hard work is in the individual modalities anymore. We have excellent image backbones, excellent text backbones, excellent audio encoders. The hard part is the seam:
+Here is the strange part: the hard work is no longer only inside each modality. We have excellent image backbones, excellent text backbones, excellent audio encoders. But once you put them in one system, many failures show up exactly at the seam:
 
 > How do you make representations of *different kinds of signals* live in the same space — or at least speak through the same interface?
 
-That question sounds abstract, but it decomposes into surprisingly few design patterns. Almost every multimodal system you have heard of — CLIP, LLaVA, Stable Diffusion, Whisper, GPT-4o — is one of three or four recipes, mixed and matched.
+That question sounds abstract, but it decomposes into surprisingly few design patterns. CLIP, LLaVA, Stable Diffusion, Whisper, speech-to-speech systems, and frontier multimodal models differ wildly in scale and data, but around the interface they keep returning to a handful of familiar recipes.
 
 <MultimodalPatternsDiagram lang="en" />
 
@@ -38,6 +38,14 @@ The first move of every multimodal system is the same: **get everything into tok
 | Video | grid × time | patch tokens across space and time |
 
 Once everything is a sequence of vectors, a Transformer does not particularly care what the vectors *mean* — attention mixes them all the same. That indifference is exactly what makes multimodal architectures possible: the [Transformer](/dl-anatomy/architectures/transformer-en) is modality-agnostic; only the tokenizers and embeddings are modality-specific.
+
+But "turn it into vectors" does not mean the modalities understand each other yet. There are at least three levels where they can meet:
+
+- **Late meeting**: each modality has its own encoder, and only the final embeddings are compared. Cheap, easy to train, great for retrieval.
+- **Middle meeting**: features from one modality are adapted into another modality's model, as images are fed into an LLM.
+- **Early meeting**: all tokens live in the same context from the start, so attention mixes them across many layers.
+
+Much of multimodal design comes down to this question: how early should the modalities meet, and how much compute are we willing to spend on that meeting?
 
 The second problem is data. Within one modality, self-supervision is free — next token, masked patch. *Across* modalities you need **paired data**: images with captions, audio with transcripts. Where pairs are abundant but noisy (web alt-text), contrastive methods shine. Where pairs are clean but scarce, you lean on pretrained single-modality models and only learn the glue.
 
@@ -61,24 +69,26 @@ The weaknesses are the flip side of the recipe. One global vector per image mean
 
 If contrastive models can match but not talk, the obvious next move is to hand the vision signal to something that already talks extremely well: an LLM.
 
-The recipe that won is almost embarrassingly economical:
+The common recipe is surprisingly compact:
 
 1. Take a **pretrained vision encoder** (very often CLIP's).
 2. Take a **pretrained LLM**.
 3. Train a small **adapter** that maps image features into the LLM's token space.
 4. Feed the mapped image tokens into the context like words, and instruction-tune.
 
-The LLM never stops being a language model. It just receives some "words" that happen to have come from pixels. All the reasoning, world knowledge, and dialogue ability it learned from text transfers to images for the price of training a projection layer — that is the LLaVA recipe, and some version of it sits inside most open VLMs.
+The LLM never stops being a language model. It just receives some "words" that happen to have come from pixels. All the reasoning, world knowledge, and dialogue ability it learned from text gets pulled toward images through a tiny interface — that is the minimal LLaVA recipe, and some version of it sits inside most open VLMs.
+
+Stronger systems usually do more than train one projection layer. They train in stages: first align image features with the token space, then instruction-tune on visual QA, sometimes unfreeze part of the LLM, raise the image resolution, split images into tiles, or add OCR/chart data to patch the exact places where vision encoders tend to miss details. The core idea stays the same: do not relearn all linguistic intelligence from scratch; learn how to feed visual evidence into the place where the LLM can read it.
 
 | Connection style | Idea | Example |
 |---|---|---|
 | Prefix tokens | project image features to token embeddings, prepend to context | LLaVA |
 | Cross-attention | frozen LLM attends to image features through inserted layers | Flamingo |
 | Query tokens | a small module learns a few dozen queries that distill the image | BLIP-2 (Q-Former) |
-| Native / early fusion | one model consumes image and text tokens from the start | GPT-4o-style, Chameleon |
+| Native / early fusion | one model consumes image and text tokens from the start | Chameleon, native multimodal systems |
 
 <Note type="warning">
-A VLM sees the image only through the adapter's bottleneck. If the vision encoder compresses a detail away — small text, exact counts, precise spatial layout — no amount of LLM intelligence downstream recovers it. Many "hallucinations" in VLMs are better read as the language model fluently papering over information it never received.
+A VLM sees the image only through the encoder-and-adapter bottleneck. If a detail gets compressed away — small text, exact counts, precise spatial layout — no amount of downstream LLM intelligence easily recovers it. Hallucination is therefore not just "the LLM making things up"; often it is the language prior fluently filling gaps in the visual signal.
 </Note>
 
 ## Text-to-image — conditioning, in the other direction
@@ -94,27 +104,29 @@ Seen this way, text-to-image and VLMs are mirror images:
 
 Same seam, opposite directions.
 
-## Audio — and the trick that makes everything language
+## Audio — turning signals into tokens
 
-Audio-language systems fall on the same two sides. On the understanding side, **Whisper** is a plain encoder-decoder Transformer trained on massive weakly-supervised pairs — spectrogram in, transcript out; no architectural novelty, just scale and data.
+Audio-language systems fall on the same two sides. On the understanding side, **Whisper** is a plain encoder-decoder Transformer trained on massive weakly-supervised pairs — spectrogram in, transcript out; no architectural novelty, just scale and data. The important detail is that audio does not enter as raw waveform: spectrograms or frame features turn a very long time signal into a sequence short enough for attention.
 
 The generation side hides the more interesting idea: **neural codecs**. A codec like SoundStream/EnCodec is a VQ-VAE for audio — it compresses a waveform into a short sequence of *discrete tokens* and can decode them back to sound. The moment audio is discrete tokens, audio generation stops being a signal-processing problem and becomes... language modeling. AudioLM and VALL-E generate speech by next-token prediction over codec tokens; MusicLM does the same for music.
 
+There are often two token layers here. **Semantic tokens** carry content: what is being said, where the melody goes. **Acoustic tokens** carry surface: whose voice, pitch, rhythm, timbre, room noise. Separating the two lets the model control meaning while still rendering natural sound. It also explains why native speech-to-speech is different from an ASR → LLM → TTS pipeline: if everything passes through text, you lose intonation, laughter, pauses, emotion, and latency.
+
 <Note type="result">
-This is the quiet unification running through the whole modality zoo: **tokenize anything, then language-model it**. Images through VQ tokens, audio through codec tokens, actions and even protein structures through their own vocabularies. The Transformer + next-token recipe is modality-blind; the tokenizer carries all the modality knowledge.
+This is the quiet unification running through many data types: **tokenize anything, then language-model it**. Images through VQ tokens, audio through codec tokens, actions and even protein structures through their own vocabularies. The Transformer + next-token recipe is modality-blind; the tokenizer carries all the modality knowledge.
 </Note>
 
 ## Unified multimodal models
 
-Everything so far glues pretrained parts around a seam. The frontier has been moving toward removing the seam entirely: **one model, trained from the start on interleaved sequences of every modality**, that both understands and generates.
+Everything so far glues pretrained parts around a seam. The frontier has been moving toward making that seam less visible: **one system trained on interleaved sequences of multiple modalities**, able to both understand and generate.
 
-Early fusion of this kind (Chameleon-style, and the direction of GPT-4o and Gemini) buys things gluing cannot:
+Early fusion of this kind (Chameleon-style; for closed systems such as GPT-4o and Gemini we can only speak at the level of public behavior) buys things gluing struggles to offer:
 
 - **Cross-modal reasoning in one stream** — the model can look at an image mid-sentence, generate a chart mid-answer, mix speech and text without hand-offs between separate systems.
 - **Shared knowledge** — one set of weights learns from all data, so text knowledge improves image understanding and vice versa.
 - **Native latency** — speech-to-speech without chaining ASR → LLM → TTS, which matters for real-time interaction.
 
-The open trade-off is on the generation side: discrete image tokens are convenient for a unified next-token objective but lossy for visual detail, so many systems pair a unified understanding core with a diffusion-based head for high-fidelity synthesis. Whether generation ultimately goes fully autoregressive, fully diffusion, or stays hybrid is one of the genuinely unsettled questions.
+The open trade-off is on the generation side. Discrete image tokens are convenient for a unified next-token objective but lossy for visual detail. Continuous embeddings keep more information but are harder to fit into one vocabulary. Diffusion gives high-fidelity images and video, but it is not a simple token stream like text. That is why many real systems stay hybrid: a relatively unified understanding core, plus a decoder or diffusion head for modalities that need high fidelity. Whether generation ultimately goes fully autoregressive, fully diffusion, or stays hybrid is one of the genuinely unsettled questions.
 
 ## The recurring design choices
 
