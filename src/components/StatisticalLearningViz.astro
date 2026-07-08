@@ -6,12 +6,12 @@ const { lang = 'vi' } = Astro.props;
 
 const ui = lang === 'en'
   ? {
-      cap: 'Capacity is one major axis of the bias–variance trade-off. Drag the slider: low capacity is too rigid and underfits; high capacity chases training noise and overfits. The useful region is in between: train error is low enough while test error has not climbed. The distance between train error and test/true risk is the generalization gap.',
+      cap: 'Classical bias–variance view: capacity is one major axis. Drag the slider: low capacity is too rigid and underfits; very high capacity can chase training noise and overfit. Modern deep learning adds extra twists, but this picture remains a useful first map of train error, test/true risk, and the generalization gap.',
       capLabel: 'Model capacity',
       low: 'low', high: 'high',
     }
   : {
-      cap: 'Capacity là một trục chính của bias–variance trade-off. Kéo slider: capacity thấp quá cứng nên underfit; capacity cao bám theo nhiễu train nên overfit. Vùng tốt nằm giữa: train error đủ thấp, test error chưa tăng mạnh. Khoảng cách giữa train error và test/true risk là generalization gap.',
+      cap: 'Đây là bias–variance view cổ điển: capacity là một trục chính. Kéo slider: capacity thấp quá cứng nên underfit; capacity rất cao có thể bám theo nhiễu train và overfit. Deep learning hiện đại có thêm nhiều twist, nhưng hình này vẫn là bản đồ đầu tiên hữu ích về train error, test/true risk và generalization gap.',
       capLabel: 'Độ phức tạp (capacity)',
       low: 'thấp', high: 'cao',
     };

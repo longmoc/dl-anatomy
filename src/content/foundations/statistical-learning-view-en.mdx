@@ -3,7 +3,7 @@ title: "Statistical Learning View of Deep Learning"
 description: "Deep learning as learning from finite samples: true risk, empirical risk, generalization gap, capacity, inductive bias, double descent, and implicit regularization."
 lang: en
 category: foundations
-order: 1
+order: 6
 translation: statistical-learning-view
 tags: [statistical-learning, generalization, empirical-risk, overfitting, inductive-bias]
 ---
@@ -367,7 +367,7 @@ Deep learning succeeds because architecture, data, and optimization exploit thes
 
 ## Why modern deep learning generalizes
 
-### Regularization
+### Regularization and solution shape
 
 Regularization makes some solutions preferred over others.
 
@@ -399,7 +399,7 @@ But in deep learning, regularization is not only a term in the loss. Many regula
 
 Good regularization does not merely raise train loss a little. It pushes the model toward patterns that remain stable outside the training set.
 
-### Stability view
+#### Stability view
 
 A learning algorithm is stable if replacing one training sample does not change the learned model too much.
 
@@ -418,7 +418,7 @@ Stability relates to:
 
 In deep learning, stability is not the whole story, but it is a useful lens for why some training recipes are more robust than others.
 
-### Margin view
+#### Margin view
 
 In classification, margin measures how safely correct a model is.
 
@@ -434,7 +434,7 @@ Generalization often improves when the model achieves large margins on training 
 
 In deep learning, cross-entropy tends to keep increasing confidence even after training accuracy reaches 100%. This is connected to margin dynamics and implicit optimization bias.
 
-### Flat minima
+#### Flat minima
 
 A sharp minimum is one where loss rises quickly after small parameter changes. A flat minimum lies in a wider low-loss region.
 
@@ -447,7 +447,9 @@ But caution is needed: "flatness" in parameter space depends on reparameterizati
 
 Still, the intuition is useful: good training recipes often find solutions that are not overly fragile.
 
-### Overparameterization
+### The overparameterized regime
+
+#### Overparameterization
 
 Overparameterization means the model has many parameters, often more than the number of training samples.
 
@@ -462,7 +464,9 @@ But on real data, overparameterization can help:
 
 The key point: parameter count is not the only measure of complexity. Two networks with the same number of parameters can represent very different functions, and the same network can learn different solutions depending on optimizer, data, and regularization.
 
-### Interpolation regime
+Overparameterization makes interpolation easier: once the model is large enough, there are many ways to drive train loss near zero. The main question then shifts from "can it fit the training set?" to "among the many training-set-fitting solutions, which one does training choose?".
+
+#### Interpolation regime
 
 Interpolation happens when the model fits training data almost perfectly:
 
@@ -484,7 +488,7 @@ but:
 
 > Which training-data-fitting function did training select?
 
-### Double descent
+#### Double descent
 
 The classical bias-variance curve says test error decreases and then increases as model complexity grows too much. Double descent adds a third phase.
 
@@ -500,15 +504,17 @@ It does not say "larger is always better." It says the generalization curve of m
 
 Double descent helps explain why increasing model size can improve test performance even when the model could already fit the training data.
 
-### Benign overfitting
+#### Benign overfitting
 
 Benign overfitting is the phenomenon where a model fits training data, including some noise, without severely hurting test performance.
 
 One intuition: in high-dimensional space, a model can spend part of its capacity interpolating training noise while still learning the main signal in important directions. If noise lies in directions that do not matter much for the test distribution, overfitting can be relatively "benign."
 
-This is subtle. Not all overfitting is benign. Label noise, spurious correlations, and leakage can still severely hurt a model.
+This is subtle. Benign overfitting usually requires particular conditions on signal/noise, data geometry, and the bias of the learning algorithm. Fitting noise is not automatically harmless. Systematic label noise, spurious correlations, and leakage can still severely hurt a model.
 
-### Implicit regularization
+### Optimization as regularization
+
+#### Implicit regularization
 
 Implicit regularization is the bias of the training procedure even when the objective has no explicit regularization term.
 
@@ -525,7 +531,7 @@ For deep networks, implicit bias is more complex, but the idea is similar:
 
 So training does not only answer "which solution has low loss?". It answers "which low-loss solution is reached, from where, along which path, with which bias?".
 
-### SGD as more than an optimizer
+#### SGD as more than an optimizer
 
 SGD is not only a cheap way to compute gradients. It uses mini-batch gradients:
 
@@ -549,6 +555,8 @@ In practice:
 So generalization is a property of the whole **model + data + optimizer + recipe**, not only architecture.
 
 ## Data, shift, and evaluation
+
+Every generalization argument quietly depends on one question: "which distribution are we evaluating on?" In a paper, that is usually the test distribution. In a real product, it is the deployment distribution, and that is often where the clean assumptions start to crack.
 
 ### Data scale
 
