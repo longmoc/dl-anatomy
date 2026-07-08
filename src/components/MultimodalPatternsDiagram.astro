@@ -10,7 +10,7 @@ const L = lang === 'en'
       t2: 'Vision-language model', t2sub: 'vision bolted onto an LLM',
       t3: 'Text-to-image', t3sub: 'text conditions a generator',
       img: 'image', txt: 'text', enc: 'enc', shared: 'shared space',
-      venc: 'vision enc', adapter: 'adapter', llm: 'LLM', out: 'text out',
+      venc: 'vision enc', adapter: 'adapter', llm: 'LLM', out: 'answer',
       tenc: 'text enc', diff: 'diffusion', imgout: 'image',
       cap: 'Three recurring patterns. Contrastive alignment (CLIP) trains two encoders so paired image–text land close in one embedding space — built for matching and retrieval. A vision-language model feeds encoded images into an LLM through a small adapter — built for understanding and reasoning. Text-to-image runs the arrow the other way: a text encoder conditions a generative model — built for synthesis.',
     }
@@ -19,7 +19,7 @@ const L = lang === 'en'
       t2: 'Vision-language model', t2sub: 'gắn vision vào LLM',
       t3: 'Text-to-image', t3sub: 'text điều kiện hóa generator',
       img: 'ảnh', txt: 'text', enc: 'enc', shared: 'không gian chung',
-      venc: 'vision enc', adapter: 'adapter', llm: 'LLM', out: 'text ra',
+      venc: 'vision enc', adapter: 'adapter', llm: 'LLM', out: 'câu trả lời',
       tenc: 'text enc', diff: 'diffusion', imgout: 'ảnh',
       cap: 'Ba pattern lặp đi lặp lại. Contrastive alignment (CLIP) train hai encoder sao cho cặp ảnh–text rơi gần nhau trong một không gian embedding — sinh ra để match và retrieval. Vision-language model đưa ảnh đã encode vào LLM qua một adapter nhỏ — sinh ra để hiểu và suy luận. Text-to-image chạy mũi tên theo chiều ngược lại: text encoder điều kiện hóa một generative model — sinh ra để tổng hợp.',
     };
@@ -44,8 +44,8 @@ const L = lang === 'en'
     <line x1="78" y1="145" x2="98" y2="145" class="mmp-line" marker-end="url(#mmp-a)" />
     <rect x="100" y="63" width="44" height="28" rx="6" class="mmp-box" /><text x="122" y="81" class="mmp-bt">{L.enc}</text>
     <rect x="100" y="131" width="44" height="28" rx="6" class="mmp-box" /><text x="122" y="149" class="mmp-bt">{L.enc}</text>
-    <line x1="144" y1="77" x2="172" y2="98" class="mmp-line" marker-end="url(#mmp-a)" />
-    <line x1="144" y1="145" x2="172" y2="124" class="mmp-line" marker-end="url(#mmp-a)" />
+    <line x1="144" y1="77" x2="170" y2="90" class="mmp-line" marker-end="url(#mmp-a)" />
+    <line x1="144" y1="145" x2="170" y2="132" class="mmp-line" marker-end="url(#mmp-a)" />
     <ellipse cx="203" cy="111" rx="42" ry="34" class="mmp-space" />
     <circle cx="192" cy="103" r="4" class="mmp-dot1" />
     <path d="M199,116 l5,-8 l5,8 z" class="mmp-dot2" />
@@ -65,8 +65,8 @@ const L = lang === 'en'
     <line x1="318" y1="145" x2="356" y2="145" class="mmp-line" marker-end="url(#mmp-a)" />
     <line x1="449" y1="91" x2="404" y2="128" class="mmp-line" marker-end="url(#mmp-a)" />
     <rect x="358" y="131" width="76" height="30" rx="7" class="mmp-llm" /><text x="396" y="150" class="mmp-bt">{L.llm}</text>
-    <line x1="434" y1="145" x2="458" y2="145" class="mmp-line" marker-end="url(#mmp-a)" />
-    <text x="464" y="149" class="mmp-mini" text-anchor="start">{L.out}</text>
+    <line x1="434" y1="145" x2="474" y2="145" class="mmp-line" marker-end="url(#mmp-a)" />
+    <text x="474" y="136" class="mmp-mini" text-anchor="end">{L.out}</text>
     <text x="380" y="196" class="mmp-sub">{L.t2sub}</text>
 
     <!-- ===== Panel 3: text-to-image ===== -->
